@@ -5,12 +5,13 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Megaphone, Plus, FileText, Download } from "lucide-react";
+import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 
 type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
@@ -121,7 +122,42 @@ export default function Announcements() {
     }
   };
 
+  const handleDelete = async (announcementId: string, fileUrl: string | null) => {
+    try {
+      // Delete file from storage if exists
+      if (fileUrl) {
+        const filePath = fileUrl.split('/').pop();
+        if (filePath) {
+          await supabase.storage.from('announcements').remove([filePath]);
+        }
+      }
+
+      // Delete announcement from database
+      const { error } = await supabase
+        .from("announcements")
+        .delete()
+        .eq("id", announcementId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Announcement deleted successfully",
+      });
+
+      fetchAnnouncements();
+    } catch (error) {
+      console.error("Error deleting announcement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete announcement",
+        variant: "destructive",
+      });
+    }
+  };
+
   const canCreateAnnouncement = role === "admin" || role === "manager";
+  const canDeleteAnnouncement = role === "admin" || role === "manager";
 
   return (
     <DashboardLayout>
@@ -211,10 +247,40 @@ export default function Announcements() {
               <Card key={announcement.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <CardTitle className="text-xl">{announcement.title}</CardTitle>
-                    <span className="text-sm text-muted-foreground">
-                      {format(new Date(announcement.created_at), "MMM dd, yyyy")}
-                    </span>
+                    <div className="flex-1">
+                      <CardTitle className="text-xl">{announcement.title}</CardTitle>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {format(new Date(announcement.created_at), "MMM dd, yyyy")}
+                      </span>
+                      {canDeleteAnnouncement && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Announcement</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this announcement? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(announcement.id, announcement.file_url)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -222,17 +288,85 @@ export default function Announcements() {
                     {announcement.content}
                   </p>
                   {announcement.file_url && announcement.file_name && (
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <a
-                        href={announcement.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-primary hover:underline flex items-center gap-1"
-                      >
-                        {announcement.file_name}
-                        <Download className="h-3 w-3" />
-                      </a>
+                    <div className="pt-4 border-t space-y-2">
+                      {(() => {
+                        const fileExt = announcement.file_name.split('.').pop()?.toLowerCase();
+                        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExt || '');
+                        const isPdf = fileExt === 'pdf';
+
+                        if (isImage) {
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <ImageIcon className="h-4 w-4" />
+                                <span>{announcement.file_name}</span>
+                              </div>
+                              <a
+                                href={announcement.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block"
+                              >
+                                <img
+                                  src={announcement.file_url}
+                                  alt={announcement.file_name}
+                                  className="max-w-full h-auto rounded-lg border max-h-96 object-contain hover:opacity-90 transition-opacity"
+                                />
+                              </a>
+                              <a
+                                href={announcement.file_url}
+                                download={announcement.file_name}
+                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                              >
+                                <Download className="h-3 w-3" />
+                                Download
+                              </a>
+                            </div>
+                          );
+                        } else if (isPdf) {
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <FileText className="h-4 w-4" />
+                                <span>{announcement.file_name}</span>
+                              </div>
+                              <div className="border rounded-lg overflow-hidden">
+                                <iframe
+                                  src={announcement.file_url}
+                                  className="w-full h-96"
+                                  title={announcement.file_name}
+                                />
+                              </div>
+                              <a
+                                href={announcement.file_url}
+                                download={announcement.file_name}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                              >
+                                <Download className="h-3 w-3" />
+                                Download PDF
+                              </a>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div className="flex items-center gap-2">
+                              <File className="h-4 w-4 text-muted-foreground" />
+                              <a
+                                href={announcement.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={announcement.file_name}
+                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                              >
+                                {announcement.file_name}
+                                <Download className="h-3 w-3" />
+                              </a>
+                            </div>
+                          );
+                        }
+                      })()}
                     </div>
                   )}
                 </CardContent>
