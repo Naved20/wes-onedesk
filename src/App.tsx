@@ -17,6 +17,8 @@ import Performance from "./pages/Performance";
 import Announcements from "./pages/Announcements";
 import Institutions from "./pages/Institutions";
 import Settings from "./pages/Settings";
+import ShiftManagement from "./pages/ShiftManagement";
+import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +42,8 @@ const App = () => (
             <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
             <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
+            <Route path="/shifts" element={<ProtectedRoute allowedRoles={["admin"]}><ShiftManagement /></ProtectedRoute>} />
+            <Route path="/shift-assignments" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeShiftAssignment /></ProtectedRoute>} />
             <Route path="/institutions" element={<ProtectedRoute allowedRoles={["admin"]}><Institutions /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

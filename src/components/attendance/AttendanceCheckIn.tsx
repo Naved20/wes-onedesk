@@ -9,12 +9,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2, Calendar } from "lucide-react";
 
 interface AttendanceCheckInProps {
   userId: string;
   todayCheckedIn: boolean;
   onCheckInComplete: () => void;
+}
+
+interface ShiftInfo {
+  shift_id: string;
+  shift_name: string;
+  start_time: string;
+  end_time: string;
+  late_threshold_minutes: number;
+  half_day_threshold_hours: number;
+  last_checkin_hours_before_end: number;
 }
 
 export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }: AttendanceCheckInProps) {
@@ -23,47 +33,118 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
   const [halfDayType, setHalfDayType] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isWithinWindow, setIsWithinWindow] = useState(false);
-  const [isLate, setIsLate] = useState(false);
+  const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
+  const [attendanceStatus, setAttendanceStatus] = useState<{
+    status: string;
+    message: string;
+    variant: "default" | "destructive" | "secondary";
+  }>({ status: "loading", message: "Loading shift info...", variant: "secondary" });
 
   useEffect(() => {
+    fetchShiftInfo();
     const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now);
-      
-      // Check window (9 AM - 11 AM IST)
-      // Convert to IST by adding 5:30 hours
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      const istTime = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60 * 1000);
-      const hour = istTime.getHours();
-      const minute = istTime.getMinutes();
-      
-      setIsWithinWindow((hour >= 9 && hour < 11) || (hour === 11 && minute === 0));
-      setIsLate(hour >= 11);
+      setCurrentTime(new Date());
     }, 1000);
-
     return () => clearInterval(timer);
-  }, []);
+  }, [userId]);
 
-  // Get IST time for display
-  const getISTTime = () => {
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istTime = new Date(currentTime.getTime() + istOffset + currentTime.getTimezoneOffset() * 60 * 1000);
-    return format(istTime, "hh:mm:ss a");
+  useEffect(() => {
+    if (shiftInfo) {
+      calculateAttendanceStatus();
+    }
+  }, [currentTime, shiftInfo]);
+
+  const fetchShiftInfo = async () => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data, error } = await supabase.rpc("get_employee_shift", {
+        p_user_id: userId,
+        p_date: today,
+      });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setShiftInfo(data[0]);
+      } else {
+        setAttendanceStatus({
+          status: "no_shift",
+          message: "No shift assigned. Contact admin.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching shift:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load shift information",
+        variant: "destructive",
+      });
+    }
   };
 
-  const getISTHour = () => {
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istTime = new Date(currentTime.getTime() + istOffset + currentTime.getTimezoneOffset() * 60 * 1000);
-    return istTime.getHours();
+  const calculateAttendanceStatus = () => {
+    if (!shiftInfo) return;
+
+    const now = new Date();
+    const [startHour, startMin] = shiftInfo.start_time.split(":").map(Number);
+    const [endHour, endMin] = shiftInfo.end_time.split(":").map(Number);
+
+    const shiftStart = new Date(now);
+    shiftStart.setHours(startHour, startMin, 0, 0);
+
+    const shiftEnd = new Date(now);
+    shiftEnd.setHours(endHour, endMin, 0, 0);
+    if (endHour < startHour) {
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+    }
+
+    const lateThreshold = new Date(shiftStart.getTime() + shiftInfo.late_threshold_minutes * 60000);
+    const halfDayThreshold = new Date(shiftStart.getTime() + shiftInfo.half_day_threshold_hours * 3600000);
+    const lastCheckinLimit = new Date(shiftEnd.getTime() - shiftInfo.last_checkin_hours_before_end * 3600000);
+
+    if (now >= lastCheckinLimit) {
+      setAttendanceStatus({
+        status: "absent",
+        message: "Too late to check-in. Will be marked Absent.",
+        variant: "destructive",
+      });
+    } else if (now >= halfDayThreshold) {
+      setAttendanceStatus({
+        status: "half_day",
+        message: "Check-in will be marked as Half Day.",
+        variant: "destructive",
+      });
+    } else if (now > lateThreshold) {
+      setAttendanceStatus({
+        status: "late",
+        message: "You are late. Check-in will be flagged.",
+        variant: "destructive",
+      });
+    } else {
+      setAttendanceStatus({
+        status: "on_time",
+        message: "You are on time!",
+        variant: "default",
+      });
+    }
   };
 
   const handleCheckIn = async () => {
-    if (!userId) return;
+    if (!userId || !shiftInfo) return;
     if (isHalfDay && !halfDayType) {
       toast({
         title: "Select Half Day Type",
         description: "Please select First Half or Second Half",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (attendanceStatus.status === "absent") {
+      toast({
+        title: "Cannot Check-In",
+        description: "Too late to check-in for today",
         variant: "destructive",
       });
       return;
@@ -74,26 +155,51 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
       const today = format(new Date(), "yyyy-MM-dd");
       const now = new Date().toISOString();
 
+      // Calculate status using database function
+      const { data: statusData, error: statusError } = await supabase.rpc(
+        "calculate_attendance_status",
+        {
+          p_check_in_time: now,
+          p_shift_start: shiftInfo.start_time,
+          p_shift_end: shiftInfo.end_time,
+          p_late_threshold_minutes: shiftInfo.late_threshold_minutes,
+          p_half_day_threshold_hours: shiftInfo.half_day_threshold_hours,
+          p_last_checkin_hours_before_end: shiftInfo.last_checkin_hours_before_end,
+        }
+      );
+
+      if (statusError) throw statusError;
+
+      const calculatedStatus = statusData || attendanceStatus.status;
+
       const { error } = await supabase.from("attendance").insert({
         user_id: userId,
         date: today,
         check_in_time: now,
+        shift_id: shiftInfo.shift_id,
+        calculated_status: calculatedStatus,
         status: "pending",
         is_half_day: isHalfDay,
         half_day_type: isHalfDay ? halfDayType : null,
         notes: notes || null,
+        is_late: calculatedStatus === "late",
       });
 
       if (error) throw error;
 
+      const statusMessages = {
+        present: "Checked in successfully!",
+        late: "Late check-in recorded and flagged for review.",
+        half_day: "Half day attendance recorded.",
+        absent: "Marked as absent due to late check-in.",
+      };
+
       toast({
-        title: isLate ? "Late Check-In Recorded" : "Checked In",
-        description: isLate 
-          ? "Your attendance has been recorded as late and flagged for review."
-          : "Your attendance has been recorded successfully.",
-        variant: isLate ? "destructive" : "default",
+        title: calculatedStatus === "present" ? "Success" : "Check-In Recorded",
+        description: statusMessages[calculatedStatus as keyof typeof statusMessages] || "Attendance recorded.",
+        variant: calculatedStatus === "present" ? "default" : "destructive",
       });
-      
+
       onCheckInComplete();
     } catch (error) {
       console.error("Error checking in:", error);
@@ -133,34 +239,53 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
             <Clock className="h-5 w-5" />
             Daily Check-In
           </div>
-          <Badge variant={isWithinWindow ? "default" : isLate ? "destructive" : "secondary"}>
-            {isWithinWindow ? "Window Open" : isLate ? "Late" : "Early"}
+          <Badge variant={attendanceStatus.variant}>
+            {attendanceStatus.status === "on_time" && "On Time"}
+            {attendanceStatus.status === "late" && "Late"}
+            {attendanceStatus.status === "half_day" && "Half Day"}
+            {attendanceStatus.status === "absent" && "Too Late"}
+            {attendanceStatus.status === "no_shift" && "No Shift"}
+            {attendanceStatus.status === "loading" && "Loading..."}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Current Time Display */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 p-3 rounded-lg bg-muted">
-          <div>
-            <p className="text-sm text-muted-foreground">Current Time (IST)</p>
-            <p className="text-2xl font-bold font-mono">{getISTTime()}</p>
+        {/* Shift Info */}
+        {shiftInfo && (
+          <div className="p-3 rounded-lg bg-muted space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Your Shift</p>
+                <p className="font-semibold">{shiftInfo.shift_name}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Timings</p>
+                <p className="font-medium">
+                  {shiftInfo.start_time.substring(0, 5)} - {shiftInfo.end_time.substring(0, 5)}
+                </p>
+              </div>
+            </div>
+            <div className="text-center pt-2 border-t">
+              <p className="text-sm text-muted-foreground">Current Time</p>
+              <p className="text-2xl font-bold font-mono">{format(currentTime, "hh:mm:ss a")}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Check-in Window</p>
-            <p className="font-medium">9:00 AM - 11:00 AM</p>
-          </div>
-        </div>
+        )}
 
-        {/* Late Warning */}
-        {isLate && (
+        {/* Status Message */}
+        {attendanceStatus.status !== "loading" && attendanceStatus.status !== "on_time" && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
             <AlertTriangle className="h-5 w-5 text-destructive" />
             <div>
-              <p className="font-medium text-destructive">Late Check-In</p>
-              <p className="text-sm text-muted-foreground">
-                Your check-in will be flagged for manager review
-              </p>
+              <p className="font-medium text-destructive">{attendanceStatus.message}</p>
             </div>
+          </div>
+        )}
+
+        {attendanceStatus.status === "on_time" && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <p className="font-medium text-green-800 dark:text-green-200">{attendanceStatus.message}</p>
           </div>
         )}
 
@@ -192,15 +317,17 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
           </div>
         )}
 
-        {/* Notes (especially for late check-ins) */}
-        {(isLate || notes) && (
+        {/* Notes */}
+        {(attendanceStatus.status === "late" || attendanceStatus.status === "half_day" || notes) && (
           <div className="space-y-2">
             <Label htmlFor="notes">
-              {isLate ? "Reason for Late Check-In *" : "Notes (Optional)"}
+              {attendanceStatus.status === "late" || attendanceStatus.status === "half_day" 
+                ? "Reason (Required)" 
+                : "Notes (Optional)"}
             </Label>
             <Textarea
               id="notes"
-              placeholder={isLate ? "Please provide a reason for late check-in..." : "Any additional notes..."}
+              placeholder="Please provide a reason..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
@@ -209,9 +336,15 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
         )}
 
         {/* Check-In Button */}
-        <Button 
-          onClick={handleCheckIn} 
-          disabled={checkingIn || (isLate && !notes)}
+        <Button
+          onClick={handleCheckIn}
+          disabled={
+            checkingIn ||
+            !shiftInfo ||
+            attendanceStatus.status === "absent" ||
+            attendanceStatus.status === "no_shift" ||
+            ((attendanceStatus.status === "late" || attendanceStatus.status === "half_day") && !notes)
+          }
           className="w-full"
           size="lg"
         >

@@ -1,0 +1,352 @@
+import { useEffect, useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { UserPlus, Clock } from "lucide-react";
+import { format } from "date-fns";
+
+interface Employee {
+  id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  employee_id: string | null;
+}
+
+interface Shift {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+}
+
+interface EmployeeShift {
+  id: string;
+  user_id: string;
+  shift_id: string;
+  effective_from: string;
+  effective_to: string | null;
+  employee_profiles: {
+    first_name: string;
+    last_name: string;
+    email: string;
+  };
+  shifts: {
+    name: string;
+    start_time: string;
+    end_time: string;
+  };
+}
+
+export default function EmployeeShiftAssignment() {
+  const { user } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [assignments, setAssignments] = useState<EmployeeShift[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    user_id: "",
+    shift_id: "",
+    effective_from: format(new Date(), "yyyy-MM-dd"),
+    effective_to: "",
+    notes: "",
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [employeesRes, shiftsRes, assignmentsRes] = await Promise.all([
+        supabase.from("employee_profiles").select("id, user_id, first_name, last_name, email, employee_id"),
+        supabase.from("shifts").select("id, name, start_time, end_time").eq("is_active", true),
+        supabase.from("employee_shifts").select("*").order("effective_from", { ascending: false }),
+      ]);
+
+      if (employeesRes.error) throw employeesRes.error;
+      if (shiftsRes.error) throw shiftsRes.error;
+      if (assignmentsRes.error) throw assignmentsRes.error;
+
+      // Manually join employee and shift data
+      const enrichedAssignments = await Promise.all(
+        (assignmentsRes.data || []).map(async (assignment) => {
+          const employee = employeesRes.data?.find(e => e.user_id === assignment.user_id);
+          const shift = shiftsRes.data?.find(s => s.id === assignment.shift_id);
+          
+          return {
+            ...assignment,
+            employee_profiles: employee ? {
+              first_name: employee.first_name,
+              last_name: employee.last_name,
+              email: employee.email,
+            } : null,
+            shifts: shift ? {
+              name: shift.name,
+              start_time: shift.start_time,
+              end_time: shift.end_time,
+            } : null,
+          };
+        })
+      );
+
+      setEmployees(employeesRes.data || []);
+      setShifts(shiftsRes.data || []);
+      setAssignments(enrichedAssignments as any);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      // End previous assignment if exists
+      const today = format(new Date(), "yyyy-MM-dd");
+      await supabase
+        .from("employee_shifts")
+        .update({ effective_to: today })
+        .eq("user_id", formData.user_id)
+        .is("effective_to", null);
+
+      // Create new assignment
+      const { error } = await supabase.from("employee_shifts").insert([{
+        ...formData,
+        effective_to: formData.effective_to || null,
+        assigned_by: user?.id,
+      }]);
+
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Shift assigned successfully" });
+      setOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      console.error("Error assigning shift:", error);
+      toast({
+        title: "Error",
+        description: "Failed to assign shift",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      user_id: "",
+      shift_id: "",
+      effective_from: format(new Date(), "yyyy-MM-dd"),
+      effective_to: "",
+      notes: "",
+    });
+  };
+
+  const getCurrentShift = (userId: string) => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    return assignments.find(
+      (a) =>
+        a.user_id === userId &&
+        a.effective_from <= today &&
+        (!a.effective_to || a.effective_to >= today)
+    );
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Employee Shift Assignment</h1>
+            <p className="text-muted-foreground">Assign and manage employee shifts</p>
+          </div>
+          <Dialog open={open} onOpenChange={(isOpen) => {
+            setOpen(isOpen);
+            if (!isOpen) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Assign Shift
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Assign Shift to Employee</DialogTitle>
+                <DialogDescription>
+                  Select an employee and shift to create a new assignment
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="employee">Employee</Label>
+                  <Select
+                    value={formData.user_id}
+                    onValueChange={(value) => setFormData({ ...formData, user_id: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.user_id} value={emp.user_id}>
+                          {emp.first_name} {emp.last_name} ({emp.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="shift">Shift</Label>
+                  <Select
+                    value={formData.shift_id}
+                    onValueChange={(value) => setFormData({ ...formData, shift_id: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {shifts.map((shift) => (
+                        <SelectItem key={shift.id} value={shift.id}>
+                          {shift.name} ({shift.start_time.substring(0, 5)} - {shift.end_time.substring(0, 5)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="effective_from">Effective From</Label>
+                    <Input
+                      id="effective_from"
+                      type="date"
+                      value={formData.effective_from}
+                      onChange={(e) => setFormData({ ...formData, effective_from: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="effective_to">Effective To (Optional)</Label>
+                    <Input
+                      id="effective_to"
+                      type="date"
+                      value={formData.effective_to}
+                      onChange={(e) => setFormData({ ...formData, effective_to: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes (Optional)</Label>
+                  <Input
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Any additional notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">Assign Shift</Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Assignments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {employees.map((emp) => {
+                    const currentShift = getCurrentShift(emp.user_id);
+                    return (
+                      <div key={emp.user_id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div>
+                          <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                          <p className="text-sm text-muted-foreground">{emp.email}</p>
+                        </div>
+                        {currentShift ? (
+                          <Badge variant="default" className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {currentShift.shifts.name}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">No Shift</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Assignments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {assignments.slice(0, 10).map((assignment) => (
+                    <div key={assignment.id} className="p-3 border rounded-lg space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium">
+                          {assignment.employee_profiles.first_name} {assignment.employee_profiles.last_name}
+                        </p>
+                        <Badge>{assignment.shifts.name}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        From: {format(new Date(assignment.effective_from), "MMM dd, yyyy")}
+                        {assignment.effective_to && ` - To: ${format(new Date(assignment.effective_to), "MMM dd, yyyy")}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
