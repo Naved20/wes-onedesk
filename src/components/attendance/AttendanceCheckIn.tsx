@@ -9,12 +9,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Clock, AlertTriangle, CheckCircle2, Calendar } from "lucide-react";
+import { Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { getAttendanceStatusBadge } from "@/lib/attendanceUtils";
 
 interface AttendanceCheckInProps {
   userId: string;
   todayCheckedIn: boolean;
   onCheckInComplete: () => void;
+}
+
+interface TodayAttendance {
+  status: string | null;
+  calculated_status: string | null;
+  is_late: boolean | null;
+  check_in_time: string | null;
+  is_half_day: boolean | null;
+  half_day_type: string | null;
 }
 
 interface ShiftInfo {
@@ -34,6 +44,7 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
   const [notes, setNotes] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [shiftInfo, setShiftInfo] = useState<ShiftInfo | null>(null);
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance | null>(null);
   const [attendanceStatus, setAttendanceStatus] = useState<{
     status: string;
     message: string;
@@ -42,17 +53,39 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
 
   useEffect(() => {
     fetchShiftInfo();
+    if (todayCheckedIn) {
+      fetchTodayAttendance();
+    }
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
-  }, [userId]);
+  }, [userId, todayCheckedIn]);
 
   useEffect(() => {
     if (shiftInfo) {
       calculateAttendanceStatus();
     }
   }, [currentTime, shiftInfo]);
+
+  const fetchTodayAttendance = async () => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("status, calculated_status, is_late, check_in_time, is_half_day, half_day_type")
+        .eq("user_id", userId)
+        .eq("date", today)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setTodayAttendance(data);
+      }
+    } catch (error) {
+      console.error("Error fetching today's attendance:", error);
+    }
+  };
 
   const fetchShiftInfo = async () => {
     try {
@@ -213,19 +246,56 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
     }
   };
 
-  if (todayCheckedIn) {
+  if (todayCheckedIn && todayAttendance) {
+    const displayStatus = todayAttendance.calculated_status || "present";
+    const statusBadge = getAttendanceStatusBadge(
+      todayAttendance.is_late ? "late" : displayStatus,
+      false
+    );
+
     return (
       <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20">
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-3">
             <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
-            <div>
+            <div className="flex-1">
               <p className="font-semibold text-green-800 dark:text-green-200">Already Checked In Today</p>
               <p className="text-sm text-green-600 dark:text-green-400">
                 {format(new Date(), "EEEE, MMMM do, yyyy")}
               </p>
             </div>
           </div>
+          
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-lg border">
+            <div>
+              <p className="text-sm text-muted-foreground">Check-in Time</p>
+              <p className="font-semibold">
+                {todayAttendance.check_in_time 
+                  ? format(new Date(todayAttendance.check_in_time), "hh:mm a")
+                  : "-"}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground mb-1">Status</p>
+              <Badge variant={statusBadge.variant} className="font-mono">
+                {statusBadge.label}
+              </Badge>
+            </div>
+          </div>
+
+          {todayAttendance.is_half_day && (
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant="secondary">
+                {todayAttendance.half_day_type === "first_half" ? "First Half" : "Second Half"}
+              </Badge>
+            </div>
+          )}
+
+          {todayAttendance.status === "pending" && (
+            <p className="text-xs text-muted-foreground text-center">
+              Pending manager approval
+            </p>
+          )}
         </CardContent>
       </Card>
     );

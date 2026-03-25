@@ -17,6 +17,7 @@ import { AttendanceStats } from "@/components/attendance/AttendanceStats";
 import { AttendanceApprovalDialog } from "@/components/attendance/AttendanceApprovalDialog";
 import { HolidayManager } from "@/components/attendance/HolidayManager";
 import { BulkAttendanceApproval } from "@/components/attendance/BulkAttendanceApproval";
+import { getAttendanceStatusBadge, getAttendanceDisplayStatus } from "@/lib/attendanceUtils";
 
 type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
@@ -151,37 +152,31 @@ export default function Attendance() {
   };
 
   const getStatusBadge = (record: AttendanceWithEmployee) => {
-    const badges = [];
+    const displayStatus = getAttendanceDisplayStatus(
+      record.status,
+      record.calculated_status,
+      record.is_late
+    );
     
-    if (record.is_late) {
-      badges.push(
-        <Badge key="late" variant="outline" className="border-orange-500 text-orange-600 dark:text-orange-400">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          Late
-        </Badge>
-      );
-    }
+    const statusBadge = getAttendanceStatusBadge(displayStatus, true);
     
-    if (record.is_half_day) {
-      badges.push(
-        <Badge key="half" variant="secondary">
-          Half Day
+    return (
+      <div className="flex flex-wrap gap-1 items-center">
+        <Badge variant={statusBadge.variant} className="font-mono">
+          {statusBadge.label}
         </Badge>
-      );
-    }
-
-    switch (record.status) {
-      case "approved":
-        badges.push(<Badge key="status" className="bg-green-500">Approved</Badge>);
-        break;
-      case "rejected":
-        badges.push(<Badge key="status" variant="destructive">Rejected</Badge>);
-        break;
-      default:
-        badges.push(<Badge key="status" variant="secondary">Pending</Badge>);
-    }
-
-    return <div className="flex flex-wrap gap-1">{badges}</div>;
+        {record.is_half_day && (
+          <Badge variant="secondary" className="text-xs">
+            {record.half_day_type === "first_half" ? "1st Half" : "2nd Half"}
+          </Badge>
+        )}
+        {record.status === "pending" && (
+          <Badge variant="outline" className="text-xs">
+            Pending Review
+          </Badge>
+        )}
+      </div>
+    );
   };
 
   // Custom modifiers styles for calendar
@@ -512,40 +507,53 @@ export default function Attendance() {
                         <TableRow>
                           <TableHead>Date</TableHead>
                           <TableHead>Check-in Time</TableHead>
-                          <TableHead>Type</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead>Details</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {monthRecords.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
-                            <TableCell>
-                              {record.check_in_time
-                                ? format(new Date(record.check_in_time), "hh:mm a")
-                                : "-"}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                {record.is_half_day && (
-                                  <Badge variant="secondary">
-                                    {record.half_day_type === "first_half" ? "Morning" : "Afternoon"}
-                                  </Badge>
-                                )}
-                                {record.is_late && (
-                                  <Badge variant="outline" className="border-orange-500 text-orange-600">
-                                    Late
-                                  </Badge>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {record.status === "approved" && <Badge className="bg-green-500">Approved</Badge>}
-                              {record.status === "pending" && <Badge variant="secondary">Pending</Badge>}
-                              {record.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {monthRecords.map((record) => {
+                          const displayStatus = getAttendanceDisplayStatus(
+                            record.status,
+                            record.calculated_status,
+                            record.is_late
+                          );
+                          const statusBadge = getAttendanceStatusBadge(displayStatus, true);
+                          
+                          return (
+                            <TableRow key={record.id}>
+                              <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
+                              <TableCell>
+                                {record.check_in_time
+                                  ? format(new Date(record.check_in_time), "hh:mm a")
+                                  : "-"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={statusBadge.variant} className="font-mono">
+                                  {statusBadge.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  {record.is_half_day && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {record.half_day_type === "first_half" ? "1st Half" : "2nd Half"}
+                                    </Badge>
+                                  )}
+                                  {record.status === "pending" && (
+                                    <Badge variant="outline" className="text-xs">Pending</Badge>
+                                  )}
+                                  {record.status === "approved" && (
+                                    <Badge className="bg-green-500 text-xs">Approved</Badge>
+                                  )}
+                                  {record.status === "rejected" && (
+                                    <Badge variant="destructive" className="text-xs">Rejected</Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
