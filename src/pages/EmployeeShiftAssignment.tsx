@@ -300,7 +300,7 @@ export default function EmployeeShiftAssignment() {
                           <p className="font-medium">{emp.first_name} {emp.last_name}</p>
                           <p className="text-sm text-muted-foreground">{emp.email}</p>
                         </div>
-                        {currentShift ? (
+                        {currentShift && currentShift.shifts ? (
                           <Badge variant="default" className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {currentShift.shifts.name}
@@ -331,9 +331,13 @@ export default function EmployeeShiftAssignment() {
                     <div key={assignment.id} className="p-3 border rounded-lg space-y-1">
                       <div className="flex items-center justify-between">
                         <p className="font-medium">
-                          {assignment.employee_profiles.first_name} {assignment.employee_profiles.last_name}
+                          {assignment.employee_profiles 
+                            ? `${assignment.employee_profiles.first_name} ${assignment.employee_profiles.last_name}`
+                            : "Unknown Employee"}
                         </p>
-                        <Badge>{assignment.shifts.name}</Badge>
+                        <Badge>
+                          {assignment.shifts?.name || "Unknown Shift"}
+                        </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         From: {format(new Date(assignment.effective_from), "MMM dd, yyyy")}
