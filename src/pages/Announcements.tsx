@@ -8,11 +8,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+
+// Custom styles for Quill editor
+const editorStyle = `
+  .ql-container {
+    min-height: 150px;
+    font-size: 14px;
+  }
+  .ql-editor {
+    min-height: 150px;
+  }
+  .ql-toolbar {
+    border-top-left-radius: 0.375rem;
+    border-top-right-radius: 0.375rem;
+  }
+  .ql-container {
+    border-bottom-left-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+  }
+`;
 
 type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
 
@@ -27,6 +47,16 @@ export default function Announcements() {
     content: "",
     file: null as File | null,
   });
+
+  // Add custom styles
+  useEffect(() => {
+    const styleTag = document.createElement("style");
+    styleTag.innerHTML = editorStyle;
+    document.head.appendChild(styleTag);
+    return () => {
+      document.head.removeChild(styleTag);
+    };
+  }, []);
 
   useEffect(() => {
     fetchAnnouncements();
@@ -192,14 +222,25 @@ export default function Announcements() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="content">Description</Label>
-                    <Textarea
-                      id="content"
-                      placeholder="Enter announcement description"
-                      value={formData.content}
-                      onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                      rows={6}
-                      required
-                    />
+                    <div className="border rounded-md">
+                      <ReactQuill
+                        theme="snow"
+                        value={formData.content}
+                        onChange={(value) => setFormData({ ...formData, content: value })}
+                        modules={{
+                          toolbar: [
+                            [{ header: [1, 2, 3, false] }],
+                            ["bold", "italic", "underline", "strike"],
+                            [{ list: "ordered" }, { list: "bullet" }],
+                            [{ color: [] }, { background: [] }],
+                            ["link"],
+                            ["clean"],
+                          ],
+                        }}
+                        className="bg-white dark:bg-gray-950"
+                        style={{ minHeight: "150px" }}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="file">Attachment (Optional)</Label>
@@ -284,9 +325,10 @@ export default function Announcements() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-muted-foreground whitespace-pre-wrap">
-                    {announcement.content}
-                  </p>
+                  <div 
+                    className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none"
+                    dangerouslySetInnerHTML={{ __html: announcement.content }}
+                  />
                   {announcement.file_url && announcement.file_name && (
                     <div className="pt-4 border-t space-y-2">
                       {(() => {

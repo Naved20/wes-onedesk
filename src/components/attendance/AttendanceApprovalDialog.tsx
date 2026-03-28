@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, Clock, AlertTriangle, Shield, Edit } from "lucide-react";
 
@@ -384,38 +383,26 @@ export function AttendanceApprovalDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            {editMode ? "Edit Attendance" : "Review Attendance"}
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              {editMode ? "Edit Attendance" : "Review Attendance"}
+            </div>
+            {isAdmin && !editMode && (
+              <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
           </DialogTitle>
           <DialogDescription>
             {editMode ? "Modify attendance details" : "Review and approve/reject attendance"}
           </DialogDescription>
         </DialogHeader>
 
-        {isAdmin && !editMode ? (
-          <Tabs defaultValue="review" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="review">Review</TabsTrigger>
-              <TabsTrigger value="edit" onClick={() => setEditMode(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="review" className="space-y-4 mt-4">
-              {renderReviewContent()}
-            </TabsContent>
-          </Tabs>
-        ) : editMode ? (
-          <div className="space-y-4 mt-4">
-            {renderEditContent()}
-          </div>
-        ) : (
-          <div className="space-y-4 mt-4">
-            {renderReviewContent()}
-          </div>
-        )}
+        <div className="space-y-4 mt-4">
+          {editMode ? renderEditContent() : renderReviewContent()}
+        </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
           {editMode ? (
