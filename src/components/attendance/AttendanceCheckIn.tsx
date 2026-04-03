@@ -248,10 +248,7 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
 
   if (todayCheckedIn && todayAttendance) {
     const displayStatus = todayAttendance.calculated_status || "present";
-    const statusBadge = getAttendanceStatusBadge(
-      todayAttendance.is_late ? "late" : displayStatus,
-      false
-    );
+    const statusBadge = getAttendanceStatusBadge(displayStatus, false);
 
     return (
       <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20">
@@ -277,9 +274,16 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground mb-1">Status</p>
-              <Badge variant={statusBadge.variant} className="font-mono">
-                {statusBadge.label}
-              </Badge>
+              <div className="flex gap-1 items-center justify-end">
+                <Badge variant={statusBadge.variant} className="font-mono">
+                  {statusBadge.label}
+                </Badge>
+                {todayAttendance.is_late && (
+                  <Badge variant="outline" className="font-mono bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+                    LT
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
 

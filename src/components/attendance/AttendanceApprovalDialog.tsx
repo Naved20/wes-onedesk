@@ -59,17 +59,23 @@ export function AttendanceApprovalDialog({
 
   useEffect(() => {
     if (attendance) {
+      const initialIsLate = attendance.is_late || false;
+      console.log("Setting initial is_late from attendance:", initialIsLate, attendance);
+      
       setEditData({
         check_in_time: attendance.check_in_time 
           ? format(new Date(attendance.check_in_time), "HH:mm")
           : "",
         status: attendance.status || "pending",
         calculated_status: attendance.calculated_status || "present",
-        is_late: attendance.is_late || false,
+        is_late: initialIsLate,
         is_half_day: attendance.is_half_day || false,
         half_day_type: attendance.half_day_type || "",
         notes: attendance.notes || "",
       });
+      
+      // Reset edit mode when attendance changes
+      setEditMode(false);
     }
   }, [attendance]);
 
@@ -147,34 +153,59 @@ export function AttendanceApprovalDialog({
   };
 
   const handleAdminEdit = async () => {
+    console.log("=== handleAdminEdit called ===");
+    console.log("Current editData state:", editData);
+    
     setSubmitting(true);
     try {
       const checkInDateTime = attendance.date && editData.check_in_time
         ? new Date(`${attendance.date}T${editData.check_in_time}:00`).toISOString()
         : null;
 
-      const { error } = await supabase
+      const updateData = {
+        check_in_time: checkInDateTime,
+        status: editData.status,
+        calculated_status: editData.calculated_status,
+        is_late: editData.is_late,
+        is_half_day: editData.is_half_day,
+        half_day_type: editData.is_half_day ? editData.half_day_type : null,
+        notes: editData.notes || null,
+        is_manual_override: true,
+        modified_by: userId,
+        modified_at: new Date().toISOString(),
+      };
+
+      console.log("=== Sending to database ===");
+      console.log("Update data:", updateData);
+      console.log("is_late value:", updateData.is_late);
+
+      const { data, error } = await supabase
         .from("attendance")
-        .update({
-          check_in_time: checkInDateTime,
-          status: editData.status,
-          calculated_status: editData.calculated_status,
-          is_late: editData.is_late,
-          is_half_day: editData.is_half_day,
-          half_day_type: editData.is_half_day ? editData.half_day_type : null,
-          notes: editData.notes || null,
-          is_manual_override: true,
-          modified_by: userId,
-          modified_at: new Date().toISOString(),
-        })
-        .eq("id", attendance.id);
+        .update(updateData)
+        .eq("id", attendance.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error:", error);
+        throw error;
+      }
 
-      toast({ title: "Success", description: "Attendance updated successfully" });
+      console.log("=== Database response ===");
+      console.log("Updated record:", data);
+
+      toast({ 
+        title: "Success", 
+        description: `Attendance updated${editData.is_late ? ' with Late tag' : ' (Late tag removed)'}` 
+      });
+      
+      // Close dialog and refresh
       setEditMode(false);
-      onClose();
+      
+      // Small delay to ensure database has committed the change
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       onUpdate();
+      onClose();
     } catch (error) {
       console.error("Error updating attendance:", error);
       toast({
@@ -317,13 +348,22 @@ export function AttendanceApprovalDialog({
         </div>
         <div className="space-y-2">
           <Label htmlFor="calculated_status">Attendance Status</Label>
-          <Select value={editData.calculated_status} onValueChange={(value) => setEditData({ ...editData, calculated_status: value })}>
+          <Select 
+            value={editData.calculated_status} 
+            onValueChange={(value) => {
+              // Auto-set is_late to false when changing status to non-present
+              if (value !== "present") {
+                setEditData(prev => ({ ...prev, calculated_status: value, is_late: false }));
+              } else {
+                setEditData(prev => ({ ...prev, calculated_status: value }));
+              }
+            }}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="present">Present (PR)</SelectItem>
-              <SelectItem value="late">Late (PR + LT)</SelectItem>
               <SelectItem value="half_day">Half Day (HD)</SelectItem>
               <SelectItem value="absent">Absent (AB)</SelectItem>
             </SelectContent>
@@ -331,14 +371,27 @@ export function AttendanceApprovalDialog({
         </div>
       </div>
 
-      <div className="flex items-center justify-between p-3 rounded-lg border">
-        <Label htmlFor="is_late" className="cursor-pointer">Mark as Late</Label>
-        <Switch
-          id="is_late"
-          checked={editData.is_late}
-          onCheckedChange={(checked) => setEditData({ ...editData, is_late: checked })}
-        />
-      </div>
+      {editData.calculated_status === "present" && (
+        <div className="flex items-center justify-between p-3 rounded-lg border bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+          <div className="flex-1">
+            <Label htmlFor="is_late" className="cursor-pointer font-medium">Mark as Late</Label>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Current: {editData.is_late ? "✓ Late (LT tag will show)" : "✗ Not Late"}
+            </p>
+          </div>
+          <Switch
+            id="is_late"
+            checked={editData.is_late}
+            onCheckedChange={(checked) => {
+              console.log("=== Mark as Late Toggle ===");
+              console.log("Toggled to:", checked);
+              console.log("Previous editData.is_late:", editData.is_late);
+              setEditData({ ...editData, is_late: checked });
+              console.log("After setState called with:", checked);
+            }}
+          />
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="flex items-center justify-between p-3 rounded-lg border">
@@ -346,7 +399,10 @@ export function AttendanceApprovalDialog({
           <Switch
             id="is_half_day"
             checked={editData.is_half_day}
-            onCheckedChange={(checked) => setEditData({ ...editData, is_half_day: checked })}
+            onCheckedChange={(checked) => {
+              console.log("Half Day toggled to:", checked);
+              setEditData({ ...editData, is_half_day: checked });
+            }}
           />
         </div>
 

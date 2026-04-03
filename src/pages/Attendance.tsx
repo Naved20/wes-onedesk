@@ -23,6 +23,7 @@ type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
 interface AttendanceWithEmployee extends Attendance {
   employee_name?: string;
+  calculated_status?: string | null;
 }
 
 interface Holiday {
@@ -37,6 +38,7 @@ export default function Attendance() {
   const [loading, setLoading] = useState(true);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedAttendance, setSelectedAttendance] = useState<AttendanceWithEmployee | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
 
@@ -53,6 +55,7 @@ export default function Attendance() {
 
   const fetchAttendance = async () => {
     try {
+      // Add timestamp to prevent caching
       const { data: attendanceData, error } = await supabase
         .from("attendance")
         .select("*")
@@ -60,6 +63,8 @@ export default function Attendance() {
         .limit(100);
 
       if (error) throw error;
+
+      console.log("Fetched attendance data:", attendanceData?.slice(0, 3)); // Log first 3 records
 
       // For managers and admins, fetch employee names
       if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
@@ -119,39 +124,39 @@ export default function Attendance() {
 
   // Get dates for calendar highlighting
   const calendarModifiers = useMemo(() => {
-    const approved: Date[] = [];
-    const pending: Date[] = [];
-    const rejected: Date[] = [];
-    const halfDay: Date[] = [];
-    const late: Date[] = [];
     const holidayDates: Date[] = holidays.map(h => new Date(h.date));
-
-    attendanceRecords.forEach(record => {
-      const date = new Date(record.date);
-      if (record.status === "approved") {
-        approved.push(date);
-      } else if (record.status === "pending") {
-        pending.push(date);
-      } else if (record.status === "rejected") {
-        rejected.push(date);
-      }
-      if (record.is_half_day) {
-        halfDay.push(date);
-      }
-      if (record.is_late) {
-        late.push(date);
-      }
-    });
-
-    return { approved, pending, rejected, halfDay, late, holiday: holidayDates };
-  }, [attendanceRecords, holidays]);
+    return { holiday: holidayDates };
+  }, [holidays]);
 
   const openApprovalDialog = (attendance: AttendanceWithEmployee) => {
+    console.log("Opening dialog for attendance:", attendance.id, "is_late:", attendance.is_late);
     setSelectedAttendance(attendance);
     setApprovalDialogOpen(true);
   };
 
   const getStatusBadge = (record: AttendanceWithEmployee) => {
+    // If half day, show HD as main status
+    if (record.is_half_day) {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="secondary" className="font-mono">
+            HD
+          </Badge>
+          {record.is_late && (
+            <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+              LT
+            </Badge>
+          )}
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
+    }
+
+    // Regular status display
     const displayStatus = getAttendanceDisplayStatus(
       record.status,
       record.calculated_status,
@@ -165,9 +170,9 @@ export default function Attendance() {
         <Badge variant={statusBadge.variant} className="font-mono">
           {statusBadge.label}
         </Badge>
-        {record.is_half_day && (
-          <Badge variant="secondary" className="text-xs">
-            {record.half_day_type === "first_half" ? "1st Half" : "2nd Half"}
+        {record.is_late && displayStatus === "present" && (
+          <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+            LT
           </Badge>
         )}
         {record.status === "pending" && (
@@ -181,21 +186,6 @@ export default function Attendance() {
 
   // Custom modifiers styles for calendar
   const modifiersStyles = {
-    approved: { 
-      backgroundColor: "hsl(var(--chart-2))", 
-      color: "hsl(var(--primary-foreground))",
-      borderRadius: "50%"
-    },
-    pending: { 
-      backgroundColor: "hsl(var(--chart-4))", 
-      color: "hsl(var(--primary-foreground))",
-      borderRadius: "50%"
-    },
-    rejected: { 
-      backgroundColor: "hsl(var(--destructive))", 
-      color: "hsl(var(--destructive-foreground))",
-      borderRadius: "50%"
-    },
     holiday: {
       backgroundColor: "hsl(var(--chart-5))",
       color: "hsl(var(--primary-foreground))",
@@ -203,8 +193,17 @@ export default function Attendance() {
     },
   };
 
-  // Filter records for current month
+  // Filter records for current month or selected date
   const monthRecords = useMemo(() => {
+    // If a specific date is selected, show only that date's records
+    if (selectedDate) {
+      return attendanceRecords.filter(record => {
+        const recordDate = new Date(record.date);
+        return isSameDay(recordDate, selectedDate);
+      });
+    }
+    
+    // Otherwise show all records for the current month
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
     
@@ -212,7 +211,43 @@ export default function Attendance() {
       const recordDate = new Date(record.date);
       return recordDate >= monthStart && recordDate <= monthEnd;
     });
-  }, [attendanceRecords, selectedMonth]);
+  }, [attendanceRecords, selectedMonth, selectedDate]);
+
+  // Calculate daily stats for selected date or today
+  const dailyStats = useMemo(() => {
+    const targetDate = selectedDate || new Date();
+    const targetDateStr = format(targetDate, "yyyy-MM-dd");
+    
+    // Get today's attendance records
+    const todayRecords = attendanceRecords.filter(record => 
+      record.date === targetDateStr
+    );
+    
+    // Count present (approved or pending with present/late status)
+    const presentCount = todayRecords.filter(record => 
+      (record.status === "approved" || record.status === "pending") &&
+      (record.calculated_status === "present" || record.calculated_status === "late" || !record.calculated_status)
+    ).length;
+    
+    // Count half day
+    const halfDayCount = todayRecords.filter(record => 
+      record.is_half_day && (record.status === "approved" || record.status === "pending")
+    ).length;
+    
+    // Get total employees count (unique user_ids in attendance records)
+    const totalEmployees = new Set(attendanceRecords.map(r => r.user_id)).size;
+    
+    // Absent = Total - Present - HalfDay
+    const absentCount = Math.max(0, totalEmployees - presentCount);
+    
+    return {
+      total: totalEmployees,
+      present: presentCount,
+      halfDay: halfDayCount,
+      absent: absentCount,
+      date: targetDate
+    };
+  }, [attendanceRecords, selectedDate]);
 
   // Pending records for manager approval
   const pendingRecords = useMemo(() => {
@@ -292,33 +327,37 @@ export default function Attendance() {
                   <CardContent>
                     <Calendar
                       mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
                       month={selectedMonth}
                       onMonthChange={setSelectedMonth}
                       modifiers={{
-                        approved: (date) => calendarModifiers.approved.some(d => isSameDay(d, date)),
-                        pending: (date) => calendarModifiers.pending.some(d => isSameDay(d, date)),
-                        rejected: (date) => calendarModifiers.rejected.some(d => isSameDay(d, date)),
                         holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)) || isSunday(date),
                       }}
                       modifiersStyles={modifiersStyles}
                       className="pointer-events-auto"
                     />
-                    <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-2))" }} />
-                        <span>Approved</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-4))" }} />
-                        <span>Pending</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--destructive))" }} />
-                        <span>Rejected</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-5))" }} />
-                        <span>Holiday</span>
+                    <div className="mt-4 space-y-2">
+                      {selectedDate && (
+                        <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
+                          <span className="text-sm font-medium">
+                            Showing: {format(selectedDate, "MMM dd, yyyy")}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedDate(undefined)}
+                            className="h-7 text-xs"
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-5))" }} />
+                          <span>Holiday</span>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -329,7 +368,39 @@ export default function Attendance() {
                   <CardHeader>
                     <CardTitle>Attendance Records</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-4">
+                    {/* Daily Stats - Compact */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/20">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                          <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Total Employees</p>
+                          <p className="text-2xl font-bold">{dailyStats.total}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20">
+                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Present</p>
+                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dailyStats.present}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-red-50 dark:bg-red-950/20">
+                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
+                          <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Absent</p>
+                          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{dailyStats.absent}</p>
+                        </div>
+                      </div>
+                    </div>
                     {loading ? (
                       <div className="flex justify-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -459,29 +530,37 @@ export default function Attendance() {
               <CardContent>
                 <Calendar
                   mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
                   month={selectedMonth}
                   onMonthChange={setSelectedMonth}
                   modifiers={{
-                    approved: (date) => calendarModifiers.approved.some(d => isSameDay(d, date)),
-                    pending: (date) => calendarModifiers.pending.some(d => isSameDay(d, date)),
-                    rejected: (date) => calendarModifiers.rejected.some(d => isSameDay(d, date)),
                     holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)) || isSunday(date),
                   }}
                   modifiersStyles={modifiersStyles}
                   className="pointer-events-auto"
                 />
-                <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-2))" }} />
-                    <span>Present</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-4))" }} />
-                    <span>Pending</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-5))" }} />
-                    <span>Holiday</span>
+                <div className="mt-4 space-y-2">
+                  {selectedDate && (
+                    <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
+                      <span className="text-sm font-medium">
+                        Showing: {format(selectedDate, "MMM dd, yyyy")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedDate(undefined)}
+                        className="h-7 text-xs"
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-5))" }} />
+                      <span>Holiday</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -513,6 +592,44 @@ export default function Attendance() {
                       </TableHeader>
                       <TableBody>
                         {monthRecords.map((record) => {
+                          // If half day, show HD as main status
+                          if (record.is_half_day) {
+                            return (
+                              <TableRow key={record.id}>
+                                <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
+                                <TableCell>
+                                  {record.check_in_time
+                                    ? format(new Date(record.check_in_time), "hh:mm a")
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary" className="font-mono">
+                                    HD
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1 flex-wrap">
+                                    {record.is_late && (
+                                      <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+                                        LT
+                                      </Badge>
+                                    )}
+                                    {record.status === "pending" && (
+                                      <Badge variant="outline" className="text-xs">Pending</Badge>
+                                    )}
+                                    {record.status === "approved" && (
+                                      <Badge className="bg-green-500 text-xs">Approved</Badge>
+                                    )}
+                                    {record.status === "rejected" && (
+                                      <Badge variant="destructive" className="text-xs">Rejected</Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          }
+
+                          // Regular attendance display
                           const displayStatus = getAttendanceDisplayStatus(
                             record.status,
                             record.calculated_status,
@@ -534,10 +651,10 @@ export default function Attendance() {
                                 </Badge>
                               </TableCell>
                               <TableCell>
-                                <div className="flex gap-1">
-                                  {record.is_half_day && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {record.half_day_type === "first_half" ? "1st Half" : "2nd Half"}
+                                <div className="flex gap-1 flex-wrap">
+                                  {record.is_late && displayStatus === "present" && (
+                                    <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
+                                      LT
                                     </Badge>
                                   )}
                                   {record.status === "pending" && (

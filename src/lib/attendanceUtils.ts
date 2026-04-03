@@ -3,7 +3,6 @@ import { Badge } from "@/components/ui/badge";
 export type AttendanceStatus = 
   | "present" 
   | "absent" 
-  | "late" 
   | "half_day" 
   | "paid_leave" 
   | "holiday" 
@@ -28,12 +27,6 @@ export const attendanceStatusConfig: Record<AttendanceStatus, AttendanceStatusCo
     shortLabel: "AB",
     variant: "destructive",
     color: "bg-red-500",
-  },
-  late: {
-    label: "Present + Late",
-    shortLabel: "PR + LT",
-    variant: "outline",
-    color: "bg-orange-500",
   },
   half_day: {
     label: "Half Day",
@@ -61,6 +54,13 @@ export const attendanceStatusConfig: Record<AttendanceStatus, AttendanceStatusCo
   },
 };
 
+export const lateStatusConfig = {
+  label: "Late",
+  shortLabel: "LT",
+  variant: "outline" as const,
+  color: "bg-orange-500",
+};
+
 export function getAttendanceStatusBadge(status: string | null, useShortLabel = false) {
   const normalizedStatus = (status?.toLowerCase() || "pending") as AttendanceStatus;
   const config = attendanceStatusConfig[normalizedStatus] || attendanceStatusConfig.pending;
@@ -79,18 +79,16 @@ export function getAttendanceDisplayStatus(
 ): AttendanceStatus {
   // If manually approved/rejected, use that status
   if (status === "approved") {
-    if (isLate) return "late";
     return "present";
   }
   if (status === "rejected") return "absent";
   
-  // Use calculated status
-  if (calculatedStatus === "present") {
-    return isLate ? "late" : "present";
+  // Use calculated status - always return present if not absent/half_day
+  if (calculatedStatus === "present" || calculatedStatus === "late") {
+    return "present";
   }
   if (calculatedStatus === "absent") return "absent";
   if (calculatedStatus === "half_day") return "half_day";
-  if (calculatedStatus === "late") return "late";
   
   return "pending";
 }
