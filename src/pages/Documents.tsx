@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { FileText, Plus, Trash2, Edit } from "lucide-react";
+import { FileText, Plus, Trash2, Edit, Search } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -43,6 +43,7 @@ export default function Documents() {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingDocument, setEditingDocument] = useState<CompanyDocument | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -191,6 +192,17 @@ export default function Documents() {
   const canUploadDocument = role === "admin" || role === "manager";
   const canDeleteDocument = role === "admin" || role === "manager";
 
+  // Filter documents based on search query
+  const filteredDocuments = documents.filter((doc) => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const titleMatch = doc.title.toLowerCase().includes(query);
+    const descriptionMatch = doc.description?.toLowerCase().includes(query);
+    
+    return titleMatch || descriptionMatch;
+  });
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -267,22 +279,36 @@ export default function Documents() {
           )}
         </div>
 
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search documents by title or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
-        ) : documents.length === 0 ? (
+        ) : filteredDocuments.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileText className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-center">
-                No documents uploaded yet.
+                {searchQuery.trim() 
+                  ? `No documents found matching "${searchQuery}"`
+                  : "No documents uploaded yet."
+                }
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {documents.map((document) => (
+            {filteredDocuments.map((document) => (
               <Card key={document.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
