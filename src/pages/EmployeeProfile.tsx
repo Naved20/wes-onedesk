@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { ArrowLeft, Save } from "lucide-react";
+import { MyDocuments } from "@/components/employee/MyDocuments";
 
 interface ProfileData {
   id: string;
@@ -296,6 +297,7 @@ export default function EmployeeProfile() {
             <TabsTrigger value="bank">Bank</TabsTrigger>
             <TabsTrigger value="education">Education</TabsTrigger>
             <TabsTrigger value="emergency">Emergency</TabsTrigger>
+            <TabsTrigger value="documents">My Documents</TabsTrigger>
             <TabsTrigger value="other">Other</TabsTrigger>
           </TabsList>
 
@@ -432,6 +434,15 @@ export default function EmployeeProfile() {
                 {renderField("Vehicle Information", "vehicle_information")}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="documents">
+            {profile && (
+              <MyDocuments 
+                userId={profile.user_id} 
+                isViewOnly={!isOwnProfile && role !== "admin"} 
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>
