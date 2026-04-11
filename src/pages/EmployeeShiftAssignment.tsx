@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { UserPlus, Clock, Users } from "lucide-react";
+import { UserPlus, Clock, Users, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface Employee {
@@ -58,6 +58,8 @@ export default function EmployeeShiftAssignment() {
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [shiftFilter, setShiftFilter] = useState<string>("all");
   const [formData, setFormData] = useState({
     user_id: "",
     shift_id: "",
@@ -242,10 +244,10 @@ export default function EmployeeShiftAssignment() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedEmployees.length === employees.length) {
+    if (selectedEmployees.length === filteredEmployees.length && filteredEmployees.length > 0) {
       setSelectedEmployees([]);
     } else {
-      setSelectedEmployees(employees.map(emp => emp.user_id));
+      setSelectedEmployees(filteredEmployees.map(emp => emp.user_id));
     }
   };
 
@@ -259,6 +261,37 @@ export default function EmployeeShiftAssignment() {
     );
   };
 
+  // Filter employees based on search query and shift
+  const filteredEmployees = employees.filter((emp) => {
+    const matchesSearch = `${emp.first_name} ${emp.last_name} ${emp.email}`
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    
+    // Apply shift filter
+    if (shiftFilter === "all") return true;
+    
+    if (shiftFilter === "no_shift") {
+      const currentShift = getCurrentShift(emp.user_id);
+      return !currentShift;
+    }
+    
+    const currentShift = getCurrentShift(emp.user_id);
+    return currentShift?.shift_id === shiftFilter;
+  });
+
+  // Count employees by shift
+  const shiftCounts = shifts.reduce((acc, shift) => {
+    acc[shift.id] = employees.filter(emp => {
+      const currentShift = getCurrentShift(emp.user_id);
+      return currentShift?.shift_id === shift.id;
+    }).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const noShiftCount = employees.filter(emp => !getCurrentShift(emp.user_id)).length;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -268,6 +301,29 @@ export default function EmployeeShiftAssignment() {
             <p className="text-muted-foreground">Assign and manage employee shifts</p>
           </div>
           <div className="flex gap-2">
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search employees..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={shiftFilter} onValueChange={setShiftFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by shift" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Shifts ({employees.length})</SelectItem>
+                <SelectItem value="no_shift">No Shift ({noShiftCount})</SelectItem>
+                {shifts.map((shift) => (
+                  <SelectItem key={shift.id} value={shift.id}>
+                    {shift.name} ({shiftCounts[shift.id] || 0})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Dialog open={bulkOpen} onOpenChange={(isOpen) => {
               setBulkOpen(isOpen);
               if (!isOpen) resetBulkForm();
@@ -481,7 +537,7 @@ export default function EmployeeShiftAssignment() {
                   size="sm"
                   onClick={toggleSelectAll}
                 >
-                  {selectedEmployees.length === employees.length ? "Deselect All" : "Select All"}
+                  {selectedEmployees.length === filteredEmployees.length && filteredEmployees.length > 0 ? "Deselect All" : "Select All"}
                 </Button>
               </CardTitle>
             </CardHeader>
@@ -492,7 +548,12 @@ export default function EmployeeShiftAssignment() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {employees.map((emp) => {
+                  {filteredEmployees.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {searchQuery ? "No employees match your search" : "No employees found"}
+                    </div>
+                  ) : (
+                    filteredEmployees.map((emp) => {
                     const currentShift = getCurrentShift(emp.user_id);
                     const isSelected = selectedEmployees.includes(emp.user_id);
                     return (
@@ -522,7 +583,8 @@ export default function EmployeeShiftAssignment() {
                         )}
                       </div>
                     );
-                  })}
+                  })
+                  )}
                 </div>
               )}
             </CardContent>

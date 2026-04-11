@@ -6,11 +6,14 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { CalendarDays, CheckCircle, XCircle, Clock, AlertTriangle, Eye } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { AttendanceCheckIn } from "@/components/attendance/AttendanceCheckIn";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
@@ -24,6 +27,7 @@ type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 interface AttendanceWithEmployee extends Attendance {
   employee_name?: string;
   calculated_status?: string | null;
+  institution?: string | null;
 }
 
 interface Holiday {
@@ -41,46 +45,93 @@ export default function Attendance() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedAttendance, setSelectedAttendance] = useState<AttendanceWithEmployee | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [institutions, setInstitutions] = useState<string[]>([]);
+  const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 
   const currentYear = selectedMonth.getFullYear();
   const currentMonth = selectedMonth.getMonth() + 1;
 
   useEffect(() => {
     fetchData();
+    if (role === "admin" || role === "manager") {
+      fetchInstitutions();
+    }
   }, [role]);
 
+  // Clear status filter when institution or date changes
+  useEffect(() => {
+    setSelectedStatusFilter(null);
+  }, [selectedInstitution, selectedDate]);
+
   const fetchData = async () => {
-    await Promise.all([fetchAttendance(), checkTodayAttendance(), fetchHolidays()]);
+    await Promise.all([
+      fetchAttendance(), 
+      checkTodayAttendance(), 
+      fetchHolidays(),
+      ...(role === "admin" || role === "manager" ? [fetchAllEmployees()] : [])
+    ]);
+  };
+
+  const fetchInstitutions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("employee_profiles")
+        .select("institution_assignment")
+        .not("institution_assignment", "is", null);
+
+      if (error) throw error;
+
+      const uniqueInstitutions = [...new Set(
+        data?.map(p => p.institution_assignment).filter(Boolean) as string[]
+      )];
+      
+      setInstitutions(uniqueInstitutions);
+    } catch (error) {
+      console.error("Error fetching institutions:", error);
+    }
   };
 
   const fetchAttendance = async () => {
     try {
-      // Add timestamp to prevent caching
+      // Fetch attendance for current month and previous month to ensure we have enough data
+      const monthStart = startOfMonth(new Date());
+      const twoMonthsAgo = new Date(monthStart);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      
       const { data: attendanceData, error } = await supabase
         .from("attendance")
         .select("*")
-        .order("date", { ascending: false })
-        .limit(100);
+        .gte("date", format(twoMonthsAgo, "yyyy-MM-dd"))
+        .order("date", { ascending: false });
 
       if (error) throw error;
 
       console.log("Fetched attendance data:", attendanceData?.slice(0, 3)); // Log first 3 records
 
-      // For managers and admins, fetch employee names
+      // For managers and admins, fetch employee names and institutions
       if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
         const userIds = [...new Set(attendanceData.map(a => a.user_id))];
         const { data: profiles } = await supabase
           .from("employee_profiles")
-          .select("user_id, first_name, last_name")
+          .select("user_id, first_name, last_name, institution_assignment")
           .in("user_id", userIds);
 
         const profileMap = new Map(
-          profiles?.map(p => [p.user_id, `${p.first_name} ${p.last_name}`]) || []
+          profiles?.map(p => [
+            p.user_id, 
+            { 
+              name: `${p.first_name} ${p.last_name}`,
+              institution: p.institution_assignment 
+            }
+          ]) || []
         );
 
         const recordsWithNames = attendanceData.map(record => ({
           ...record,
-          employee_name: profileMap.get(record.user_id) || "Unknown",
+          employee_name: profileMap.get(record.user_id)?.name || "Unknown",
+          institution: profileMap.get(record.user_id)?.institution || null,
         }));
 
         setAttendanceRecords(recordsWithNames);
@@ -193,33 +244,244 @@ export default function Attendance() {
     },
   };
 
+  // Get all employees for absent calculation
+  const [allEmployees, setAllEmployees] = useState<Array<{user_id: string, name: string, institution: string | null}>>([]);
+
+  useEffect(() => {
+    if (role === "admin" || role === "manager") {
+      fetchAllEmployees();
+    }
+  }, [role]);
+
+  const fetchAllEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("employee_profiles")
+        .select("user_id, first_name, last_name, institution_assignment");
+
+      if (error) throw error;
+
+      const employees = data?.map(p => ({
+        user_id: p.user_id,
+        name: `${p.first_name} ${p.last_name}`,
+        institution: p.institution_assignment
+      })) || [];
+
+      setAllEmployees(employees);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
+  };
+
   // Filter records for current month or selected date
   const monthRecords = useMemo(() => {
+    let filtered = attendanceRecords;
+
     // If a specific date is selected, show only that date's records
     if (selectedDate) {
-      return attendanceRecords.filter(record => {
+      filtered = filtered.filter(record => {
         const recordDate = new Date(record.date);
         return isSameDay(recordDate, selectedDate);
       });
+    } else {
+      // Otherwise show all records for the current month
+      const monthStart = startOfMonth(selectedMonth);
+      const monthEnd = endOfMonth(selectedMonth);
+      
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.date);
+        return recordDate >= monthStart && recordDate <= monthEnd;
+      });
     }
+
+    // Apply institution filter
+    if (selectedInstitution !== "all") {
+      filtered = filtered.filter(record => 
+        record.institution === selectedInstitution
+      );
+    }
+
+    // Apply status filter
+    if (selectedStatusFilter) {
+      const targetDate = selectedDate || new Date();
+      const targetDateStr = format(targetDate, "yyyy-MM-dd");
+      
+      if (selectedStatusFilter === "present") {
+        filtered = filtered.filter(record => {
+          if (record.date !== targetDateStr) return false;
+          return (record.status === "approved" || record.status === "pending") &&
+                 (record.calculated_status === "present" || record.calculated_status === "late" || !record.calculated_status);
+        });
+      } else if (selectedStatusFilter === "absent") {
+        // For absent, show both:
+        // 1. Employees who checked in but are marked absent/rejected
+        // 2. Employees who didn't check in at all
+        const targetDate = selectedDate || new Date();
+        const targetDateStr = format(targetDate, "yyyy-MM-dd");
+        
+        // Get today's attendance records
+        const todayRecords = attendanceRecords.filter(r => r.date === targetDateStr);
+        
+        // Apply institution filter
+        let filteredTodayRecords = todayRecords;
+        if (selectedInstitution !== "all") {
+          filteredTodayRecords = todayRecords.filter(record => 
+            record.institution === selectedInstitution
+          );
+        }
+        
+        // Get employees who are marked absent (rejected or calculated_status = absent)
+        const markedAbsent = filteredTodayRecords.filter(record =>
+          record.status === "rejected" || record.calculated_status === "absent"
+        );
+        
+        // Get employees who checked in today
+        const checkedInUserIds = new Set(todayRecords.map(r => r.user_id));
+
+        // Filter employees based on institution
+        let employeesToCheck = allEmployees;
+        if (selectedInstitution !== "all") {
+          employeesToCheck = employeesToCheck.filter(emp => emp.institution === selectedInstitution);
+        }
+
+        // Find employees who didn't check in at all
+        const didNotCheckIn = employeesToCheck.filter(emp => !checkedInUserIds.has(emp.user_id));
+
+        // Create fake attendance records for employees who didn't check in
+        const absentRecords: AttendanceWithEmployee[] = didNotCheckIn.map(emp => ({
+          id: `absent-${emp.user_id}`,
+          user_id: emp.user_id,
+          date: targetDateStr,
+          check_in_time: null,
+          check_out_time: null,
+          status: "rejected",
+          calculated_status: "absent",
+          is_late: false,
+          is_half_day: false,
+          half_day_type: null,
+          notes: null,
+          shift_id: null,
+          is_manual_override: false,
+          modified_by: null,
+          created_at: targetDateStr,
+          updated_at: targetDateStr,
+          employee_name: emp.name,
+          institution: emp.institution,
+          admin_override: null,
+          approved_at: null,
+          approved_by: null,
+          modified_at: null,
+          rejection_reason: null,
+          late_reason: null,
+          overtime_hours: null,
+          original_status: null,
+          presence_value: null
+        }));
+
+        // Combine marked absent and didn't check in
+        return [...markedAbsent, ...absentRecords];
+      } else if (selectedStatusFilter === "all") {
+        // Show all employees (present + absent) for today
+        const targetDate = selectedDate || new Date();
+        const targetDateStr = format(targetDate, "yyyy-MM-dd");
+        
+        // Get today's attendance records
+        const todayRecords = attendanceRecords.filter(r => r.date === targetDateStr);
+        
+        // Apply institution filter to today's records
+        let filteredTodayRecords = todayRecords;
+        if (selectedInstitution !== "all") {
+          filteredTodayRecords = todayRecords.filter(record => 
+            record.institution === selectedInstitution
+          );
+        }
+        
+        // Get employees who checked in today
+        const checkedInUserIds = new Set(todayRecords.map(r => r.user_id));
+
+        // Filter employees based on institution
+        let employeesToCheck = allEmployees;
+        if (selectedInstitution !== "all") {
+          employeesToCheck = employeesToCheck.filter(emp => emp.institution === selectedInstitution);
+        }
+
+        // Find absent employees (those who didn't check in)
+        const absentEmployees = employeesToCheck.filter(emp => !checkedInUserIds.has(emp.user_id));
+
+        // Create fake attendance records for absent employees
+        const absentRecords: AttendanceWithEmployee[] = absentEmployees.map(emp => ({
+          id: `absent-${emp.user_id}`,
+          user_id: emp.user_id,
+          date: targetDateStr,
+          check_in_time: null,
+          check_out_time: null,
+          status: "rejected",
+          calculated_status: "absent",
+          is_late: false,
+          is_half_day: false,
+          half_day_type: null,
+          notes: null,
+          shift_id: null,
+          is_manual_override: false,
+          modified_by: null,
+          created_at: targetDateStr,
+          updated_at: targetDateStr,
+          employee_name: emp.name,
+          institution: emp.institution,
+          admin_override: null,
+          approved_at: null,
+          approved_by: null,
+          modified_at: null,
+          rejection_reason: null,
+          late_reason: null,
+          overtime_hours: null,
+          original_status: null,
+          presence_value: null
+        }));
+
+        // Combine present and absent records
+        return [...filteredTodayRecords, ...absentRecords];
+      }
+    }
+
+    return filtered;
+  }, [attendanceRecords, selectedMonth, selectedDate, selectedInstitution, selectedStatusFilter, allEmployees]);
+
+  // Apply employee search filter
+  const searchFilteredRecords = useMemo(() => {
+    if (!employeeSearchQuery.trim()) return monthRecords;
     
-    // Otherwise show all records for the current month
-    const monthStart = startOfMonth(selectedMonth);
-    const monthEnd = endOfMonth(selectedMonth);
-    
-    return attendanceRecords.filter(record => {
-      const recordDate = new Date(record.date);
-      return recordDate >= monthStart && recordDate <= monthEnd;
-    });
-  }, [attendanceRecords, selectedMonth, selectedDate]);
+    return monthRecords.filter(record => 
+      record.employee_name?.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+    );
+  }, [monthRecords, employeeSearchQuery]);
 
   // Calculate daily stats for selected date or today
   const dailyStats = useMemo(() => {
     const targetDate = selectedDate || new Date();
     const targetDateStr = format(targetDate, "yyyy-MM-dd");
     
+    // Filter employees by institution first
+    let employeesToCount = allEmployees;
+    if (selectedInstitution !== "all") {
+      employeesToCount = employeesToCount.filter(emp => 
+        emp.institution === selectedInstitution
+      );
+    }
+    
+    // Total employees from employee_profiles (not just those with attendance records)
+    const totalEmployees = employeesToCount.length;
+    
+    // Filter attendance records by institution
+    let filteredRecords = attendanceRecords;
+    if (selectedInstitution !== "all") {
+      filteredRecords = filteredRecords.filter(record => 
+        record.institution === selectedInstitution
+      );
+    }
+    
     // Get today's attendance records
-    const todayRecords = attendanceRecords.filter(record => 
+    const todayRecords = filteredRecords.filter(record => 
       record.date === targetDateStr
     );
     
@@ -234,9 +496,6 @@ export default function Attendance() {
       record.is_half_day && (record.status === "approved" || record.status === "pending")
     ).length;
     
-    // Get total employees count (unique user_ids in attendance records)
-    const totalEmployees = new Set(attendanceRecords.map(r => r.user_id)).size;
-    
     // Absent = Total - Present - HalfDay
     const absentCount = Math.max(0, totalEmployees - presentCount);
     
@@ -247,7 +506,7 @@ export default function Attendance() {
       absent: absentCount,
       date: targetDate
     };
-  }, [attendanceRecords, selectedDate]);
+  }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees]);
 
   // Pending records for manager approval
   const pendingRecords = useMemo(() => {
@@ -290,6 +549,51 @@ export default function Attendance() {
 
         {/* Manager/Admin View with Tabs */}
         {(role === "admin" || role === "manager") ? (
+          <>
+            {/* Institution Filter */}
+            {institutions.length > 0 && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <Label htmlFor="institution-filter" className="whitespace-nowrap">
+                      Filter by Institution:
+                    </Label>
+                    <Select value={selectedInstitution} onValueChange={setSelectedInstitution}>
+                      <SelectTrigger id="institution-filter" className="w-[300px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Institutions</SelectItem>
+                        {institutions.map((inst) => (
+                          <SelectItem key={inst} value={inst}>
+                            {inst}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedInstitution !== "all" && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setSelectedInstitution("all")}
+                      >
+                        Clear Filter
+                      </Button>
+                    )}
+                    <div className="relative ml-auto w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search employees..."
+                        value={employeeSearchQuery}
+                        onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -369,9 +673,16 @@ export default function Attendance() {
                     <CardTitle>Attendance Records</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Daily Stats - Compact */}
+                    {/* Daily Stats - Compact and Clickable */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/20">
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          selectedStatusFilter === 'all' 
+                            ? 'bg-blue-50 dark:bg-blue-950/20 ring-2 ring-blue-500' 
+                            : 'bg-blue-50 dark:bg-blue-950/20'
+                        }`}
+                        onClick={() => setSelectedStatusFilter('all')}
+                      >
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
                           <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </div>
@@ -381,7 +692,14 @@ export default function Attendance() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-green-50 dark:bg-green-950/20">
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          selectedStatusFilter === 'present' 
+                            ? 'bg-green-50 dark:bg-green-950/20 ring-2 ring-green-500' 
+                            : 'bg-green-50 dark:bg-green-950/20'
+                        }`}
+                        onClick={() => setSelectedStatusFilter('present')}
+                      >
                         <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
                           <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                         </div>
@@ -391,7 +709,14 @@ export default function Attendance() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 p-3 rounded-lg border bg-red-50 dark:bg-red-950/20">
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          selectedStatusFilter === 'absent' 
+                            ? 'bg-red-50 dark:bg-red-950/20 ring-2 ring-red-500' 
+                            : 'bg-red-50 dark:bg-red-950/20'
+                        }`}
+                        onClick={() => setSelectedStatusFilter('absent')}
+                      >
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
                           <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </div>
@@ -405,15 +730,16 @@ export default function Attendance() {
                       <div className="flex justify-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                       </div>
-                    ) : monthRecords.length === 0 ? (
+                    ) : searchFilteredRecords.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        No attendance records for this month
+                        {employeeSearchQuery ? "No employees match your search" : "No attendance records for this month"}
                       </div>
                     ) : (
                       <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-16">S.No.</TableHead>
                               <TableHead>Employee</TableHead>
                               <TableHead>Date</TableHead>
                               <TableHead>Check-in</TableHead>
@@ -422,8 +748,11 @@ export default function Attendance() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {monthRecords.map((record) => (
+                            {searchFilteredRecords.map((record, index) => (
                               <TableRow key={record.id}>
+                                <TableCell className="font-medium text-muted-foreground">
+                                  {index + 1}
+                                </TableCell>
                                 <TableCell className="font-medium">{record.employee_name || "-"}</TableCell>
                                 <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
                                 <TableCell>
@@ -517,6 +846,7 @@ export default function Attendance() {
               </TabsContent>
             )}
           </Tabs>
+          </>
         ) : (
           /* Employee View - Calendar and Records */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -575,15 +905,16 @@ export default function Attendance() {
                   <div className="flex justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
-                ) : monthRecords.length === 0 ? (
+                ) : searchFilteredRecords.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No attendance records for this month
+                    {employeeSearchQuery ? "No employees match your search" : "No attendance records for this month"}
                   </div>
                 ) : (
                   <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-16">S.No.</TableHead>
                           <TableHead>Date</TableHead>
                           <TableHead>Check-in Time</TableHead>
                           <TableHead>Status</TableHead>
@@ -591,11 +922,14 @@ export default function Attendance() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {monthRecords.map((record) => {
+                        {searchFilteredRecords.map((record, index) => {
                           // If half day, show HD as main status
                           if (record.is_half_day) {
                             return (
                               <TableRow key={record.id}>
+                                <TableCell className="font-medium text-muted-foreground">
+                                  {index + 1}
+                                </TableCell>
                                 <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
                                 <TableCell>
                                   {record.check_in_time
@@ -639,6 +973,9 @@ export default function Attendance() {
                           
                           return (
                             <TableRow key={record.id}>
+                              <TableCell className="font-medium text-muted-foreground">
+                                {index + 1}
+                              </TableCell>
                               <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
                               <TableCell>
                                 {record.check_in_time

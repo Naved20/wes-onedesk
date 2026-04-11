@@ -293,13 +293,17 @@ export default function Employees() {
             <p className="text-muted-foreground">Manage employee profiles and information</p>
           </div>
           {role === "admin" && (
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Employee
-                </Button>
-              </DialogTrigger>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-base px-4 py-2">
+                Total: {employees.length}
+              </Badge>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Employee
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Create New Employee</DialogTitle>
@@ -401,6 +405,7 @@ export default function Employees() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           )}
         </div>
 
@@ -433,6 +438,7 @@ export default function Employees() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-16">S.No.</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Designation</TableHead>
@@ -443,8 +449,11 @@ export default function Employees() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEmployees.map((employee) => (
+                    {filteredEmployees.map((employee, index) => (
                       <TableRow key={employee.id}>
+                        <TableCell className="font-medium text-muted-foreground">
+                          {index + 1}
+                        </TableCell>
                         <TableCell className="font-medium">
                           {employee.first_name} {employee.last_name}
                         </TableCell>
