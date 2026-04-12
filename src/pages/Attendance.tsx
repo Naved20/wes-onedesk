@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search } from "lucide-react";
+import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { AttendanceCheckIn } from "@/components/attendance/AttendanceCheckIn";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
@@ -45,6 +46,9 @@ export default function Attendance() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedAttendance, setSelectedAttendance] = useState<AttendanceWithEmployee | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [employeeDetailsOpen, setEmployeeDetailsOpen] = useState(false);
+  const [employeeDialogMonth, setEmployeeDialogMonth] = useState<Date>(new Date());
   const [institutions, setInstitutions] = useState<string[]>([]);
   const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
@@ -109,6 +113,16 @@ export default function Attendance() {
       if (error) throw error;
 
       console.log("Fetched attendance data:", attendanceData?.slice(0, 3)); // Log first 3 records
+      
+      // Debug: Log calculated_status values
+      if (attendanceData && attendanceData.length > 0) {
+        console.log("Sample record statuses:", attendanceData.slice(0, 3).map((r: any) => ({
+          id: r.id,
+          status: r.status,
+          calculated_status: r.calculated_status,
+          is_late: r.is_late
+        })));
+      }
 
       // For managers and admins, fetch employee names and institutions
       if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
@@ -185,9 +199,43 @@ export default function Attendance() {
     setApprovalDialogOpen(true);
   };
 
+  const openEmployeeDetails = (userId: string) => {
+    setSelectedEmployeeId(userId);
+    setEmployeeDialogMonth(new Date()); // Reset to current month
+    setEmployeeDetailsOpen(true);
+  };
+
   const getStatusBadge = (record: AttendanceWithEmployee) => {
-    // If half day, show HD as main status
-    if (record.is_half_day) {
+    // Check calculated_status first for direct status display
+    const calculatedStatus = record.calculated_status?.toLowerCase();
+    
+    // Debug log
+    if (record.employee_name?.includes("test") || Math.random() < 0.1) {
+      console.log("Badge for:", record.employee_name, {
+        status: record.status,
+        calculated_status: record.calculated_status,
+        calculatedStatus: calculatedStatus
+      });
+    }
+    
+    // If absent from calculated_status, show AB
+    if (calculatedStatus === "absent") {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="destructive" className="font-mono">
+            AB
+          </Badge>
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
+    }
+    
+    // If half day (either from flag or calculated_status), show HD as main status
+    if (record.is_half_day || calculatedStatus === "half_day") {
       return (
         <div className="flex flex-wrap gap-1 items-center">
           <Badge variant="secondary" className="font-mono">
@@ -207,7 +255,48 @@ export default function Attendance() {
       );
     }
 
-    // Regular status display
+    // Use calculated_status directly if it's one of the special types
+    if (calculatedStatus === "paid_leave") {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="secondary" className="font-mono bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700">
+            PL
+          </Badge>
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
+    }
+
+    if (calculatedStatus === "holiday") {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="outline" className="font-mono bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+            HO
+          </Badge>
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
+    }
+
+    if (calculatedStatus === "pending") {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="secondary" className="font-mono">
+            PD
+          </Badge>
+        </div>
+      );
+    }
+
+    // Regular status display for present
     const displayStatus = getAttendanceDisplayStatus(
       record.status,
       record.calculated_status,
@@ -301,151 +390,49 @@ export default function Attendance() {
       );
     }
 
+    // Check if target date is a holiday (including Sundays)
+    const isTargetDateHoliday = (dateStr: string) => {
+      const date = new Date(dateStr);
+      // Check if it's Sunday OR in holidays table
+      return isSunday(date) || holidays.some(h => h.date === dateStr);
+    };
+
     // Apply status filter
     if (selectedStatusFilter) {
       const targetDate = selectedDate || new Date();
       const targetDateStr = format(targetDate, "yyyy-MM-dd");
+      const isHoliday = isTargetDateHoliday(targetDateStr);
       
       if (selectedStatusFilter === "present") {
         filtered = filtered.filter(record => {
           if (record.date !== targetDateStr) return false;
-          return (record.status === "approved" || record.status === "pending") &&
-                 (record.calculated_status === "present" || record.calculated_status === "late" || !record.calculated_status);
+          // Check calculated_status for present/late, not approval status
+          const calcStatus = record.calculated_status?.toLowerCase();
+          return calcStatus === "present" || calcStatus === "late";
         });
       } else if (selectedStatusFilter === "absent") {
-        // For absent, show both:
-        // 1. Employees who checked in but are marked absent/rejected
-        // 2. Employees who didn't check in at all
-        const targetDate = selectedDate || new Date();
-        const targetDateStr = format(targetDate, "yyyy-MM-dd");
-        
-        // Get today's attendance records
-        const todayRecords = attendanceRecords.filter(r => r.date === targetDateStr);
-        
-        // Apply institution filter
-        let filteredTodayRecords = todayRecords;
-        if (selectedInstitution !== "all") {
-          filteredTodayRecords = todayRecords.filter(record => 
-            record.institution === selectedInstitution
-          );
-        }
-        
-        // Get employees who are marked absent (rejected or calculated_status = absent)
-        const markedAbsent = filteredTodayRecords.filter(record =>
-          record.status === "rejected" || record.calculated_status === "absent"
-        );
-        
-        // Get employees who checked in today
-        const checkedInUserIds = new Set(todayRecords.map(r => r.user_id));
-
-        // Filter employees based on institution
-        let employeesToCheck = allEmployees;
-        if (selectedInstitution !== "all") {
-          employeesToCheck = employeesToCheck.filter(emp => emp.institution === selectedInstitution);
+        // Don't show absent records if the date is a holiday
+        if (isHoliday) {
+          return [];
         }
 
-        // Find employees who didn't check in at all
-        const didNotCheckIn = employeesToCheck.filter(emp => !checkedInUserIds.has(emp.user_id));
-
-        // Create fake attendance records for employees who didn't check in
-        const absentRecords: AttendanceWithEmployee[] = didNotCheckIn.map(emp => ({
-          id: `absent-${emp.user_id}`,
-          user_id: emp.user_id,
-          date: targetDateStr,
-          check_in_time: null,
-          check_out_time: null,
-          status: "rejected",
-          calculated_status: "absent",
-          is_late: false,
-          is_half_day: false,
-          half_day_type: null,
-          notes: null,
-          shift_id: null,
-          is_manual_override: false,
-          modified_by: null,
-          created_at: targetDateStr,
-          updated_at: targetDateStr,
-          employee_name: emp.name,
-          institution: emp.institution,
-          admin_override: null,
-          approved_at: null,
-          approved_by: null,
-          modified_at: null,
-          rejection_reason: null,
-          late_reason: null,
-          overtime_hours: null,
-          original_status: null,
-          presence_value: null
-        }));
-
-        // Combine marked absent and didn't check in
-        return [...markedAbsent, ...absentRecords];
+        // Show employees who have calculated_status = absent
+        filtered = filtered.filter(record => {
+          if (record.date !== targetDateStr) return false;
+          const calcStatus = record.calculated_status?.toLowerCase();
+          return calcStatus === "absent";
+        });
       } else if (selectedStatusFilter === "all") {
-        // Show all employees (present + absent) for today
+        // Show all employees (present + absent) for the selected date
         const targetDate = selectedDate || new Date();
         const targetDateStr = format(targetDate, "yyyy-MM-dd");
         
-        // Get today's attendance records
-        const todayRecords = attendanceRecords.filter(r => r.date === targetDateStr);
-        
-        // Apply institution filter to today's records
-        let filteredTodayRecords = todayRecords;
-        if (selectedInstitution !== "all") {
-          filteredTodayRecords = todayRecords.filter(record => 
-            record.institution === selectedInstitution
-          );
-        }
-        
-        // Get employees who checked in today
-        const checkedInUserIds = new Set(todayRecords.map(r => r.user_id));
-
-        // Filter employees based on institution
-        let employeesToCheck = allEmployees;
-        if (selectedInstitution !== "all") {
-          employeesToCheck = employeesToCheck.filter(emp => emp.institution === selectedInstitution);
-        }
-
-        // Find absent employees (those who didn't check in)
-        const absentEmployees = employeesToCheck.filter(emp => !checkedInUserIds.has(emp.user_id));
-
-        // Create fake attendance records for absent employees
-        const absentRecords: AttendanceWithEmployee[] = absentEmployees.map(emp => ({
-          id: `absent-${emp.user_id}`,
-          user_id: emp.user_id,
-          date: targetDateStr,
-          check_in_time: null,
-          check_out_time: null,
-          status: "rejected",
-          calculated_status: "absent",
-          is_late: false,
-          is_half_day: false,
-          half_day_type: null,
-          notes: null,
-          shift_id: null,
-          is_manual_override: false,
-          modified_by: null,
-          created_at: targetDateStr,
-          updated_at: targetDateStr,
-          employee_name: emp.name,
-          institution: emp.institution,
-          admin_override: null,
-          approved_at: null,
-          approved_by: null,
-          modified_at: null,
-          rejection_reason: null,
-          late_reason: null,
-          overtime_hours: null,
-          original_status: null,
-          presence_value: null
-        }));
-
-        // Combine present and absent records
-        return [...filteredTodayRecords, ...absentRecords];
+        filtered = filtered.filter(record => record.date === targetDateStr);
       }
     }
 
     return filtered;
-  }, [attendanceRecords, selectedMonth, selectedDate, selectedInstitution, selectedStatusFilter, allEmployees]);
+  }, [attendanceRecords, selectedMonth, selectedDate, selectedInstitution, selectedStatusFilter, holidays]);
 
   // Apply employee search filter
   const searchFilteredRecords = useMemo(() => {
@@ -460,6 +447,9 @@ export default function Attendance() {
   const dailyStats = useMemo(() => {
     const targetDate = selectedDate || new Date();
     const targetDateStr = format(targetDate, "yyyy-MM-dd");
+    
+    // Check if target date is a holiday (including Sundays)
+    const isHoliday = isSunday(targetDate) || holidays.some(h => h.date === targetDateStr);
     
     // Filter employees by institution first
     let employeesToCount = allEmployees;
@@ -485,28 +475,33 @@ export default function Attendance() {
       record.date === targetDateStr
     );
     
-    // Count present (approved or pending with present/late status)
-    const presentCount = todayRecords.filter(record => 
-      (record.status === "approved" || record.status === "pending") &&
-      (record.calculated_status === "present" || record.calculated_status === "late" || !record.calculated_status)
-    ).length;
+    // Count present based on calculated_status (not approval status)
+    const presentCount = todayRecords.filter(record => {
+      const calcStatus = record.calculated_status?.toLowerCase();
+      return calcStatus === "present" || calcStatus === "late";
+    }).length;
     
-    // Count half day
-    const halfDayCount = todayRecords.filter(record => 
-      record.is_half_day && (record.status === "approved" || record.status === "pending")
-    ).length;
+    // Count half day based on calculated_status
+    const halfDayCount = todayRecords.filter(record => {
+      const calcStatus = record.calculated_status?.toLowerCase();
+      return calcStatus === "half_day" || record.is_half_day;
+    }).length;
     
-    // Absent = Total - Present - HalfDay
-    const absentCount = Math.max(0, totalEmployees - presentCount);
+    // Count absent based on calculated_status
+    const absentCount = isHoliday ? 0 : todayRecords.filter(record => {
+      const calcStatus = record.calculated_status?.toLowerCase();
+      return calcStatus === "absent";
+    }).length;
     
     return {
       total: totalEmployees,
       present: presentCount,
       halfDay: halfDayCount,
       absent: absentCount,
-      date: targetDate
+      date: targetDate,
+      isHoliday: isHoliday
     };
-  }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees]);
+  }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees, holidays]);
 
   // Pending records for manager approval
   const pendingRecords = useMemo(() => {
@@ -715,14 +710,18 @@ export default function Attendance() {
                             ? 'bg-red-50 dark:bg-red-950/20 ring-2 ring-red-500' 
                             : 'bg-red-50 dark:bg-red-950/20'
                         }`}
-                        onClick={() => setSelectedStatusFilter('absent')}
+                        onClick={() => !dailyStats.isHoliday && setSelectedStatusFilter('absent')}
                       >
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
                           <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Absent</p>
-                          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{dailyStats.absent}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {dailyStats.isHoliday ? "Holiday" : "Absent"}
+                          </p>
+                          <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                            {dailyStats.isHoliday ? "-" : dailyStats.absent}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -732,7 +731,18 @@ export default function Attendance() {
                       </div>
                     ) : searchFilteredRecords.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        {employeeSearchQuery ? "No employees match your search" : "No attendance records for this month"}
+                        {dailyStats.isHoliday ? (
+                          <div className="space-y-2">
+                            <p className="text-lg font-medium">🎉 Holiday</p>
+                            <p>No attendance records for holidays</p>
+                          </div>
+                        ) : employeeSearchQuery ? (
+                          "No employees match your search"
+                        ) : selectedDate ? (
+                          "No attendance records for this date"
+                        ) : (
+                          "No attendance records for this month"
+                        )}
                       </div>
                     ) : (
                       <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -743,6 +753,7 @@ export default function Attendance() {
                               <TableHead>Employee</TableHead>
                               <TableHead>Date</TableHead>
                               <TableHead>Check-in</TableHead>
+                              <TableHead>Check-out</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -753,11 +764,21 @@ export default function Attendance() {
                                 <TableCell className="font-medium text-muted-foreground">
                                   {index + 1}
                                 </TableCell>
-                                <TableCell className="font-medium">{record.employee_name || "-"}</TableCell>
+                                <TableCell 
+                                  className="font-medium cursor-pointer hover:text-primary hover:underline"
+                                  onClick={() => openEmployeeDetails(record.user_id)}
+                                >
+                                  {record.employee_name || "-"}
+                                </TableCell>
                                 <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
                                 <TableCell>
                                   {record.check_in_time
                                     ? format(new Date(record.check_in_time), "hh:mm a")
+                                    : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {record.check_out_time
+                                    ? format(new Date(record.check_out_time), "hh:mm a")
                                     : "-"}
                                 </TableCell>
                                 <TableCell>{getStatusBadge(record)}</TableCell>
@@ -1030,6 +1051,300 @@ export default function Attendance() {
         userId={user?.id || ""}
         isAdmin={role === "admin"}
       />
+
+      {/* Employee Details Dialog */}
+      {selectedEmployeeId && (
+        <Dialog open={employeeDetailsOpen} onOpenChange={setEmployeeDetailsOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {(() => {
+                  const employeeRecord = attendanceRecords.find(r => r.user_id === selectedEmployeeId);
+                  const employeeName = employeeRecord?.employee_name || "Employee";
+                  return employeeName;
+                })()}
+              </DialogTitle>
+            </DialogHeader>
+            
+            {/* Month Navigation */}
+            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newMonth = new Date(employeeDialogMonth);
+                  newMonth.setMonth(newMonth.getMonth() - 1);
+                  setEmployeeDialogMonth(newMonth);
+                }}
+              >
+                ← Previous
+              </Button>
+              <div className="text-center">
+                <p className="font-semibold text-lg">
+                  {format(employeeDialogMonth, "MMMM yyyy")}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newMonth = new Date(employeeDialogMonth);
+                  newMonth.setMonth(newMonth.getMonth() + 1);
+                  setEmployeeDialogMonth(newMonth);
+                }}
+                disabled={employeeDialogMonth >= new Date()}
+              >
+                Next →
+              </Button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Monthly Stats */}
+              <AttendanceStats 
+                userId={selectedEmployeeId} 
+                year={employeeDialogMonth.getFullYear()} 
+                month={employeeDialogMonth.getMonth() + 1}
+                attendanceRecords={attendanceRecords}
+              />
+              
+              {/* Attendance Records - Calendar View */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Attendance Records</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const monthRecords = attendanceRecords
+                      .filter(r => {
+                        if (r.user_id !== selectedEmployeeId) return false;
+                        const recordDate = new Date(r.date);
+                        return recordDate.getMonth() === employeeDialogMonth.getMonth() &&
+                               recordDate.getFullYear() === employeeDialogMonth.getFullYear();
+                      });
+
+                    if (monthRecords.length === 0) {
+                      return (
+                        <p className="text-center text-muted-foreground py-8">
+                          No attendance records for this month
+                        </p>
+                      );
+                    }
+
+                    // Create a map of date -> record for quick lookup
+                    const recordMap = new Map(monthRecords.map(r => [r.date, r]));
+                    
+                    // Get first day of month and number of days
+                    const firstDay = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), 1);
+                    const lastDay = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth() + 1, 0);
+                    const daysInMonth = lastDay.getDate();
+                    const startingDayOfWeek = firstDay.getDay();
+                    
+                    // Create array of days
+                    const days = [];
+                    for (let i = 0; i < startingDayOfWeek; i++) {
+                      days.push(null);
+                    }
+                    for (let i = 1; i <= daysInMonth; i++) {
+                      days.push(i);
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Day headers */}
+                        <div className="grid grid-cols-7 gap-2 mb-2">
+                          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                            <div key={day} className="text-center font-semibold text-sm text-muted-foreground">
+                              {day}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Calendar grid */}
+                        <div className="grid grid-cols-7 gap-2">
+                          {days.map((day, index) => {
+                            if (day === null) {
+                              return <div key={`empty-${index}`} className="aspect-square" />;
+                            }
+
+                            const dateStr = format(
+                              new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), day),
+                              "yyyy-MM-dd"
+                            );
+                            const record = recordMap.get(dateStr);
+
+                            // Determine display info
+                            let displayInfo = '';
+                            let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
+                            let StatusIcon = null;
+
+                            if (record) {
+                              const calcStatus = record.calculated_status?.toLowerCase();
+                              
+                              // Determine color and icon based on status
+                              if (calcStatus === 'absent') {
+                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
+                                StatusIcon = XCircle;
+                              } else if (calcStatus === 'half_day' || record.is_half_day) {
+                                displayColor = 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700';
+                                StatusIcon = Zap;
+                              } else if (calcStatus === 'paid_leave') {
+                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
+                                StatusIcon = Palmtree;
+                              } else if (calcStatus === 'holiday') {
+                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                                StatusIcon = Gift;
+                              } else if (record.is_late) {
+                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
+                                StatusIcon = Clock;
+                              } else {
+                                displayColor = 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700';
+                                StatusIcon = Check;
+                              }
+
+                              // Get time display
+                              if (record.check_in_time) {
+                                displayInfo = format(new Date(record.check_in_time), "hh:mm a");
+                              }
+                            }
+
+                            return (
+                              <Dialog key={day}>
+                                <DialogTrigger asChild>
+                                  <button
+                                    className={`aspect-square p-2 rounded-lg border-2 transition-all hover:shadow-md cursor-pointer flex flex-col items-center justify-center text-xs font-medium ${displayColor}`}
+                                  >
+                                    <span className="font-bold">{day}</span>
+                                    {record && StatusIcon && (
+                                      <>
+                                        <StatusIcon className="h-5 w-5 mt-0.5" />
+                                        {displayInfo && (
+                                          <span className="text-xs mt-0.5 opacity-75">{displayInfo}</span>
+                                        )}
+                                      </>
+                                    )}
+                                  </button>
+                                </DialogTrigger>
+                                {record && (
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>{format(new Date(record.date), "MMMM dd, yyyy")}</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                          <p className="text-sm text-muted-foreground">Check-in Time</p>
+                                          <p className="text-lg font-semibold">
+                                            {record.check_in_time
+                                              ? format(new Date(record.check_in_time), "hh:mm a")
+                                              : "-"}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          <p className="text-sm text-muted-foreground">Check-out Time</p>
+                                          <p className="text-lg font-semibold">
+                                            {record.check_out_time
+                                              ? format(new Date(record.check_out_time), "hh:mm a")
+                                              : "-"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Status and flags */}
+                                      <div>
+                                        <p className="text-sm text-muted-foreground mb-2">Status</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {getStatusBadge(record as AttendanceWithEmployee)}
+                                        </div>
+                                      </div>
+
+                                      {/* Late indicator */}
+                                      {record.is_late && (
+                                        <div className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg flex items-start gap-3">
+                                          <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                                              Late Check-in
+                                            </p>
+                                            <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
+                                              Checked in after 11:00 AM
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Half day indicator */}
+                                      {(record.is_half_day || record.calculated_status?.toLowerCase() === 'half_day') && (
+                                        <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-3">
+                                          <Zap className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                              Half Day
+                                            </p>
+                                            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                              {record.half_day_type || 'Half day attendance'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Leave indicator */}
+                                      {record.calculated_status?.toLowerCase() === 'paid_leave' && (
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3">
+                                          <Palmtree className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                                              Paid Leave
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Holiday indicator */}
+                                      {record.calculated_status?.toLowerCase() === 'holiday' && (
+                                        <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg flex items-start gap-3">
+                                          <Gift className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                                              Holiday
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Absent indicator */}
+                                      {record.calculated_status?.toLowerCase() === 'absent' && (
+                                        <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
+                                          <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                                              Absent
+                                            </p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {record.notes && (
+                                        <div>
+                                          <p className="text-sm text-muted-foreground">Notes</p>
+                                          <p className="text-sm">{record.notes}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </DialogContent>
+                                )}
+                              </Dialog>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </DashboardLayout>
   );
 }

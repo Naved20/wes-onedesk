@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { 
   CheckCircle, 
   Clock, 
@@ -11,11 +14,15 @@ import {
   AlertCircle,
   Coffee
 } from "lucide-react";
+import { Database } from "@/integrations/supabase/types";
+
+type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
 interface AttendanceStatsProps {
   userId: string;
   year: number;
   month: number;
+  attendanceRecords?: Attendance[];
 }
 
 interface Stats {
@@ -34,7 +41,7 @@ interface Stats {
   present_on_time: number;
 }
 
-export function AttendanceStats({ userId, year, month }: AttendanceStatsProps) {
+export function AttendanceStats({ userId, year, month, attendanceRecords = [] }: AttendanceStatsProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -201,20 +208,82 @@ export function AttendanceStats({ userId, year, month }: AttendanceStatsProps) {
         </Card>
       </div>
 
-      {/* Pending/Rejected Info */}
+      {/* Pending/Rejected Info - Clickable to show details */}
       {(stats.pending_days > 0 || stats.rejected_days > 0) && (
         <div className="flex flex-wrap gap-2">
           {stats.pending_days > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-sm">
-              <Clock className="h-3.5 w-3.5" />
-              {stats.pending_days} pending approval
-            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-sm cursor-pointer hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors">
+                  <Clock className="h-3.5 w-3.5" />
+                  {stats.pending_days} pending approval
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Pending Approvals</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {attendanceRecords
+                    .filter(r => r.user_id === userId && r.status === 'pending' && 
+                      new Date(r.date).getMonth() === month - 1 &&
+                      new Date(r.date).getFullYear() === year)
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map((record) => (
+                      <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                        <div>
+                          <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {record.check_in_time 
+                              ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
+                              : "No check-in"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30">
+                          Pending
+                        </Badge>
+                      </div>
+                    ))}
+                </div>
+              </DialogContent>
+            </Dialog>
           )}
           {stats.rejected_days > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">
-              <XCircle className="h-3.5 w-3.5" />
-              {stats.rejected_days} rejected
-            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm cursor-pointer hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors">
+                  <XCircle className="h-3.5 w-3.5" />
+                  {stats.rejected_days} rejected
+                </button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Rejected Records</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {attendanceRecords
+                    .filter(r => r.user_id === userId && r.status === 'rejected' && 
+                      new Date(r.date).getMonth() === month - 1 &&
+                      new Date(r.date).getFullYear() === year)
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map((record) => (
+                      <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-red-50 dark:bg-red-950/20">
+                        <div>
+                          <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {record.check_in_time 
+                              ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
+                              : "No check-in"}
+                          </p>
+                        </div>
+                        <Badge variant="destructive">
+                          Rejected
+                        </Badge>
+                      </div>
+                    ))}
+                </div>
+              </DialogContent>
+            </Dialog>
           )}
         </div>
       )}

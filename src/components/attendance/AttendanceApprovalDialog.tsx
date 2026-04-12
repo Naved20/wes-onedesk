@@ -273,22 +273,6 @@ export function AttendanceApprovalDialog({
         </div>
       )}
 
-      {isAdmin && attendance.status !== "approved" && (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            <Label htmlFor="admin-override" className="cursor-pointer">
-              Admin Override
-            </Label>
-          </div>
-          <Switch
-            id="admin-override"
-            checked={adminOverride}
-            onCheckedChange={setAdminOverride}
-          />
-        </div>
-      )}
-
       {attendance.status === "pending" && (
         <div className="space-y-2">
           <Label htmlFor="rejection-reason">Rejection Reason</Label>
@@ -351,11 +335,42 @@ export function AttendanceApprovalDialog({
           <Select 
             value={editData.calculated_status} 
             onValueChange={(value) => {
+              // Auto-set approval status based on attendance status
+              let newApprovalStatus = editData.status;
+              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "holiday") {
+                newApprovalStatus = "approved"; // Auto-approve when marking as present/half day/leave
+              } else if (value === "absent") {
+                newApprovalStatus = "rejected"; // Auto-reject when marking as absent
+              }
+              
               // Auto-set is_late to false when changing status to non-present
-              if (value !== "present") {
-                setEditData(prev => ({ ...prev, calculated_status: value, is_late: false }));
+              // Auto-set is_half_day based on status
+              if (value === "half_day") {
+                setEditData(prev => ({ 
+                  ...prev, 
+                  status: newApprovalStatus,
+                  calculated_status: value, 
+                  is_late: false,
+                  is_half_day: true,
+                  half_day_type: prev.half_day_type || "first_half" // Default to first half if not set
+                }));
+              } else if (value !== "present") {
+                setEditData(prev => ({ 
+                  ...prev, 
+                  status: newApprovalStatus,
+                  calculated_status: value, 
+                  is_late: false,
+                  is_half_day: false,
+                  half_day_type: ""
+                }));
               } else {
-                setEditData(prev => ({ ...prev, calculated_status: value }));
+                setEditData(prev => ({ 
+                  ...prev, 
+                  status: newApprovalStatus,
+                  calculated_status: value,
+                  is_half_day: false,
+                  half_day_type: ""
+                }));
               }
             }}
           >
@@ -364,8 +379,11 @@ export function AttendanceApprovalDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="present">Present (PR)</SelectItem>
-              <SelectItem value="half_day">Half Day (HD)</SelectItem>
               <SelectItem value="absent">Absent (AB)</SelectItem>
+              <SelectItem value="half_day">Half Day (HD)</SelectItem>
+              <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
+              <SelectItem value="holiday">Holiday (HO)</SelectItem>
+              <SelectItem value="pending">Pending (PD)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -392,35 +410,6 @@ export function AttendanceApprovalDialog({
           />
         </div>
       )}
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between p-3 rounded-lg border">
-          <Label htmlFor="is_half_day" className="cursor-pointer">Half Day</Label>
-          <Switch
-            id="is_half_day"
-            checked={editData.is_half_day}
-            onCheckedChange={(checked) => {
-              console.log("Half Day toggled to:", checked);
-              setEditData({ ...editData, is_half_day: checked });
-            }}
-          />
-        </div>
-
-        {editData.is_half_day && (
-          <div className="space-y-2">
-            <Label htmlFor="half_day_type">Half Day Type</Label>
-            <Select value={editData.half_day_type} onValueChange={(value) => setEditData({ ...editData, half_day_type: value })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="first_half">First Half (Morning)</SelectItem>
-                <SelectItem value="second_half">Second Half (Afternoon)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notes</Label>

@@ -23,6 +23,7 @@ interface TodayAttendance {
   calculated_status: string | null;
   is_late: boolean | null;
   check_in_time: string | null;
+  check_out_time: string | null;
   is_half_day: boolean | null;
   half_day_type: string | null;
 }
@@ -39,6 +40,7 @@ interface ShiftInfo {
 
 export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }: AttendanceCheckInProps) {
   const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
   const [isHalfDay, setIsHalfDay] = useState(false);
   const [halfDayType, setHalfDayType] = useState<string>("");
   const [notes, setNotes] = useState("");
@@ -73,7 +75,7 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
       const today = format(new Date(), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("attendance")
-        .select("status, calculated_status, is_late, check_in_time, is_half_day, half_day_type")
+        .select("status, calculated_status, is_late, check_in_time, check_out_time, is_half_day, half_day_type")
         .eq("user_id", userId)
         .eq("date", today)
         .maybeSingle();
@@ -246,6 +248,42 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
     }
   };
 
+  const handleCheckOut = async () => {
+    if (!userId) return;
+
+    setCheckingOut(true);
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const now = new Date().toISOString();
+
+      const { error } = await supabase
+        .from("attendance")
+        .update({
+          check_out_time: now,
+        })
+        .eq("user_id", userId)
+        .eq("date", today);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Checked out successfully!",
+      });
+
+      fetchTodayAttendance();
+    } catch (error) {
+      console.error("Error checking out:", error);
+      toast({
+        title: "Error",
+        description: "Failed to record check-out",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckingOut(false);
+    }
+  };
+
   if (todayCheckedIn && todayAttendance) {
     const displayStatus = todayAttendance.calculated_status || "present";
     const statusBadge = getAttendanceStatusBadge(displayStatus, false);
@@ -263,7 +301,7 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
             </div>
           </div>
           
-          <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-lg border">
+          <div className="grid grid-cols-2 gap-3 p-3 bg-white dark:bg-gray-900 rounded-lg border">
             <div>
               <p className="text-sm text-muted-foreground">Check-in Time</p>
               <p className="font-semibold">
@@ -272,9 +310,20 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
                   : "-"}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground mb-1">Status</p>
-              <div className="flex gap-1 items-center justify-end">
+            <div>
+              <p className="text-sm text-muted-foreground">Check-out Time</p>
+              <p className="font-semibold">
+                {todayAttendance.check_out_time 
+                  ? format(new Date(todayAttendance.check_out_time), "hh:mm a")
+                  : "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-lg border">
+            <div>
+              <p className="text-sm text-muted-foreground">Status</p>
+              <div className="flex gap-1 items-center mt-1">
                 <Badge variant={statusBadge.variant} className="font-mono">
                   {statusBadge.label}
                 </Badge>
@@ -285,6 +334,16 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
                 )}
               </div>
             </div>
+            {!todayAttendance.check_out_time && (
+              <Button
+                onClick={handleCheckOut}
+                disabled={checkingOut}
+                size="sm"
+                variant="outline"
+              >
+                {checkingOut ? "Checking Out..." : "Check Out"}
+              </Button>
+            )}
           </div>
 
           {todayAttendance.is_half_day && (
