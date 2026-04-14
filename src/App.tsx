@@ -19,6 +19,8 @@ import Institutions from "./pages/Institutions";
 import Settings from "./pages/Settings";
 import ShiftManagement from "./pages/ShiftManagement";
 import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
+import GoogleDrive from "./pages/GoogleDrive";
+import Tasks from "./pages/Tasks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +47,8 @@ const App = () => (
             <Route path="/shifts" element={<ProtectedRoute allowedRoles={["admin"]}><ShiftManagement /></ProtectedRoute>} />
             <Route path="/shift-assignments" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><EmployeeShiftAssignment /></ProtectedRoute>} />
             <Route path="/institutions" element={<ProtectedRoute allowedRoles={["admin"]}><Institutions /></ProtectedRoute>} />
+            <Route path="/google-drive" element={<ProtectedRoute><GoogleDrive /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

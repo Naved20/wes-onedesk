@@ -29,6 +29,7 @@ interface AttendanceWithEmployee extends Attendance {
   employee_name?: string;
   calculated_status?: string | null;
   institution?: string | null;
+  shift_name?: string;
 }
 
 interface Holiday {
@@ -49,6 +50,7 @@ export default function Attendance() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [employeeDetailsOpen, setEmployeeDetailsOpen] = useState(false);
   const [employeeDialogMonth, setEmployeeDialogMonth] = useState<Date>(new Date());
+  const [employeeShiftInfo, setEmployeeShiftInfo] = useState<any>(null);
   const [institutions, setInstitutions] = useState<string[]>([]);
   const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
@@ -132,6 +134,13 @@ export default function Attendance() {
           .select("user_id, first_name, last_name, institution_assignment")
           .in("user_id", userIds);
 
+        // Fetch shift information for each attendance record
+        const { data: shifts } = await supabase
+          .from("shifts")
+          .select("id, name");
+
+        const shiftMap = new Map(shifts?.map(s => [s.id, s.name]) || []);
+
         const profileMap = new Map(
           profiles?.map(p => [
             p.user_id, 
@@ -146,6 +155,7 @@ export default function Attendance() {
           ...record,
           employee_name: profileMap.get(record.user_id)?.name || "Unknown",
           institution: profileMap.get(record.user_id)?.institution || null,
+          shift_name: record.shift_id ? shiftMap.get(record.shift_id) || "Unknown" : "-",
         }));
 
         setAttendanceRecords(recordsWithNames);
@@ -203,6 +213,24 @@ export default function Attendance() {
     setSelectedEmployeeId(userId);
     setEmployeeDialogMonth(new Date()); // Reset to current month
     setEmployeeDetailsOpen(true);
+    fetchEmployeeShiftInfo(userId);
+  };
+
+  const fetchEmployeeShiftInfo = async (userId: string) => {
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data, error } = await supabase.rpc("get_employee_shift", {
+        p_user_id: userId,
+        p_date: today,
+      });
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setEmployeeShiftInfo(data[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching employee shift:", error);
+    }
   };
 
   const getStatusBadge = (record: AttendanceWithEmployee) => {
@@ -346,7 +374,8 @@ export default function Attendance() {
     try {
       const { data, error } = await supabase
         .from("employee_profiles")
-        .select("user_id, first_name, last_name, institution_assignment");
+        .select("user_id, first_name, last_name, institution_assignment")
+        .eq("is_active", true);
 
       if (error) throw error;
 
@@ -752,6 +781,7 @@ export default function Attendance() {
                               <TableHead className="w-16">S.No.</TableHead>
                               <TableHead>Employee</TableHead>
                               <TableHead>Date</TableHead>
+                              <TableHead>Shift</TableHead>
                               <TableHead>Check-in</TableHead>
                               <TableHead>Check-out</TableHead>
                               <TableHead>Status</TableHead>
@@ -771,6 +801,9 @@ export default function Attendance() {
                                   {record.employee_name || "-"}
                                 </TableCell>
                                 <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
+                                <TableCell className="text-sm">
+                                  {record.shift_name || "-"}
+                                </TableCell>
                                 <TableCell>
                                   {record.check_in_time
                                     ? format(new Date(record.check_in_time), "hh:mm a")
@@ -1099,6 +1132,29 @@ export default function Attendance() {
             </div>
 
             <div className="space-y-6">
+              {/* Shift Information */}
+              {employeeShiftInfo && (
+                <Card className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20">
+                  <CardHeader>
+                    <CardTitle className="text-base">Current Shift Assignment</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Shift Name</p>
+                        <p className="text-lg font-semibold">{employeeShiftInfo.shift_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Shift Timings</p>
+                        <p className="text-lg font-semibold">
+                          {employeeShiftInfo.start_time.substring(0, 5)} - {employeeShiftInfo.end_time.substring(0, 5)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Monthly Stats */}
               <AttendanceStats 
                 userId={selectedEmployeeId} 

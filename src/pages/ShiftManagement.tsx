@@ -35,7 +35,7 @@ export default function ShiftManagement() {
     description: "",
     start_time: "09:00",
     end_time: "18:00",
-    late_threshold_minutes: 1,
+    late_threshold_minutes: 15,
     half_day_threshold_hours: 2.5,
     last_checkin_hours_before_end: 3.5,
   });
@@ -160,7 +160,7 @@ export default function ShiftManagement() {
       description: "",
       start_time: "09:00",
       end_time: "18:00",
-      late_threshold_minutes: 1,
+      late_threshold_minutes: 15,
       half_day_threshold_hours: 2.5,
       last_checkin_hours_before_end: 3.5,
     });

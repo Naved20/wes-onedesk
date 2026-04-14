@@ -81,7 +81,7 @@ export default function EmployeeShiftAssignment() {
   const fetchData = async () => {
     try {
       const [employeesRes, shiftsRes, assignmentsRes] = await Promise.all([
-        supabase.from("employee_profiles").select("id, user_id, first_name, last_name, email, employee_id"),
+        supabase.from("employee_profiles").select("id, user_id, first_name, last_name, email, employee_id").eq("is_active", true),
         supabase.from("shifts").select("id, name, start_time, end_time").eq("is_active", true),
         supabase.from("employee_shifts").select("*").order("effective_from", { ascending: false }),
       ]);

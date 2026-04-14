@@ -143,7 +143,8 @@ export default function Leaves() {
         const { data: profiles } = await supabase
           .from("employee_profiles")
           .select("user_id, first_name, last_name")
-          .in("user_id", userIds);
+          .in("user_id", userIds)
+          .eq("is_active", true);
 
         const profileMap = new Map(
           profiles?.map(p => [p.user_id, `${p.first_name} ${p.last_name}`]) || []

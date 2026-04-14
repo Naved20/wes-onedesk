@@ -75,7 +75,8 @@ export function SalaryStatusWidget({ userId, isAdmin }: SalaryStatusWidgetProps)
       // Fetch employee names for pending approvals
       const { data: employees } = await supabase
         .from("employee_profiles")
-        .select("user_id, first_name, last_name");
+        .select("user_id, first_name, last_name")
+        .eq("is_active", true);
 
       const employeeMap = new Map(
         employees?.map(e => [e.user_id, `${e.first_name} ${e.last_name}`]) || []

@@ -21,6 +21,8 @@ import {
   Star,
   Megaphone,
   UserCircle,
+  Cloud,
+  CheckSquare,
 } from "lucide-react";
 
 interface NavItem {
@@ -39,6 +41,8 @@ const navItems: NavItem[] = [
   { label: "Documents", href: "/documents", icon: <FileText className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Performance", href: "/performance", icon: <Star className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Announcements", href: "/announcements", icon: <Megaphone className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
+  { label: "Tasks", href: "/tasks", icon: <CheckSquare className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
+  { label: "Google Drive", href: "/google-drive", icon: <Cloud className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Shift Management", href: "/shifts", icon: <Clock className="h-5 w-5" />, roles: ["admin"] },
   { label: "Shift Assignments", href: "/shift-assignments", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Institutions", href: "/institutions", icon: <Building className="h-5 w-5" />, roles: ["admin"] },

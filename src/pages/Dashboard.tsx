@@ -49,7 +49,7 @@ export default function Dashboard() {
         salariesResult,
       ] = await Promise.all([
         role === "admin" || role === "manager"
-          ? supabase.from("employee_profiles").select("id", { count: "exact" })
+          ? supabase.from("employee_profiles").select("id", { count: "exact" }).eq("is_active", true)
           : Promise.resolve({ count: 0 }),
         supabase.from("attendance").select("id", { count: "exact" }).eq("status", "pending"),
         supabase.from("leaves").select("id", { count: "exact" }).eq("status", "pending"),
