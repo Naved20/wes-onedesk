@@ -47,6 +47,7 @@ interface TaskRemark {
   response_id: string;
   remarked_by: string;
   remark_text: string;
+  rating?: number;
   created_at: string;
   employee_profiles: {
     first_name: string;
@@ -81,6 +82,7 @@ const Tasks = () => {
 
   const [remarkFormData, setRemarkFormData] = useState({
     remark_text: "",
+    rating: 5,
   });
 
   useEffect(() => {
@@ -448,6 +450,7 @@ const Tasks = () => {
           response_id: selectedResponse.id,
           remarked_by: user?.id,
           remark_text: remarkFormData.remark_text,
+          rating: remarkFormData.rating,
         });
 
       if (error) throw error;
@@ -457,7 +460,7 @@ const Tasks = () => {
         description: "Remark added successfully",
       });
 
-      setRemarkFormData({ remark_text: "" });
+      setRemarkFormData({ remark_text: "", rating: 5 });
       setRemarkDialogOpen(false);
       fetchRemarks(selectedResponse.id);
     } catch (error) {
@@ -792,13 +795,23 @@ const Tasks = () => {
                                           <p className="text-sm font-medium text-primary">Remarks:</p>
                                           {responseRemarks.map((remark) => (
                                             <div key={remark.id} className="bg-muted p-3 rounded-md">
-                                              <div className="flex items-center justify-between mb-1">
-                                                <p className="text-xs font-medium">
-                                                  {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                  {format(new Date(remark.created_at), "MMM dd, HH:mm")}
-                                                </p>
+                                              <div className="flex items-center justify-between mb-2">
+                                                <div>
+                                                  <p className="text-xs font-medium">
+                                                    {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
+                                                  </p>
+                                                  <p className="text-xs text-muted-foreground">
+                                                    {format(new Date(remark.created_at), "MMM dd, HH:mm")}
+                                                  </p>
+                                                </div>
+                                                {remark.rating && (
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat(remark.rating)}{"☆".repeat(5 - remark.rating)}
+                                                    </span>
+                                                    <span className="text-xs font-semibold">{remark.rating}/5</span>
+                                                  </div>
+                                                )}
                                               </div>
                                               <p className="text-sm">{remark.remark_text}</p>
                                             </div>
@@ -867,13 +880,23 @@ const Tasks = () => {
                                       <p className="text-sm font-medium text-primary">Remarks from Admin/Manager:</p>
                                       {remarks[userResponse.id].map((remark) => (
                                         <div key={remark.id} className="bg-muted p-3 rounded-md">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <p className="text-xs font-medium">
-                                              {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                              {format(new Date(remark.created_at), "MMM dd, HH:mm")}
-                                            </p>
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                              <p className="text-xs font-medium">
+                                                {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {format(new Date(remark.created_at), "MMM dd, HH:mm")}
+                                              </p>
+                                            </div>
+                                            {remark.rating && (
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-yellow-400">
+                                                  {"★".repeat(remark.rating)}{"☆".repeat(5 - remark.rating)}
+                                                </span>
+                                                <span className="text-xs font-semibold">{remark.rating}/5</span>
+                                              </div>
+                                            )}
                                           </div>
                                           <p className="text-sm">{remark.remark_text}</p>
                                         </div>
@@ -961,6 +984,35 @@ const Tasks = () => {
                 rows={4}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rating">Rating (1-5)</Label>
+              <div className="flex items-center gap-4">
+                <input
+                  id="rating"
+                  type="range"
+                  min="1"
+                  max="5"
+                  value={remarkFormData.rating}
+                  onChange={(e) => setRemarkFormData({ ...remarkFormData, rating: parseInt(e.target.value) })}
+                  className="flex-1"
+                />
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRemarkFormData({ ...remarkFormData, rating: star })}
+                      className={`text-2xl transition-colors ${
+                        star <= remarkFormData.rating ? "text-yellow-400" : "text-gray-300"
+                      }`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+                <span className="font-semibold text-lg w-8 text-center">{remarkFormData.rating}</span>
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setRemarkDialogOpen(false)}>
