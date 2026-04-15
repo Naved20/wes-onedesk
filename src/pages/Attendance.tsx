@@ -299,6 +299,21 @@ export default function Attendance() {
       );
     }
 
+    if (calculatedStatus === "leave") {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="secondary" className="font-mono bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-700">
+            LE
+          </Badge>
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
+    }
+
     if (calculatedStatus === "holiday") {
       return (
         <div className="flex flex-wrap gap-1 items-center">
@@ -451,6 +466,18 @@ export default function Attendance() {
           const calcStatus = record.calculated_status?.toLowerCase();
           return calcStatus === "absent";
         });
+      } else if (selectedStatusFilter === "paid_leave") {
+        filtered = filtered.filter(record => {
+          if (record.date !== targetDateStr) return false;
+          const calcStatus = record.calculated_status?.toLowerCase();
+          return calcStatus === "paid_leave";
+        });
+      } else if (selectedStatusFilter === "leave") {
+        filtered = filtered.filter(record => {
+          if (record.date !== targetDateStr) return false;
+          const calcStatus = record.calculated_status?.toLowerCase();
+          return calcStatus === "leave";
+        });
       } else if (selectedStatusFilter === "all") {
         // Show all employees (present + absent) for the selected date
         const targetDate = selectedDate || new Date();
@@ -516,6 +543,18 @@ export default function Attendance() {
       return calcStatus === "half_day" || record.is_half_day;
     }).length;
     
+    // Count paid leave based on calculated_status
+    const paidLeaveCount = todayRecords.filter(record => {
+      const calcStatus = record.calculated_status?.toLowerCase();
+      return calcStatus === "paid_leave";
+    }).length;
+    
+    // Count leave based on calculated_status
+    const leaveCount = todayRecords.filter(record => {
+      const calcStatus = record.calculated_status?.toLowerCase();
+      return calcStatus === "leave";
+    }).length;
+    
     // Count absent based on calculated_status
     const absentCount = isHoliday ? 0 : todayRecords.filter(record => {
       const calcStatus = record.calculated_status?.toLowerCase();
@@ -526,6 +565,8 @@ export default function Attendance() {
       total: totalEmployees,
       present: presentCount,
       halfDay: halfDayCount,
+      paidLeave: paidLeaveCount,
+      leave: leaveCount,
       absent: absentCount,
       date: targetDate,
       isHoliday: isHoliday
@@ -698,7 +739,7 @@ export default function Attendance() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Daily Stats - Compact and Clickable */}
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                       <div 
                         className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                           selectedStatusFilter === 'all' 
@@ -711,7 +752,7 @@ export default function Attendance() {
                           <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Total Employees</p>
+                          <p className="text-xs text-muted-foreground">Total</p>
                           <p className="text-2xl font-bold">{dailyStats.total}</p>
                         </div>
                       </div>
@@ -730,6 +771,40 @@ export default function Attendance() {
                         <div>
                           <p className="text-xs text-muted-foreground">Present</p>
                           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dailyStats.present}</p>
+                        </div>
+                      </div>
+
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          selectedStatusFilter === 'paid_leave' 
+                            ? 'bg-blue-50 dark:bg-blue-950/20 ring-2 ring-blue-500' 
+                            : 'bg-blue-50 dark:bg-blue-950/20'
+                        }`}
+                        onClick={() => setSelectedStatusFilter('paid_leave')}
+                      >
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                          <Gift className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Paid Leave</p>
+                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{dailyStats.paidLeave}</p>
+                        </div>
+                      </div>
+
+                      <div 
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          selectedStatusFilter === 'leave' 
+                            ? 'bg-cyan-50 dark:bg-cyan-950/20 ring-2 ring-cyan-500' 
+                            : 'bg-cyan-50 dark:bg-cyan-950/20'
+                        }`}
+                        onClick={() => setSelectedStatusFilter('leave')}
+                      >
+                        <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-full">
+                          <Palmtree className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Leave</p>
+                          <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{dailyStats.leave}</p>
                         </div>
                       </div>
 
@@ -790,13 +865,20 @@ export default function Attendance() {
                           </TableHeader>
                           <TableBody>
                             {searchFilteredRecords.map((record, index) => (
-                              <TableRow key={record.id}>
+                              <TableRow 
+                                key={record.id}
+                                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => openApprovalDialog(record)}
+                              >
                                 <TableCell className="font-medium text-muted-foreground">
                                   {index + 1}
                                 </TableCell>
                                 <TableCell 
                                   className="font-medium cursor-pointer hover:text-primary hover:underline"
-                                  onClick={() => openEmployeeDetails(record.user_id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEmployeeDetails(record.user_id);
+                                  }}
                                 >
                                   {record.employee_name || "-"}
                                 </TableCell>
@@ -819,7 +901,10 @@ export default function Attendance() {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => openApprovalDialog(record)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openApprovalDialog(record);
+                                    }}
                                   >
                                     <Eye className="h-4 w-4 mr-1" />
                                     Review
@@ -866,7 +951,11 @@ export default function Attendance() {
                       </TableHeader>
                       <TableBody>
                         {lateRecords.map((record) => (
-                          <TableRow key={record.id}>
+                          <TableRow 
+                            key={record.id}
+                            className="cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => openApprovalDialog(record)}
+                          >
                             <TableCell className="font-medium">{record.employee_name || "-"}</TableCell>
                             <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
                             <TableCell className="text-orange-600 dark:text-orange-400 font-medium">
@@ -880,7 +969,10 @@ export default function Attendance() {
                             <TableCell className="text-right">
                               <Button
                                 size="sm"
-                                onClick={() => openApprovalDialog(record)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openApprovalDialog(record);
+                                }}
                               >
                                 Review
                               </Button>
@@ -980,7 +1072,14 @@ export default function Attendance() {
                           // If half day, show HD as main status
                           if (record.is_half_day) {
                             return (
-                              <TableRow key={record.id}>
+                              <TableRow 
+                                key={record.id}
+                                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                                onClick={() => {
+                                  setSelectedAttendance(record);
+                                  setApprovalDialogOpen(true);
+                                }}
+                              >
                                 <TableCell className="font-medium text-muted-foreground">
                                   {index + 1}
                                 </TableCell>
@@ -1026,7 +1125,14 @@ export default function Attendance() {
                           const statusBadge = getAttendanceStatusBadge(displayStatus, true);
                           
                           return (
-                            <TableRow key={record.id}>
+                            <TableRow 
+                              key={record.id}
+                              className="cursor-pointer hover:bg-muted/50 transition-colors"
+                              onClick={() => {
+                                setSelectedAttendance(record);
+                                setApprovalDialogOpen(true);
+                              }}
+                            >
                               <TableCell className="font-medium text-muted-foreground">
                                 {index + 1}
                               </TableCell>
@@ -1264,131 +1370,26 @@ export default function Attendance() {
                             }
 
                             return (
-                              <Dialog key={day}>
-                                <DialogTrigger asChild>
-                                  <button
-                                    className={`aspect-square p-2 rounded-lg border-2 transition-all hover:shadow-md cursor-pointer flex flex-col items-center justify-center text-xs font-medium ${displayColor}`}
-                                  >
-                                    <span className="font-bold">{day}</span>
-                                    {record && StatusIcon && (
-                                      <>
-                                        <StatusIcon className="h-5 w-5 mt-0.5" />
-                                        {displayInfo && (
-                                          <span className="text-xs mt-0.5 opacity-75">{displayInfo}</span>
-                                        )}
-                                      </>
+                              <button
+                                key={day}
+                                className={`aspect-square p-2 rounded-lg border-2 transition-all hover:shadow-md cursor-pointer flex flex-col items-center justify-center text-xs font-medium ${displayColor}`}
+                                onClick={() => {
+                                  if (record) {
+                                    setSelectedAttendance(record as AttendanceWithEmployee);
+                                    setApprovalDialogOpen(true);
+                                  }
+                                }}
+                              >
+                                <span className="font-bold">{day}</span>
+                                {record && StatusIcon && (
+                                  <>
+                                    <StatusIcon className="h-5 w-5 mt-0.5" />
+                                    {displayInfo && (
+                                      <span className="text-xs mt-0.5 opacity-75">{displayInfo}</span>
                                     )}
-                                  </button>
-                                </DialogTrigger>
-                                {record && (
-                                  <DialogContent>
-                                    <DialogHeader>
-                                      <DialogTitle>{format(new Date(record.date), "MMMM dd, yyyy")}</DialogTitle>
-                                    </DialogHeader>
-                                    <div className="space-y-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                          <p className="text-sm text-muted-foreground">Check-in Time</p>
-                                          <p className="text-lg font-semibold">
-                                            {record.check_in_time
-                                              ? format(new Date(record.check_in_time), "hh:mm a")
-                                              : "-"}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm text-muted-foreground">Check-out Time</p>
-                                          <p className="text-lg font-semibold">
-                                            {record.check_out_time
-                                              ? format(new Date(record.check_out_time), "hh:mm a")
-                                              : "-"}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Status and flags */}
-                                      <div>
-                                        <p className="text-sm text-muted-foreground mb-2">Status</p>
-                                        <div className="flex flex-wrap gap-2">
-                                          {getStatusBadge(record as AttendanceWithEmployee)}
-                                        </div>
-                                      </div>
-
-                                      {/* Late indicator */}
-                                      {record.is_late && (
-                                        <div className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg flex items-start gap-3">
-                                          <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                                              Late Check-in
-                                            </p>
-                                            <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
-                                              Checked in after 11:00 AM
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Half day indicator */}
-                                      {(record.is_half_day || record.calculated_status?.toLowerCase() === 'half_day') && (
-                                        <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-start gap-3">
-                                          <Zap className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                              Half Day
-                                            </p>
-                                            <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                              {record.half_day_type || 'Half day attendance'}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Leave indicator */}
-                                      {record.calculated_status?.toLowerCase() === 'paid_leave' && (
-                                        <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start gap-3">
-                                          <Palmtree className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                              Paid Leave
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Holiday indicator */}
-                                      {record.calculated_status?.toLowerCase() === 'holiday' && (
-                                        <div className="p-3 bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg flex items-start gap-3">
-                                          <Gift className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium text-purple-800 dark:text-purple-200">
-                                              Holiday
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Absent indicator */}
-                                      {record.calculated_status?.toLowerCase() === 'absent' && (
-                                        <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3">
-                                          <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                                          <div>
-                                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                                              Absent
-                                            </p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {record.notes && (
-                                        <div>
-                                          <p className="text-sm text-muted-foreground">Notes</p>
-                                          <p className="text-sm">{record.notes}</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </DialogContent>
+                                  </>
                                 )}
-                              </Dialog>
+                              </button>
                             );
                           })}
                         </div>

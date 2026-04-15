@@ -5,6 +5,7 @@ export type AttendanceStatus =
   | "absent" 
   | "half_day" 
   | "paid_leave" 
+  | "leave"
   | "holiday" 
   | "pending";
 
@@ -39,6 +40,12 @@ export const attendanceStatusConfig: Record<AttendanceStatus, AttendanceStatusCo
     shortLabel: "PL",
     variant: "secondary",
     color: "bg-blue-500",
+  },
+  leave: {
+    label: "Leave",
+    shortLabel: "LE",
+    variant: "secondary",
+    color: "bg-cyan-500",
   },
   holiday: {
     label: "Holiday",
@@ -89,6 +96,9 @@ export function getAttendanceDisplayStatus(
   }
   if (calculatedStatus === "absent") return "absent";
   if (calculatedStatus === "half_day") return "half_day";
+  if (calculatedStatus === "paid_leave") return "paid_leave";
+  if (calculatedStatus === "leave") return "leave";
+  if (calculatedStatus === "holiday") return "holiday";
   
   return "pending";
 }

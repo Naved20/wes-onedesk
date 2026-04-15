@@ -9,9 +9,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -64,6 +66,7 @@ const Tasks = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [responses, setResponses] = useState<Record<string, TaskResponse[]>>({});
   const [remarks, setRemarks] = useState<Record<string, TaskRemark[]>>({});
+  const [assignments, setAssignments] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
   const [responseDialogOpen, setResponseDialogOpen] = useState(false);
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
@@ -73,7 +76,11 @@ const Tasks = () => {
     description: "",
     due_date: "",
     file: null as File | null,
+    assign_to: "all" as "all" | "specific",
+    assigned_user_ids: [] as string[],
   });
+
+  const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
@@ -87,15 +94,62 @@ const Tasks = () => {
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+    if (role === "admin") {
+      fetchEmployees();
+    }
+  }, [role]);
+
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("employee_profiles")
+        .select("user_id, first_name, last_name, email")
+        .order("first_name");
+
+      if (error) throw error;
+      setEmployees(data || []);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
-      const { data, error } = await supabase
-        .from("tasks" as any)
-        .select("*")
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
+      let query;
+      
+      if (role === "admin") {
+        // Admin sees all tasks
+        query = supabase
+          .from("tasks" as any)
+          .select("*")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+      } else {
+        // Employees and managers only see tasks assigned to them
+        const { data: assignedTasks, error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .select("task_id")
+          .eq("user_id", user?.id);
+
+        if (assignError) throw assignError;
+
+        const taskIds = (assignedTasks || []).map((a: any) => a.task_id);
+
+        if (taskIds.length === 0) {
+          setTasks([]);
+          setLoading(false);
+          return;
+        }
+
+        query = supabase
+          .from("tasks" as any)
+          .select("*")
+          .in("id", taskIds)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setTasks((data || []) as any);
@@ -104,6 +158,7 @@ const Tasks = () => {
       if (data && data.length > 0) {
         for (const task of data as any[]) {
           await fetchResponses(task.id);
+          await fetchAssignments(task.id);
         }
       }
     } catch (error) {
@@ -269,12 +324,49 @@ const Tasks = () => {
     }
   };
 
+  const fetchAssignments = async (taskId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("task_assignments" as any)
+        .select(`
+          user_id,
+          employee_profiles(first_name, last_name)
+        `)
+        .eq("task_id", taskId);
+
+      if (error) {
+        console.error("Error fetching assignments:", error);
+        return;
+      }
+
+      // Transform data to flat structure
+      const assignedEmployees = (data || []).map((assignment: any) => ({
+        user_id: assignment.user_id,
+        first_name: assignment.employee_profiles?.first_name || "Unknown",
+        last_name: assignment.employee_profiles?.last_name || "User",
+      }));
+
+      setAssignments(prev => ({ ...prev, [taskId]: assignedEmployees }));
+    } catch (error) {
+      console.error("Error fetching assignments:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.description.trim()) {
       toast({
         title: "Error",
         description: "Title and description are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.assign_to === "specific" && formData.assigned_user_ids.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one employee",
         variant: "destructive",
       });
       return;
@@ -313,7 +405,8 @@ const Tasks = () => {
         fileName = formData.file.name;
       }
 
-      const { error } = await supabase
+      // Create the task
+      const { data: taskData, error: taskError } = await supabase
         .from("tasks" as any)
         .insert({
           title: formData.title,
@@ -323,16 +416,45 @@ const Tasks = () => {
           file_name: fileName,
           created_by: user.id,
           is_active: true,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (taskError) throw taskError;
+
+      // Create task assignments
+      if (formData.assign_to === "all") {
+        // Assign to all employees
+        const assignments = employees.map(emp => ({
+          task_id: (taskData as any).id,
+          user_id: emp.user_id,
+        }));
+
+        const { error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .insert(assignments);
+
+        if (assignError) throw assignError;
+      } else {
+        // Assign to selected employees
+        const assignments = formData.assigned_user_ids.map(userId => ({
+          task_id: (taskData as any).id,
+          user_id: userId,
+        }));
+
+        const { error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .insert(assignments);
+
+        if (assignError) throw assignError;
+      }
 
       toast({
         title: "Success",
-        description: "Task created successfully",
+        description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null });
+      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [] });
       setOpen(false);
       fetchTasks();
     } catch (error) {
@@ -507,9 +629,9 @@ const Tasks = () => {
     }
   };
 
-  const canCreateTask = role === "admin" || role === "manager";
-  const canDeleteTask = role === "admin" || role === "manager";
-  const canAddRemark = role === "admin" || role === "manager";
+  const canCreateTask = role === "admin";
+  const canDeleteTask = role === "admin";
+  const canAddRemark = role === "admin";
 
   const renderFilePreview = (fileUrl: string | null, fileName: string | null) => {
     if (!fileUrl || !fileName) return null;
@@ -603,7 +725,7 @@ const Tasks = () => {
                 <DialogHeader>
                   <DialogTitle>Create New Task</DialogTitle>
                   <DialogDescription>
-                    Create a new task for all employees to view and respond to
+                    Create a new task and assign it to all employees or a specific employee
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -628,6 +750,69 @@ const Tasks = () => {
                       required
                     />
                   </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="assign_to">Assign To</Label>
+                    <Select 
+                      value={formData.assign_to} 
+                      onValueChange={(value: "all" | "specific") => 
+                        setFormData({ ...formData, assign_to: value, assigned_user_ids: value === "all" ? [] : formData.assigned_user_ids })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Employees</SelectItem>
+                        <SelectItem value="specific">Specific Employee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.assign_to === "specific" && (
+                    <div className="space-y-2">
+                      <Label>Select Employees (Multiple)</Label>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                        {employees.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No employees found</p>
+                        ) : (
+                          employees.map((emp) => (
+                            <div key={emp.user_id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`emp-${emp.user_id}`}
+                                checked={formData.assigned_user_ids.includes(emp.user_id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setFormData({
+                                      ...formData,
+                                      assigned_user_ids: [...formData.assigned_user_ids, emp.user_id]
+                                    });
+                                  } else {
+                                    setFormData({
+                                      ...formData,
+                                      assigned_user_ids: formData.assigned_user_ids.filter(id => id !== emp.user_id)
+                                    });
+                                  }
+                                }}
+                              />
+                              <Label
+                                htmlFor={`emp-${emp.user_id}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                {emp.first_name} {emp.last_name} ({emp.email})
+                              </Label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {formData.assigned_user_ids.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          {formData.assigned_user_ids.length} employee(s) selected
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     <Label htmlFor="due_date">Due Date (Optional)</Label>
                     <Input
@@ -732,6 +917,29 @@ const Tasks = () => {
                     <div className="text-muted-foreground whitespace-pre-wrap">
                       {task.description}
                     </div>
+                    
+                    {/* Assigned To Section - Only show for admin */}
+                    {role === "admin" && assignments[task.id] && assignments[task.id].length > 0 && (
+                      <div className="pt-4 border-t">
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 mt-1 text-muted-foreground" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium mb-2">Assigned To:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {assignments[task.id].map((emp) => (
+                                <Badge key={emp.user_id} variant="secondary" className="text-xs">
+                                  {emp.first_name} {emp.last_name}
+                                </Badge>
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {assignments[task.id].length} employee(s) assigned
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {task.file_url && task.file_name && (
                       <div className="pt-4 border-t">
                         {renderFilePreview(task.file_url, task.file_name)}

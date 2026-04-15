@@ -164,7 +164,7 @@ export function AttendanceApprovalDialog({
 
       const updateData = {
         check_in_time: checkInDateTime,
-        status: editData.status,
+        status: editData.status as "pending" | "approved" | "rejected",
         calculated_status: editData.calculated_status,
         is_late: editData.is_late,
         is_half_day: editData.is_half_day,
@@ -337,7 +337,7 @@ export function AttendanceApprovalDialog({
             onValueChange={(value) => {
               // Auto-set approval status based on attendance status
               let newApprovalStatus = editData.status;
-              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "holiday") {
+              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "leave" || value === "holiday") {
                 newApprovalStatus = "approved"; // Auto-approve when marking as present/half day/leave
               } else if (value === "absent") {
                 newApprovalStatus = "rejected"; // Auto-reject when marking as absent
@@ -382,6 +382,7 @@ export function AttendanceApprovalDialog({
               <SelectItem value="absent">Absent (AB)</SelectItem>
               <SelectItem value="half_day">Half Day (HD)</SelectItem>
               <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
+              <SelectItem value="leave">Leave (LE)</SelectItem>
               <SelectItem value="holiday">Holiday (HO)</SelectItem>
               <SelectItem value="pending">Pending (PD)</SelectItem>
             </SelectContent>
