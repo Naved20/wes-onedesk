@@ -1337,30 +1337,33 @@ export default function Attendance() {
                             // Determine display info
                             let displayInfo = '';
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
-                            let StatusIcon = null;
+                            let statusTag = '';
 
                             if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
-                              // Determine color and icon based on status
+                              // Determine color and tag based on status
                               if (calcStatus === 'absent') {
                                 displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
-                                StatusIcon = XCircle;
+                                statusTag = 'AB';
                               } else if (calcStatus === 'half_day' || record.is_half_day) {
                                 displayColor = 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700';
-                                StatusIcon = Zap;
+                                statusTag = 'HD';
                               } else if (calcStatus === 'paid_leave') {
                                 displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
-                                StatusIcon = Palmtree;
+                                statusTag = 'PL';
+                              } else if (calcStatus === 'leave') {
+                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
+                                statusTag = 'LE';
                               } else if (calcStatus === 'holiday') {
                                 displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                                StatusIcon = Gift;
+                                statusTag = 'HO';
                               } else if (record.is_late) {
                                 displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
-                                StatusIcon = Clock;
+                                statusTag = 'LT';
                               } else {
                                 displayColor = 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700';
-                                StatusIcon = Check;
+                                statusTag = 'PR';
                               }
 
                               // Get time display
@@ -1380,10 +1383,10 @@ export default function Attendance() {
                                   }
                                 }}
                               >
-                                <span className="font-bold">{day}</span>
-                                {record && StatusIcon && (
+                                <span className="font-bold text-base">{day}</span>
+                                {record && statusTag && (
                                   <>
-                                    <StatusIcon className="h-5 w-5 mt-0.5" />
+                                    <span className="font-bold text-lg mt-1">{statusTag}</span>
                                     {displayInfo && (
                                       <span className="text-xs mt-0.5 opacity-75">{displayInfo}</span>
                                     )}

@@ -1,0 +1,133 @@
+================================================================================
+COMPREHENSIVE ATTENDANCE TIMEZONE FIX - SOLUTION DOCUMENT
+================================================================================
+
+PROBLEM SUMMARY:
+----------------
+1. Check-in times showing previous day's date (e.g., date=2026-04-01 but time=2026-03-31 23:06:35)
+2. Late threshold not working correctly - employees checking in on time marked as late
+3. Academy shift employees at 12:55 PM marked late when cutoff is 1:15 PM
+
+ROOT CAUSE:
+-----------
+- Times stored in UTC in database
+- Late threshold comparison happening in UTC instead of IST
+- 5:30 hour timezone offset causing date mismatch and incorrect late flags
+
+SOLUTION (3-PART FIX):
+----------------------
+
+PART 1: DATABASE MIGRATION (Fixes existing data + function)
+File: supabase/migrations/20260417000001_comprehensive_april_attendance_fix.sql
+
+What it does:
+✅ Updates calculate_attendance_status function to properly convert UTC to IST
+✅ Adds 5:30 hours to April 1-14 check-in times (fixes date mismatch)
+✅ Recalculates all April attendance statuses with correct timezone logic
+✅ Updates is_late flags based on proper IST comparison
+✅ Protects April 15-16 data (as per user request)
+
+PART 2: MANUAL FIX FOR ACADEMY SHIFT (April 15-16)
+File: manual_fix_academy_late_threshold.sql
+
+What it does:
+✅ Specifically fixes Academy shift late threshold issue
+✅ Recalculates is_late flag for April 15-16 Academy employees
+✅ Includes verification queries to confirm fix
+
+PART 3: FRONTEND FIX (Prevents future issues)
+File: src/components/attendance/AttendanceCheckIn.tsx
+
+What it does:
+✅ Ensures date is calculated in IST timezone
+✅ Stores check-in time in UTC (standard practice)
+✅ Database function handles UTC to IST conversion automatically
+✅ Prevents future date mismatch issues
+
+
+HOW TO APPLY THE FIX:
+----------------------
+
+STEP 1: Run the comprehensive migration
+   - This will be auto-applied through Lovable
+   - File: 20260417000001_comprehensive_april_attendance_fix.sql
+   - This fixes the function AND April 1-14 data
+
+STEP 2: (Optional) Run manual Academy fix for April 15-16
+   - Open Supabase SQL Editor
+   - Copy and run: manual_fix_academy_late_threshold.sql
+   - This specifically fixes Academy shift late threshold
+
+STEP 3: Verify the fix
+   - Open Supabase SQL Editor
+   - Run: verify_all_shifts_late_threshold.sql
+   - Check which shifts are now working correctly
+
+STEP 4: Frontend changes are already applied
+   - AttendanceCheckIn.tsx has been updated
+   - Future check-ins will work correctly
+
+
+VERIFICATION QUERIES:
+---------------------
+
+1. Check if late threshold is working for all shifts:
+   Run: verify_all_shifts_late_threshold.sql
+
+2. Check specific Academy shift issue:
+   Run: manual_fix_academy_late_threshold.sql (Step 1 only)
+
+3. Check April attendance summary:
+   SELECT 
+     date,
+     COUNT(*) as total,
+     SUM(CASE WHEN is_late THEN 1 ELSE 0 END) as late_count
+   FROM attendance
+   WHERE date >= '2026-04-01' AND date <= '2026-04-30'
+   GROUP BY date
+   ORDER BY date;
+
+
+WHAT THIS FIXES:
+----------------
+✅ Database: All April attendance records corrected
+✅ Function: calculate_attendance_status now properly handles UTC to IST
+✅ Frontend: Check-in component sends correct timezone data
+✅ Late Threshold: Now compares IST to IST (not UTC to IST)
+✅ Date Mismatch: Check-in times now show correct date
+✅ Future Prevention: New check-ins will work correctly
+
+
+TECHNICAL DETAILS:
+------------------
+
+Before Fix:
+- Check-in stored: 2026-03-31 23:06:35+00 (UTC)
+- Comparison: UTC time vs IST shift time (WRONG!)
+- Result: Incorrect late flags
+
+After Fix:
+- Check-in stored: 2026-04-01 04:36:35+00 (UTC)
+- Comparison: Converts to IST first, then compares (CORRECT!)
+- Result: Accurate late flags
+
+The key insight: We must convert UTC to IST BEFORE comparing with shift times,
+because shift times are defined in IST (e.g., "13:00:00" means 1:00 PM IST).
+
+
+FILES CREATED/MODIFIED:
+-----------------------
+1. supabase/migrations/20260417000001_comprehensive_april_attendance_fix.sql (NEW)
+2. manual_fix_academy_late_threshold.sql (NEW)
+3. verify_all_shifts_late_threshold.sql (NEW)
+4. src/components/attendance/AttendanceCheckIn.tsx (MODIFIED)
+
+
+NEXT STEPS:
+-----------
+1. Wait for migration to auto-apply through Lovable
+2. Run verification queries to confirm fix
+3. Optionally run manual Academy fix if needed
+4. Monitor new check-ins to ensure they work correctly
+
+================================================================================

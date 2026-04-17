@@ -143,7 +143,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-xs text-muted-foreground">PR + LT</span>
+              <span className="text-xs text-muted-foreground">Present</span>
             </div>
             <p className="text-2xl font-bold text-green-600 dark:text-green-400">
               {stats.present_days}
@@ -152,9 +152,6 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
                   (+{stats.half_days} half)
                 </span>
               )}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              PR: {stats.present_on_time || (stats.present_days - stats.late_days)} | LT: {stats.late_days}
             </p>
           </CardContent>
         </Card>

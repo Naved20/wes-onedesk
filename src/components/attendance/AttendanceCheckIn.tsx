@@ -121,14 +121,18 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
   const calculateAttendanceStatus = () => {
     if (!shiftInfo) return;
 
+    // Get current time in IST (Asia/Kolkata timezone)
     const now = new Date();
+    const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    
     const [startHour, startMin] = shiftInfo.start_time.split(":").map(Number);
     const [endHour, endMin] = shiftInfo.end_time.split(":").map(Number);
 
-    const shiftStart = new Date(now);
+    // Create shift times in IST
+    const shiftStart = new Date(istTime);
     shiftStart.setHours(startHour, startMin, 0, 0);
 
-    const shiftEnd = new Date(now);
+    const shiftEnd = new Date(istTime);
     shiftEnd.setHours(endHour, endMin, 0, 0);
     if (endHour < startHour) {
       shiftEnd.setDate(shiftEnd.getDate() + 1);
@@ -138,19 +142,19 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
     const halfDayThreshold = new Date(shiftStart.getTime() + shiftInfo.half_day_threshold_hours * 3600000);
     const lastCheckinLimit = new Date(shiftEnd.getTime() - shiftInfo.last_checkin_hours_before_end * 3600000);
 
-    if (now >= lastCheckinLimit) {
+    if (istTime >= lastCheckinLimit) {
       setAttendanceStatus({
         status: "absent",
         message: "Too late to check-in. Will be marked Absent.",
         variant: "destructive",
       });
-    } else if (now >= halfDayThreshold) {
+    } else if (istTime >= halfDayThreshold) {
       setAttendanceStatus({
         status: "half_day",
         message: "Check-in will be marked as Half Day.",
         variant: "destructive",
       });
-    } else if (now > lateThreshold) {
+    } else if (istTime > lateThreshold) {
       setAttendanceStatus({
         status: "late",
         message: "You are late. Check-in will be flagged.",
@@ -187,14 +191,21 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
 
     setCheckingIn(true);
     try {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const now = new Date().toISOString();
+      // Get current time in IST
+      const now = new Date();
+      const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      
+      // Format date in IST
+      const today = format(istTime, "yyyy-MM-dd");
+      
+      // Store timestamp in UTC (database will handle conversion)
+      const nowUTC = now.toISOString();
 
-      // Calculate status using database function
+      // Calculate status using database function (it will convert UTC to IST internally)
       const { data: statusData, error: statusError } = await supabase.rpc(
         "calculate_attendance_status",
         {
-          p_check_in_time: now,
+          p_check_in_time: nowUTC,
           p_shift_start: shiftInfo.start_time,
           p_shift_end: shiftInfo.end_time,
           p_late_threshold_minutes: shiftInfo.late_threshold_minutes,
@@ -210,7 +221,7 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
       const { error } = await supabase.from("attendance").insert({
         user_id: userId,
         date: today,
-        check_in_time: now,
+        check_in_time: nowUTC,
         shift_id: shiftInfo.shift_id,
         calculated_status: calculatedStatus,
         status: "pending",
