@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2 } from "lucide-react";
+import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2, Edit } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -41,11 +41,19 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     content: "",
     file: null as File | null,
+  });
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    content: "",
+    file: null as File | null,
+    keepExistingFile: true,
   });
 
   // Add custom styles
@@ -186,7 +194,106 @@ export default function Announcements() {
     }
   };
 
+  const openEditDialog = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setEditFormData({
+      title: announcement.title,
+      content: announcement.content,
+      file: null,
+      keepExistingFile: true,
+    });
+    setEditOpen(true);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAnnouncement) return;
+    
+    if (!editFormData.title.trim() || !editFormData.content.trim()) {
+      toast({
+        title: "Error",
+        description: "Title and description are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let fileUrl = editingAnnouncement.file_url;
+      let fileName = editingAnnouncement.file_name;
+
+      // Handle file update
+      if (editFormData.file) {
+        // Delete old file if exists
+        if (editingAnnouncement.file_url) {
+          const oldFilePath = editingAnnouncement.file_url.split('/').pop();
+          if (oldFilePath) {
+            await supabase.storage.from('announcements').remove([oldFilePath]);
+          }
+        }
+
+        // Upload new file
+        const fileExt = editFormData.file.name.split('.').pop();
+        const filePath = `${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('announcements')
+          .upload(filePath, editFormData.file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('announcements')
+          .getPublicUrl(filePath);
+
+        fileUrl = publicUrl;
+        fileName = editFormData.file.name;
+      } else if (!editFormData.keepExistingFile && editingAnnouncement.file_url) {
+        // Remove existing file if user chose to remove it
+        const oldFilePath = editingAnnouncement.file_url.split('/').pop();
+        if (oldFilePath) {
+          await supabase.storage.from('announcements').remove([oldFilePath]);
+        }
+        fileUrl = null;
+        fileName = null;
+      }
+
+      // Update announcement
+      const { error } = await supabase
+        .from("announcements")
+        .update({
+          title: editFormData.title,
+          content: editFormData.content,
+          file_url: fileUrl,
+          file_name: fileName,
+        })
+        .eq("id", editingAnnouncement.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Announcement updated successfully",
+      });
+
+      setEditOpen(false);
+      setEditingAnnouncement(null);
+      fetchAnnouncements();
+    } catch (error) {
+      console.error("Error updating announcement:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update announcement",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const canCreateAnnouncement = role === "admin" || role === "manager";
+  const canEditAnnouncement = role === "admin" || role === "manager";
   const canDeleteAnnouncement = role === "admin" || role === "manager";
 
   return (
@@ -295,6 +402,16 @@ export default function Announcements() {
                       <span className="text-sm text-muted-foreground">
                         {format(new Date(announcement.created_at), "MMM dd, yyyy")}
                       </span>
+                      {canEditAnnouncement && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => openEditDialog(announcement)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      )}
                       {canDeleteAnnouncement && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -417,6 +534,88 @@ export default function Announcements() {
           </div>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Edit Announcement</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                placeholder="Enter announcement title"
+                value={editFormData.title}
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-content">Description</Label>
+              <div className="border rounded-md">
+                <ReactQuill
+                  theme="snow"
+                  value={editFormData.content}
+                  onChange={(value) => setEditFormData({ ...editFormData, content: value })}
+                  modules={{
+                    toolbar: [
+                      [{ header: [1, 2, 3, false] }],
+                      ["bold", "italic", "underline", "strike"],
+                      [{ list: "ordered" }, { list: "bullet" }],
+                      [{ color: [] }, { background: [] }],
+                      ["link"],
+                      ["clean"],
+                    ],
+                  }}
+                  className="bg-white dark:bg-gray-950"
+                  style={{ minHeight: "150px" }}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Attachment</Label>
+              {editingAnnouncement?.file_url && editFormData.keepExistingFile && !editFormData.file && (
+                <div className="flex items-center gap-2 p-2 border rounded-md bg-muted">
+                  <File className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm flex-1">{editingAnnouncement.file_name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditFormData({ ...editFormData, keepExistingFile: false })}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+              {(!editingAnnouncement?.file_url || !editFormData.keepExistingFile) && (
+                <>
+                  <Input
+                    id="edit-file"
+                    type="file"
+                    onChange={(e) => setEditFormData({ ...editFormData, file: e.target.files?.[0] || null, keepExistingFile: false })}
+                  />
+                  {editFormData.file && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {editFormData.file.name}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Updating..." : "Update Announcement"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

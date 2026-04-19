@@ -48,6 +48,26 @@ export default function Auth() {
         return;
       }
 
+      // Check if it's face attendance credentials
+      if (
+        loginEmail.toLowerCase() === "face@wes.lu" &&
+        loginPassword === "WES@naved123"
+      ) {
+        // Set face attendance session
+        sessionStorage.setItem("faceAttendanceAuth", "true");
+        
+        toast({
+          title: "Face Attendance Access",
+          description: "Redirecting to face recognition system...",
+        });
+
+        setTimeout(() => {
+          navigate("/face-attendance");
+        }, 500);
+        return;
+      }
+
+      // Normal login flow
       const { error } = await signIn(loginEmail.trim(), loginPassword);
       
       if (error) {
@@ -121,6 +141,7 @@ export default function Auth() {
               {isLoading ? "Logging in..." : "Login"}
             </Button>
           </form>
+
           <p className="text-xs text-muted-foreground text-center mt-4">
             Contact your administrator if you need an account.
           </p>

@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalaryStatusWidget } from "@/components/dashboard/SalaryStatusWidget";
-import { Users, Clock, Calendar, DollarSign, Bell, FileText, Building } from "lucide-react";
+import { Users, Clock, Calendar, DollarSign, Bell, FileText, Building, Camera } from "lucide-react";
 
 interface DashboardStats {
   totalEmployees: number;
@@ -260,6 +260,18 @@ export default function Dashboard() {
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               {role === "employee" && (
                 <>
+                  <button
+                    onClick={() => {
+                      // Set face attendance flag and navigate
+                      sessionStorage.setItem("redirectToFaceAttendance", "true");
+                      navigate("/auth");
+                    }}
+                    className="p-4 rounded-lg border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors text-left"
+                  >
+                    <Camera className="h-8 w-8 text-primary mb-2" />
+                    <h3 className="font-medium">Face Recognition</h3>
+                    <p className="text-sm text-muted-foreground">Quick check-in with camera</p>
+                  </button>
                   <button
                     onClick={() => navigate("/attendance")}
                     className="p-4 rounded-lg border bg-card hover:bg-muted transition-colors text-left"

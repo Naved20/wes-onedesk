@@ -21,6 +21,7 @@ import ShiftManagement from "./pages/ShiftManagement";
 import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
 import GoogleDrive from "./pages/GoogleDrive";
 import Tasks from "./pages/Tasks";
+import FaceAttendance from "./pages/FaceAttendance";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/face-attendance" element={<FaceAttendance />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Employees /></ProtectedRoute>} />
             <Route path="/employee/:id" element={<ProtectedRoute><EmployeeProfile /></ProtectedRoute>} />

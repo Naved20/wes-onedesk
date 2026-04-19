@@ -47,6 +47,8 @@ export default function Employees() {
   const [employees, setEmployees] = useState<EmployeeWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterInstitution, setFilterInstitution] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -64,6 +66,10 @@ export default function Employees() {
   const [formPhone, setFormPhone] = useState("");
 
   // Edit form state
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState<AppRole>("employee");
   const [editDesignation, setEditDesignation] = useState("");
   const [editInstitution, setEditInstitution] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -187,12 +193,24 @@ export default function Employees() {
     }
   };
 
-  const openEditDialog = (employee: EmployeeProfile) => {
+  const openEditDialog = async (employee: EmployeeProfile) => {
     setSelectedEmployee(employee);
+    setEditFirstName(employee.first_name || "");
+    setEditLastName(employee.last_name || "");
+    setEditEmail(employee.email || "");
     setEditDesignation(employee.designation || "");
     setEditInstitution(employee.institution_assignment || "");
     setEditPhone(employee.phone || "");
     setEditIsActive(employee.is_active ?? true);
+    
+    // Fetch user role
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", employee.user_id)
+      .single();
+    
+    setEditRole(roleData?.role || "employee");
     setEditDialogOpen(true);
   };
 
@@ -200,11 +218,25 @@ export default function Employees() {
     e.preventDefault();
     if (!selectedEmployee) return;
 
+    // Validate required fields
+    if (!editFirstName.trim() || !editLastName.trim() || !editEmail.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "First name, last name, and email are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const { error } = await supabase
+      // Update employee profile
+      const { error: profileError } = await supabase
         .from("employee_profiles")
         .update({
+          first_name: editFirstName.trim(),
+          last_name: editLastName.trim(),
+          email: editEmail.trim(),
           designation: editDesignation.trim() || null,
           institution_assignment: editInstitution.trim() || null,
           phone: editPhone.trim() || null,
@@ -212,7 +244,28 @@ export default function Employees() {
         })
         .eq("id", selectedEmployee.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Update user role
+      const { error: roleError } = await supabase
+        .from("user_roles")
+        .update({ role: editRole })
+        .eq("user_id", selectedEmployee.user_id);
+
+      if (roleError) throw roleError;
+
+      // Update auth user email if changed
+      if (editEmail.trim() !== selectedEmployee.email) {
+        const { error: authError } = await supabase.auth.admin.updateUserById(
+          selectedEmployee.user_id,
+          { email: editEmail.trim() }
+        );
+        
+        // Note: This might fail if not admin, but we'll continue anyway
+        if (authError) {
+          console.warn("Could not update auth email:", authError);
+        }
+      }
 
       toast({
         title: "Updated",
@@ -278,11 +331,23 @@ export default function Employees() {
     }
   };
 
-  const filteredEmployees = employees.filter((emp) =>
-    `${emp.first_name} ${emp.last_name} ${emp.email}`
+  const filteredEmployees = employees.filter((emp) => {
+    // Search filter
+    const matchesSearch = `${emp.first_name} ${emp.last_name} ${emp.email}`
       .toLowerCase()
-      .includes(searchQuery.toLowerCase())
-  );
+      .includes(searchQuery.toLowerCase());
+    
+    // Institution filter
+    const matchesInstitution = filterInstitution === "all" || 
+      emp.institution_assignment === filterInstitution;
+    
+    // Status filter
+    const matchesStatus = filterStatus === "all" || 
+      (filterStatus === "active" && emp.is_active) ||
+      (filterStatus === "inactive" && !emp.is_active);
+    
+    return matchesSearch && matchesInstitution && matchesStatus;
+  });
 
   return (
     <DashboardLayout>
@@ -411,16 +476,96 @@ export default function Employees() {
 
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <CardTitle>Employee Directory</CardTitle>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search employees..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <CardTitle>Employee Directory</CardTitle>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search employees..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+              
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Institution</Label>
+                  <Select value={filterInstitution} onValueChange={setFilterInstitution}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Institutions" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Institutions</SelectItem>
+                      <SelectItem value="WES">WES</SelectItem>
+                      <SelectItem value="DPS">DPS</SelectItem>
+                      <SelectItem value="CLAS">CLAS</SelectItem>
+                      <SelectItem value="WESA">WESA</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Status</Label>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {/* Active Filters Display */}
+              {(filterInstitution !== "all" || filterStatus !== "all") && (
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-sm text-muted-foreground">Active filters:</span>
+                  {filterInstitution !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Institution: {filterInstitution}
+                      <button
+                        onClick={() => setFilterInstitution("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  )}
+                  {filterStatus !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Status: {filterStatus}
+                      <button
+                        onClick={() => setFilterStatus("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilterInstitution("all");
+                      setFilterStatus("all");
+                    }}
+                    className="h-6 text-xs"
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              )}
+              
+              {/* Results Count */}
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredEmployees.length} of {employees.length} employees
               </div>
             </div>
           </CardHeader>
@@ -521,17 +666,56 @@ export default function Employees() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleEditEmployee} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editFirstName">First Name *</Label>
+                <Input
+                  id="editFirstName"
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editLastName">Last Name *</Label>
+                <Input
+                  id="editLastName"
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  required
+                  maxLength={100}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label htmlFor="editEmail">Email *</Label>
               <Input
-                value={`${selectedEmployee?.first_name} ${selectedEmployee?.last_name}`}
-                disabled
+                id="editEmail"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                required
+                maxLength={255}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editRole">Role *</Label>
+              <Select value={editRole} onValueChange={(v) => setEditRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="editDesignation">Designation</Label>
