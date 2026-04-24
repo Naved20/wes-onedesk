@@ -69,6 +69,7 @@ export default function Employees() {
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState<AppRole>("employee");
   const [editDesignation, setEditDesignation] = useState("");
   const [editInstitution, setEditInstitution] = useState("");
@@ -198,6 +199,7 @@ export default function Employees() {
     setEditFirstName(employee.first_name || "");
     setEditLastName(employee.last_name || "");
     setEditEmail(employee.email || "");
+    setEditPassword(""); // Clear password field
     setEditDesignation(employee.designation || "");
     setEditInstitution(employee.institution_assignment || "");
     setEditPhone(employee.phone || "");
@@ -223,6 +225,16 @@ export default function Employees() {
       toast({
         title: "Validation Error",
         description: "First name, last name, and email are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate password if provided
+    if (editPassword && editPassword.length < 6) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 6 characters",
         variant: "destructive",
       });
       return;
@@ -254,22 +266,33 @@ export default function Employees() {
 
       if (roleError) throw roleError;
 
-      // Update auth user email if changed
+      // Update auth user email and/or password if changed
+      const authUpdates: any = {};
+      
       if (editEmail.trim() !== selectedEmployee.email) {
+        authUpdates.email = editEmail.trim();
+      }
+      
+      if (editPassword) {
+        authUpdates.password = editPassword;
+      }
+
+      if (Object.keys(authUpdates).length > 0) {
         const { error: authError } = await supabase.auth.admin.updateUserById(
           selectedEmployee.user_id,
-          { email: editEmail.trim() }
+          authUpdates
         );
         
-        // Note: This might fail if not admin, but we'll continue anyway
         if (authError) {
-          console.warn("Could not update auth email:", authError);
+          console.warn("Could not update auth user:", authError);
         }
       }
 
       toast({
         title: "Updated",
-        description: "Employee updated successfully",
+        description: editPassword 
+          ? "Employee and password updated successfully" 
+          : "Employee updated successfully",
       });
 
       setEditDialogOpen(false);
@@ -703,6 +726,21 @@ export default function Employees() {
                 required
                 maxLength={255}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editPassword">Password</Label>
+              <Input
+                id="editPassword"
+                type="password"
+                placeholder="Leave blank to keep current password"
+                value={editPassword}
+                onChange={(e) => setEditPassword(e.target.value)}
+                minLength={6}
+                maxLength={100}
+              />
+              <p className="text-xs text-muted-foreground">
+                Only fill this if you want to change the password
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="editRole">Role *</Label>
