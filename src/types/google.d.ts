@@ -75,8 +75,6 @@ declare namespace gapi {
   function load(api: string, callback: () => void): void;
 }
 
-  function load(api: string, callback: () => void): void;
-}
 
 declare namespace google {
   namespace accounts {
