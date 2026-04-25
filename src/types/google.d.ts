@@ -65,7 +65,7 @@ declare namespace gapi {
           };
         }>;
 
-        const delete: (params: { fileId: string }) => Promise<void>;
+        function delete_(params: { fileId: string }): Promise<void>;
       }
     }
   }
