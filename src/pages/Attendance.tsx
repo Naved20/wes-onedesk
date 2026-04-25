@@ -25,7 +25,7 @@ import { getAttendanceStatusBadge, getAttendanceDisplayStatus } from "@/lib/atte
 
 type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
-interface AttendanceWithEmployee extends Attendance {
+interface AttendanceWithEmployee extends Omit<Attendance, 'calculated_status'> {
   employee_name?: string;
   calculated_status?: string | null;
   institution?: string | null;
@@ -1266,7 +1266,7 @@ export default function Attendance() {
                 userId={selectedEmployeeId} 
                 year={employeeDialogMonth.getFullYear()} 
                 month={employeeDialogMonth.getMonth() + 1}
-                attendanceRecords={attendanceRecords}
+                attendanceRecords={attendanceRecords as any}
               />
               
               {/* Attendance Records - Calendar View */}

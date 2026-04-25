@@ -52,14 +52,14 @@ export const TaskBoard = () => {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('tasks')
         .select('*')
         .eq('is_deleted', false)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as Task[];
+      return (data as unknown) as Task[];
     },
   });
 
@@ -67,7 +67,7 @@ export const TaskBoard = () => {
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<Task> }) => {
       const { error } = await supabase
         .from('tasks')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id);
 
       if (error) throw error;

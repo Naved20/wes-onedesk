@@ -96,7 +96,7 @@ export function AppraisalManager() {
       const { data, error } = await query;
 
       if (error) throw error;
-      setAppraisals(data || []);
+      setAppraisals((data || []) as unknown as Appraisal[]);
     } catch (error: any) {
       console.error("Error fetching appraisals:", error);
       toast.error("Failed to load appraisals");
