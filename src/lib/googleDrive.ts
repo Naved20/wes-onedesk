@@ -113,7 +113,7 @@ export const uploadFileToDrive = async (
 ): Promise<DriveFile> => {
   const metadata = {
     name: file.name,
-    mimeType: file.mimeType,
+    mimeType: file.type,
     ...(folderId && { parents: [folderId] }),
   };
 
@@ -155,7 +155,7 @@ export const listDriveFiles = async (
 };
 
 export const deleteFileFromDrive = async (fileId: string): Promise<void> => {
-  await gapi.client.drive.files.delete({
+  await (gapi.client.drive.files as any).delete({
     fileId,
   });
 };
