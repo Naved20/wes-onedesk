@@ -47,6 +47,17 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
 
   useEffect(() => {
     fetchStats();
+
+    // Auto-refresh when attendance or leaves change for this user
+    const channel = supabase
+      .channel(`attendance-stats-${userId}-${year}-${month}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance', filter: `user_id=eq.${userId}` }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves', filter: `user_id=eq.${userId}` }, () => fetchStats())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId, year, month]);
 
   const fetchStats = async () => {
