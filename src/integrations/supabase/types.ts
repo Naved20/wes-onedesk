@@ -20,6 +20,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           expires_at: string | null
+          file_name: string | null
+          file_url: string | null
           id: string
           institution: string | null
           is_active: boolean | null
@@ -32,6 +34,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
           id?: string
           institution?: string | null
           is_active?: boolean | null
@@ -44,6 +48,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
           id?: string
           institution?: string | null
           is_active?: boolean | null
@@ -53,11 +59,68 @@ export type Database = {
         }
         Relationships: []
       }
+      appraisals: {
+        Row: {
+          appraisal_period_end: string
+          appraisal_period_start: string
+          appraisal_type: string
+          created_at: string | null
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          notes: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          appraisal_period_end: string
+          appraisal_period_start: string
+          appraisal_type: string
+          created_at?: string | null
+          employee_id: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          notes?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          appraisal_period_end?: string
+          appraisal_period_start?: string
+          appraisal_type?: string
+          created_at?: string | null
+          employee_id?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          notes?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appraisals_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employee_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           admin_override: boolean | null
           approved_at: string | null
           approved_by: string | null
+          calculated_status: string | null
           check_in_time: string | null
           check_out_time: string | null
           created_at: string
@@ -66,12 +129,14 @@ export type Database = {
           id: string
           is_half_day: boolean | null
           is_late: boolean | null
+          is_manual_override: boolean | null
           modified_at: string | null
           modified_by: string | null
           notes: string | null
           original_status: string | null
           presence_value: number | null
           rejection_reason: string | null
+          shift_id: string | null
           status: Database["public"]["Enums"]["attendance_status"] | null
           updated_at: string
           user_id: string
@@ -80,6 +145,7 @@ export type Database = {
           admin_override?: boolean | null
           approved_at?: string | null
           approved_by?: string | null
+          calculated_status?: string | null
           check_in_time?: string | null
           check_out_time?: string | null
           created_at?: string
@@ -88,12 +154,14 @@ export type Database = {
           id?: string
           is_half_day?: boolean | null
           is_late?: boolean | null
+          is_manual_override?: boolean | null
           modified_at?: string | null
           modified_by?: string | null
           notes?: string | null
           original_status?: string | null
           presence_value?: number | null
           rejection_reason?: string | null
+          shift_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"] | null
           updated_at?: string
           user_id: string
@@ -102,6 +170,7 @@ export type Database = {
           admin_override?: boolean | null
           approved_at?: string | null
           approved_by?: string | null
+          calculated_status?: string | null
           check_in_time?: string | null
           check_out_time?: string | null
           created_at?: string
@@ -110,17 +179,27 @@ export type Database = {
           id?: string
           is_half_day?: boolean | null
           is_late?: boolean | null
+          is_manual_override?: boolean | null
           modified_at?: string | null
           modified_by?: string | null
           notes?: string | null
           original_status?: string | null
           presence_value?: number | null
           rejection_reason?: string | null
+          shift_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"] | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "attendance_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attendance_audit: {
         Row: {
@@ -169,12 +248,73 @@ export type Database = {
           },
         ]
       }
+      attendance_rules: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          rule_name: string
+          rule_value: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          rule_name: string
+          rule_value: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          rule_name?: string
+          rule_value?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      company_documents: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          title: string
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          title: string
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          title?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       documents: {
         Row: {
           document_name: string
           document_type: string
           file_url: string
           id: string
+          title: string
           uploaded_at: string
           user_id: string
           verified: boolean | null
@@ -186,6 +326,7 @@ export type Database = {
           document_type: string
           file_url: string
           id?: string
+          title: string
           uploaded_at?: string
           user_id: string
           verified?: boolean | null
@@ -197,6 +338,7 @@ export type Database = {
           document_type?: string
           file_url?: string
           id?: string
+          title?: string
           uploaded_at?: string
           user_id?: string
           verified?: boolean | null
@@ -432,6 +574,60 @@ export type Database = {
           year_of_passing?: number | null
         }
         Relationships: []
+      }
+      employee_shifts: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          created_at: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          notes: string | null
+          shift_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          shift_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          shift_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_shifts_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_employee_shifts_profile"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "employee_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       holidays: {
         Row: {
@@ -838,6 +1034,202 @@ export type Database = {
         }
         Relationships: []
       }
+      shifts: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_time: string
+          half_day_threshold_hours: number | null
+          id: string
+          is_active: boolean | null
+          last_checkin_hours_before_end: number | null
+          late_threshold_minutes: number | null
+          name: string
+          start_time: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_time: string
+          half_day_threshold_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_checkin_hours_before_end?: number | null
+          late_threshold_minutes?: number | null
+          name: string
+          start_time: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_time?: string
+          half_day_threshold_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_checkin_hours_before_end?: number | null
+          late_threshold_minutes?: number | null
+          name?: string
+          start_time?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      task_assignments: {
+        Row: {
+          created_at: string | null
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_assignments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "employee_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      task_remarks: {
+        Row: {
+          created_at: string | null
+          id: string
+          rating: number | null
+          remark_text: string
+          remarked_by: string
+          response_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          rating?: number | null
+          remark_text: string
+          remarked_by: string
+          response_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          rating?: number | null
+          remark_text?: string
+          remarked_by?: string
+          response_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_remarks_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "task_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_responses: {
+        Row: {
+          created_at: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          response_text: string
+          task_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          response_text: string
+          task_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          response_text?: string
+          task_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_responses_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          description: string
+          due_date: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          description: string
+          due_date?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          description?: string
+          due_date?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -868,6 +1260,17 @@ export type Database = {
         Args: { p_month: number; p_user_id: string; p_year: number }
         Returns: Json
       }
+      calculate_attendance_status: {
+        Args: {
+          p_check_in_time: string
+          p_half_day_threshold_hours: number
+          p_last_checkin_hours_before_end: number
+          p_late_threshold_minutes: number
+          p_shift_end: string
+          p_shift_start: string
+        }
+        Returns: string
+      }
       calculate_monthly_working_days: {
         Args: { p_month: number; p_year: number }
         Returns: number
@@ -895,6 +1298,17 @@ export type Database = {
         }
         Returns: Json
       }
+      create_absent_records_for_date: {
+        Args: { p_date: string }
+        Returns: number
+      }
+      create_absent_records_for_range: {
+        Args: { p_end_date: string; p_start_date: string }
+        Returns: {
+          date: string
+          records_created: number
+        }[]
+      }
       generate_monthly_salaries: {
         Args: { p_month: number; p_year: number }
         Returns: Json
@@ -902,6 +1316,18 @@ export type Database = {
       get_casual_leave_count: {
         Args: { p_month: number; p_user_id: string; p_year: number }
         Returns: number
+      }
+      get_employee_shift: {
+        Args: { p_date: string; p_user_id: string }
+        Returns: {
+          end_time: string
+          half_day_threshold_hours: number
+          last_checkin_hours_before_end: number
+          late_threshold_minutes: number
+          shift_id: string
+          shift_name: string
+          start_time: string
+        }[]
       }
       get_or_create_leave_balance: {
         Args: { p_month: number; p_user_id: string; p_year: number }
@@ -932,6 +1358,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_holiday_date: { Args: { p_date: string }; Returns: boolean }
       is_late_checkin: { Args: { p_check_in_time: string }; Returns: boolean }
       is_manager_of_institution: {
         Args: { _institution: string; _user_id: string }
@@ -942,6 +1369,14 @@ export type Database = {
         Returns: boolean
       }
       is_within_checkin_window: { Args: never; Returns: boolean }
+      trigger_absent_records_now: {
+        Args: never
+        Returns: {
+          date: string
+          message: string
+          records_created: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
