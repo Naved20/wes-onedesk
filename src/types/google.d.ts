@@ -65,8 +65,9 @@ declare namespace gapi {
           };
         }>;
 
-        const _delete: (params: { fileId: string }) => Promise<void>;
-        export { _delete as delete };
+        // 'delete' is a reserved word in TS function declarations, so it's accessed via index
+      }
+      const files: { [key: string]: any };
       }
     }
   }
