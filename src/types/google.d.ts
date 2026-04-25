@@ -65,12 +65,15 @@ declare namespace gapi {
           };
         }>;
 
-        // 'delete' is a reserved word in TS function declarations, so it's accessed via index
+        // 'delete' is a reserved word — accessed via the index signature below
       }
+      // Fallback index signature so `files.delete(...)` typechecks
       const files: { [key: string]: any };
-      }
     }
   }
+
+  function load(api: string, callback: () => void): void;
+}
 
   function load(api: string, callback: () => void): void;
 }
