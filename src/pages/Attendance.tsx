@@ -1390,6 +1390,9 @@ export default function Attendance() {
                                 {record && statusTag && (
                                   <>
                                     <span className="font-bold text-lg mt-1">{statusTag}</span>
+                                    {record.is_late && statusTag !== 'LT' && (
+                                      <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 leading-none">LT</span>
+                                    )}
                                     {displayInfo && (
                                       <span className="text-xs mt-0.5 opacity-75">{displayInfo}</span>
                                     )}
