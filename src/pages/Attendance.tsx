@@ -1342,8 +1342,11 @@ export default function Attendance() {
                             if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
-                              // Determine color and tag based on status
-                              if (calcStatus === 'absent') {
+                              // Rejected attendance is treated as Absent regardless of check-in
+                              if (record.status === 'rejected') {
+                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
+                                statusTag = 'AB';
+                              } else if (calcStatus === 'absent') {
                                 displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
                                 statusTag = 'AB';
                               } else if (calcStatus === 'half_day' || record.is_half_day) {
