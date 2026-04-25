@@ -65,9 +65,8 @@ declare namespace gapi {
           };
         }>;
 
-        // 'delete' is a reserved word — accessed via the index signature below
       }
-      // Fallback index signature so `files.delete(...)` typechecks
+      // 'delete' is reserved — expose via index signature so files.delete(...) typechecks
       const files: { [key: string]: any };
     }
   }
