@@ -65,13 +65,15 @@ declare namespace gapi {
           };
         }>;
 
-        function delete(params: { fileId: string }): Promise<void>;
       }
+      // 'delete' is reserved — expose via index signature so files.delete(...) typechecks
+      const files: { [key: string]: any };
     }
   }
 
   function load(api: string, callback: () => void): void;
 }
+
 
 declare namespace google {
   namespace accounts {
