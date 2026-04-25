@@ -1266,7 +1266,7 @@ export default function Attendance() {
                 userId={selectedEmployeeId} 
                 year={employeeDialogMonth.getFullYear()} 
                 month={employeeDialogMonth.getMonth() + 1}
-                attendanceRecords={attendanceRecords}
+                attendanceRecords={attendanceRecords as any}
               />
               
               {/* Attendance Records - Calendar View */}
