@@ -41,7 +41,7 @@ export function euclideanDistance(a: Float32Array | number[], b: Float32Array | 
   return Math.sqrt(sum);
 }
 
-export const MATCH_THRESHOLD = 0.5; // lower = stricter
+export const MATCH_THRESHOLD = 0.6; // lower = stricter; 0.6 is face-api.js standard
 
 export function findBestMatch(
   candidate: Float32Array,

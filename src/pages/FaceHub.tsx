@@ -79,12 +79,22 @@ export default function FaceHub() {
 
   const handleScan = async () => {
     if (!videoRef.current || !modelsReady) return;
+    const v = videoRef.current;
+    if (!v.videoWidth || !v.videoHeight || v.readyState < 2) {
+      setLastResult({ ok: false, msg: "Camera not ready. Please wait a moment and try again." });
+      return;
+    }
     setScanning(true);
     setLastResult(null);
     try {
-      const descriptor = await getFaceDescriptor(videoRef.current);
+      // Take best of 3 attempts to improve reliability
+      let descriptor = await getFaceDescriptor(v);
       if (!descriptor) {
-        setLastResult({ ok: false, msg: "No face detected. Please face the camera." });
+        await new Promise((r) => setTimeout(r, 250));
+        descriptor = await getFaceDescriptor(v);
+      }
+      if (!descriptor) {
+        setLastResult({ ok: false, msg: "No face detected. Please face the camera squarely with good lighting." });
         await supabase.from("face_checkin_history").insert({
           user_id: null,
           matched: false,
@@ -94,11 +104,15 @@ export default function FaceHub() {
         return;
       }
 
-      const { data: enrolled } = await supabase
+      const { data: enrolled, error: enrollErr } = await supabase
         .from("face_descriptors")
         .select("user_id, descriptor")
         .eq("is_active", true);
 
+      if (enrollErr) {
+        setLastResult({ ok: false, msg: `DB error: ${enrollErr.message}` });
+        return;
+      }
       if (!enrolled || enrolled.length === 0) {
         setLastResult({ ok: false, msg: "No enrolled faces in system." });
         return;
@@ -108,7 +122,9 @@ export default function FaceHub() {
         user_id: e.user_id,
         descriptor: e.descriptor as unknown as number[],
       }));
+      console.log(`[FaceHub] Comparing against ${candidates.length} enrolled faces`);
       const match = findBestMatch(descriptor, candidates);
+      console.log(`[FaceHub] Best match distance: ${match?.distance.toFixed(4)} (threshold: ${MATCH_THRESHOLD})`);
 
       if (!match || match.distance > MATCH_THRESHOLD) {
         setLastResult({
