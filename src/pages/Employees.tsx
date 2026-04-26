@@ -266,25 +266,25 @@ export default function Employees() {
 
       if (roleError) throw roleError;
 
-      // Update auth user email and/or password if changed
-      const authUpdates: any = {};
-      
-      if (editEmail.trim() !== selectedEmployee.email) {
-        authUpdates.email = editEmail.trim();
-      }
-      
+      // Update password if provided using edge function
       if (editPassword) {
-        authUpdates.password = editPassword;
-      }
-
-      if (Object.keys(authUpdates).length > 0) {
-        const { error: authError } = await supabase.auth.admin.updateUserById(
-          selectedEmployee.user_id,
-          authUpdates
+        const { data: passwordData, error: passwordError } = await supabase.functions.invoke(
+          "update-user-password",
+          {
+            body: {
+              userId: selectedEmployee.user_id,
+              newPassword: editPassword,
+            },
+          }
         );
-        
-        if (authError) {
-          console.warn("Could not update auth user:", authError);
+
+        if (passwordError) {
+          console.error("Password update error:", passwordError);
+          throw new Error("Failed to update password");
+        }
+
+        if (passwordData?.error) {
+          throw new Error(passwordData.error);
         }
       }
 
@@ -731,7 +731,7 @@ export default function Employees() {
               <Label htmlFor="editPassword">Password</Label>
               <Input
                 id="editPassword"
-                type="password"
+                type="text"
                 placeholder="Leave blank to keep current password"
                 value={editPassword}
                 onChange={(e) => setEditPassword(e.target.value)}
@@ -739,7 +739,7 @@ export default function Employees() {
                 maxLength={100}
               />
               <p className="text-xs text-muted-foreground">
-                Only fill this if you want to change the password
+                Only fill this if you want to change the password (min 6 characters)
               </p>
             </div>
             <div className="space-y-2">
