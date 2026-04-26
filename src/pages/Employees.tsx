@@ -210,7 +210,7 @@ export default function Employees() {
       .from("user_roles")
       .select("role")
       .eq("user_id", employee.user_id)
-      .single();
+      .maybeSingle();
     
     setEditRole(roleData?.role || "employee");
     setEditDialogOpen(true);
