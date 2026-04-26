@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Camera, Trash2, UserPlus, Loader2, CheckCircle2 } from "lucide-react";
-import { loadFaceModels, getFaceDescriptor } from "@/lib/faceApi";
+import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 
 interface Employee {
   user_id: string;
@@ -81,9 +81,9 @@ export default function FaceIdManagement() {
     if (!videoRef.current || !enrollFor) return;
     setCapturing(true);
     try {
-      const descriptor = await getFaceDescriptor(videoRef.current);
+      const descriptor = await getAveragedFaceDescriptor(videoRef.current, 7, 160);
       if (!descriptor) {
-        toast({ title: "No face detected", variant: "destructive" });
+        toast({ title: "No face detected", description: "Please keep the face steady in good light and try again.", variant: "destructive" });
         return;
       }
 

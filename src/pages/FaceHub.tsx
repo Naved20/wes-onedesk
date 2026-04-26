@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { loadFaceModels, getFaceDescriptor, findBestMatch, MATCH_THRESHOLD } from "@/lib/faceApi";
+import { loadFaceModels, getAveragedFaceDescriptor, findBestMatch, MATCH_THRESHOLD } from "@/lib/faceApi";
 import wesLogo from "@/assets/wes-logo.jpg";
 
 interface HistoryRow {
@@ -27,6 +27,7 @@ export default function FaceHub() {
   const [modelsReady, setModelsReady] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [lastResult, setLastResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [lastDistance, setLastDistance] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
 
   useEffect(() => {
@@ -87,12 +88,8 @@ export default function FaceHub() {
     setScanning(true);
     setLastResult(null);
     try {
-      // Take best of 3 attempts to improve reliability
-      let descriptor = await getFaceDescriptor(v);
-      if (!descriptor) {
-        await new Promise((r) => setTimeout(r, 250));
-        descriptor = await getFaceDescriptor(v);
-      }
+      // Average multiple frames so one blink/movement/lighting change does not break matching
+      const descriptor = await getAveragedFaceDescriptor(v, 7, 160);
       if (!descriptor) {
         setLastResult({ ok: false, msg: "No face detected. Please face the camera squarely with good lighting." });
         await supabase.from("face_checkin_history").insert({
@@ -125,6 +122,7 @@ export default function FaceHub() {
       console.log(`[FaceHub] Comparing against ${candidates.length} enrolled faces`);
       const match = findBestMatch(descriptor, candidates);
       console.log(`[FaceHub] Best match distance: ${match?.distance.toFixed(4)} (threshold: ${MATCH_THRESHOLD})`);
+      setLastDistance(match?.distance ?? null);
 
       if (!match || match.distance > MATCH_THRESHOLD) {
         setLastResult({
@@ -262,11 +260,14 @@ export default function FaceHub() {
                 {lastResult && (
                   <div
                     className={`p-4 rounded-lg flex items-center gap-3 ${
-                      lastResult.ok ? "bg-green-500/10 text-green-700 dark:text-green-400" : "bg-destructive/10 text-destructive"
+                      lastResult.ok ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
                     }`}
                   >
                     {lastResult.ok ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
-                    <span className="font-medium">{lastResult.msg}</span>
+                    <span className="font-medium">
+                      {lastResult.msg}
+                      {lastDistance !== null ? ` Match score: ${lastDistance.toFixed(3)}` : ""}
+                    </span>
                   </div>
                 )}
                 <Button onClick={handleScan} disabled={!modelsReady || scanning} size="lg" className="w-full">
