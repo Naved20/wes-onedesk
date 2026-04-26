@@ -26,10 +26,47 @@ export async function getFaceDescriptor(
 ): Promise<Float32Array | null> {
   await loadFaceModels();
   const detection = await faceapi
-    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
+    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.35 }))
     .withFaceLandmarks()
     .withFaceDescriptor();
   return detection?.descriptor ?? null;
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export function averageFaceDescriptors(descriptors: (Float32Array | number[])[]): Float32Array | null {
+  if (descriptors.length === 0) return null;
+
+  const length = descriptors[0].length;
+  const average = new Float32Array(length);
+
+  for (const descriptor of descriptors) {
+    for (let i = 0; i < length; i++) {
+      average[i] += descriptor[i] as number;
+    }
+  }
+
+  for (let i = 0; i < length; i++) {
+    average[i] /= descriptors.length;
+  }
+
+  return average;
+}
+
+export async function getAveragedFaceDescriptor(
+  input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement,
+  attempts = 5,
+  delayMs = 180
+): Promise<Float32Array | null> {
+  const descriptors: Float32Array[] = [];
+
+  for (let i = 0; i < attempts; i++) {
+    const descriptor = await getFaceDescriptor(input);
+    if (descriptor) descriptors.push(descriptor);
+    if (i < attempts - 1) await wait(delayMs);
+  }
+
+  return averageFaceDescriptors(descriptors);
 }
 
 export function euclideanDistance(a: Float32Array | number[], b: Float32Array | number[]): number {
@@ -41,7 +78,7 @@ export function euclideanDistance(a: Float32Array | number[], b: Float32Array | 
   return Math.sqrt(sum);
 }
 
-export const MATCH_THRESHOLD = 0.6; // lower = stricter; 0.6 is face-api.js standard
+export const MATCH_THRESHOLD = 0.68; // lower = stricter; averaged samples need a little room for live camera lighting
 
 export function findBestMatch(
   candidate: Float32Array,
