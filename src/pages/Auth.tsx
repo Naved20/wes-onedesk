@@ -48,21 +48,18 @@ export default function Auth() {
         return;
       }
 
-      // Check if it's face attendance credentials
+      // Check if it's face attendance hub credentials
       if (
-        loginEmail.toLowerCase() === "face@wes.lu" &&
-        loginPassword === "WES@naved123"
+        loginEmail.toLowerCase() === "face@wazireducationsocity.com" &&
+        loginPassword === "WES@12345"
       ) {
-        // Set face attendance session
         sessionStorage.setItem("faceAttendanceAuth", "true");
-        
         toast({
           title: "Face Attendance Access",
-          description: "Redirecting to face recognition system...",
+          description: "Redirecting to face hub...",
         });
-
         setTimeout(() => {
-          navigate("/face-attendance");
+          navigate("/face-hub");
         }, 500);
         return;
       }
