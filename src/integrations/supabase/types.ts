@@ -629,6 +629,69 @@ export type Database = {
           },
         ]
       }
+      face_checkin_history: {
+        Row: {
+          attendance_id: string | null
+          created_at: string
+          id: string
+          match_distance: number | null
+          matched: boolean
+          notes: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attendance_id?: string | null
+          created_at?: string
+          id?: string
+          match_distance?: number | null
+          matched?: boolean
+          notes?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attendance_id?: string | null
+          created_at?: string
+          id?: string
+          match_distance?: number | null
+          matched?: boolean
+          notes?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      face_descriptors: {
+        Row: {
+          descriptor: Json
+          enrolled_at: string
+          enrolled_by: string | null
+          id: string
+          is_active: boolean
+          photo_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          descriptor: Json
+          enrolled_at?: string
+          enrolled_by?: string | null
+          id?: string
+          is_active?: boolean
+          photo_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          descriptor?: Json
+          enrolled_at?: string
+          enrolled_by?: string | null
+          id?: string
+          is_active?: boolean
+          photo_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       holidays: {
         Row: {
           created_at: string
