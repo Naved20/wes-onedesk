@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2, Edit } from "lucide-react";
@@ -36,14 +37,47 @@ const editorStyle = `
 
 type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
 
+// Skeleton Loading Component
+function AnnouncementSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <Skeleton className="h-6 w-3/4" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-8 w-8 rounded" />
+            <Skeleton className="h-8 w-8 rounded" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-4/6" />
+        </div>
+        <Skeleton className="h-48 w-full rounded-lg" />
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Announcements() {
   const { role } = useAuth();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  
+  const ANNOUNCEMENTS_PER_PAGE = 4;
   const [formData, setFormData] = useState({
     title: "",
     content: "",
@@ -67,19 +101,68 @@ export default function Announcements() {
   }, []);
 
   useEffect(() => {
-    fetchAnnouncements();
+    fetchAnnouncements(true); // Initial load
   }, []);
 
-  const fetchAnnouncements = async () => {
+  // Infinite scroll observer
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      
+      // When user scrolls to 66% of the page
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+      
+      if (scrollPercentage > 0.66 && !loadingMore && hasMore) {
+        fetchAnnouncements(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loadingMore, hasMore, page]);
+
+  const fetchAnnouncements = async (reset: boolean = false) => {
     try {
-      const { data, error } = await supabase
+      if (reset) {
+        setLoading(true);
+        setPage(0);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = reset ? 0 : page;
+      const from = currentPage * ANNOUNCEMENTS_PER_PAGE;
+      const to = from + ANNOUNCEMENTS_PER_PAGE - 1;
+
+      const { data, error, count } = await supabase
         .from("announcements")
-        .select("*")
+        .select("*", { count: 'exact' })
         .eq("is_active", true)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
-      setAnnouncements(data || []);
+      
+      const newAnnouncements = data || [];
+      
+      if (reset) {
+        setAnnouncements(newAnnouncements);
+      } else {
+        setAnnouncements(prev => [...prev, ...newAnnouncements]);
+      }
+      
+      // Check if there are more announcements to load
+      const totalLoaded = reset ? newAnnouncements.length : announcements.length + newAnnouncements.length;
+      setHasMore(count ? totalLoaded < count : newAnnouncements.length === ANNOUNCEMENTS_PER_PAGE);
+      
+      if (!reset) {
+        setPage(currentPage + 1);
+      } else {
+        setPage(1);
+      }
     } catch (error) {
       console.error("Error fetching announcements:", error);
       toast({
@@ -89,6 +172,7 @@ export default function Announcements() {
       });
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -147,7 +231,7 @@ export default function Announcements() {
 
       setFormData({ title: "", content: "", file: null });
       setOpen(false);
-      fetchAnnouncements();
+      fetchAnnouncements(true); // Reset and reload
     } catch (error) {
       console.error("Error creating announcement:", error);
       toast({
@@ -183,7 +267,7 @@ export default function Announcements() {
         description: "Announcement deleted successfully",
       });
 
-      fetchAnnouncements();
+      fetchAnnouncements(true); // Reset and reload
     } catch (error) {
       console.error("Error deleting announcement:", error);
       toast({
@@ -279,7 +363,7 @@ export default function Announcements() {
 
       setEditOpen(false);
       setEditingAnnouncement(null);
-      fetchAnnouncements();
+      fetchAnnouncements(true); // Reset and reload
     } catch (error) {
       console.error("Error updating announcement:", error);
       toast({
@@ -377,8 +461,10 @@ export default function Announcements() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="space-y-4">
+            {[...Array(4)].map((_, index) => (
+              <AnnouncementSkeleton key={index} />
+            ))}
           </div>
         ) : announcements.length === 0 ? (
           <Card>
@@ -531,6 +617,22 @@ export default function Announcements() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Loading more indicator */}
+        {loadingMore && (
+          <div className="space-y-4">
+            {[...Array(2)].map((_, index) => (
+              <AnnouncementSkeleton key={`loading-${index}`} />
+            ))}
+          </div>
+        )}
+
+        {/* No more announcements indicator */}
+        {!loading && !loadingMore && !hasMore && announcements.length > 0 && (
+          <div className="text-center py-4 text-muted-foreground">
+            <p>No more announcements to load</p>
           </div>
         )}
       </div>
