@@ -12,26 +12,24 @@ function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt
 
 const out = [];
 for (const row of rows) {
-  const day = row['Day'];
-  const taskNum = row['Task'];
+  const day = row['Day'] || row['\uFEFFDay'];
+  const taskNum = row['Article No'];
   const theme = row['Theme'] || '';
   const difficulty = row['Difficulty'] || '';
   const instruction = row['Instruction'] || '';
-  const articleTitle = row['Article_Title'] || '';
-  const articleText = row['Article_Text'] || '';
-  // Vocabulary columns: Vocab_1..Vocab_20
+  const articleTitle = row['Article Title'] || '';
+  const articleText = row['Article Text'] || '';
   const vocab = [];
   for (let i = 1; i <= 20; i++) {
-    const v = row[`Vocab_${i}`];
+    const v = row[`Vocab${i}`];
     if (v) vocab.push(v);
   }
-  // Sentences: Sentence_1..Sentence_10
   const sentences = [];
   for (let i = 1; i <= 10; i++) {
-    const s = row[`Sentence_${i}`];
+    const s = row[`Sentence${i}`];
     if (s) sentences.push(s);
   }
-  const wordCount = row['Word_Count'] || '';
+  const wordCount = row['Word Count'] || '';
 
   const title = `Day ${day} - Task ${taskNum}: ${articleTitle}`;
   const id = byTitle.get(title);
