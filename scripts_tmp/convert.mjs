@@ -16,10 +16,17 @@ function mdToHtml(md) {
   if (looksLikeHtml(md) && !/&lt;p&gt;/i.test(md)) return md;
 
   // If content was double-escaped (contains &lt;p&gt;), unescape first then strip outer tags
+  let stripped = false;
   if (/&lt;p&gt;/i.test(md)) {
     md = md.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-    // Strip ALL HTML tags so we re-render from raw markdown text
-    md = md.replace(/<[^>]+>/g,'');
+    md = md.replace(/<[^>]+>/g,' ');
+    stripped = true;
+  }
+  if (stripped) {
+    // After stripping tags, treat as a single concatenated line; insert newlines.
+    md = md.replace(/\s*###\s+/g, '\n### ')
+           .replace(/\s+(\d+)\.\s+/g, '\n$1. ')
+           .replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
   }
 
   const lines = md.split(/\r?\n/);
