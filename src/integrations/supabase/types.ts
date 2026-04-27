@@ -1259,6 +1259,7 @@ export type Database = {
           created_at: string | null
           created_by: string
           description: string
+          display_order: number | null
           due_date: string | null
           file_name: string | null
           file_url: string | null
@@ -1271,6 +1272,7 @@ export type Database = {
           created_at?: string | null
           created_by: string
           description: string
+          display_order?: number | null
           due_date?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -1283,6 +1285,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string
           description?: string
+          display_order?: number | null
           due_date?: string | null
           file_name?: string | null
           file_url?: string | null
