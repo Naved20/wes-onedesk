@@ -1,73 +1,68 @@
 import fs from 'fs';
+import { parse } from 'csv-parse/sync';
+
+const csvText = fs.readFileSync('/dev-server/src/assets/task/WES_Teacher_English_Training_Day1_10_High_Quality_Master.csv','utf8');
+const rows = parse(csvText, { columns: true, skip_empty_lines: true });
+
 const data = JSON.parse(fs.readFileSync('/tmp/tasks/raw.json','utf8'));
+// Map by title to id
+const byTitle = new Map(data.map(r => [r.title, r.id]));
 
-function looksLikeHtml(s){ return /<\/?(p|h[1-6]|ul|ol|li|strong|em|br|div|span)\b/i.test(s); }
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function escapeHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function inline(s){
-  s = escapeHtml(s);
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
-  return s;
-}
-
-function mdToHtml(md) {
-  const hasMarkdown = /\*\*[^*]+\*\*|###\s|\n\d+\.\s/.test(md);
-  if (looksLikeHtml(md) && !hasMarkdown && !/&lt;p&gt;/i.test(md)) return md;
-
-  if (/&lt;p&gt;/i.test(md)) {
-    md = md.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+const out = [];
+for (const row of rows) {
+  const day = row['Day'];
+  const taskNum = row['Task'];
+  const theme = row['Theme'] || '';
+  const difficulty = row['Difficulty'] || '';
+  const instruction = row['Instruction'] || '';
+  const articleTitle = row['Article_Title'] || '';
+  const articleText = row['Article_Text'] || '';
+  // Vocabulary columns: Vocab_1..Vocab_20
+  const vocab = [];
+  for (let i = 1; i <= 20; i++) {
+    const v = row[`Vocab_${i}`];
+    if (v) vocab.push(v);
   }
-  if (looksLikeHtml(md)) {
-    md = md.replace(/<\/(p|h[1-6]|li|ul|ol|div)>/gi, '\n')
-           .replace(/<br\s*\/?>/gi, '\n')
-           .replace(/<[^>]+>/g, ' ');
+  // Sentences: Sentence_1..Sentence_10
+  const sentences = [];
+  for (let i = 1; i <= 10; i++) {
+    const s = row[`Sentence_${i}`];
+    if (s) sentences.push(s);
   }
-  // Insert newlines before structural markers
-  md = md.replace(/\s*###\s+/g, '\n### ')
-         .replace(/\s+(\d+)\.\s+/g, '\n$1. ')
-         .replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
-  // Split known headings from inline body
-  md = md.replace(/^### (📝 Instruction)[ \t]+/gm, '### $1\n')
-         .replace(/^### (📚 Vocabulary[^\n]*?)[ \t]+(?=\d+\.)/gm, '### $1\n')
-         .replace(/^### (💬 Practice Sentences[^\n]*?)[ \t]+(?=\d+\.)/gm, '### $1\n')
-         .replace(/^### (📖 Article:[ \t]*[^.\n]+?)\.[ \t]+/gm, '### $1\n');
+  const wordCount = row['Word_Count'] || '';
 
-  const lines = md.split(/\r?\n/);
+  const title = `Day ${day} - Task ${taskNum}: ${articleTitle}`;
+  const id = byTitle.get(title);
+  if (!id) { console.warn('No id for', title); continue; }
+
   let html = '';
-  let inList = false;
-  let listType = null;
-  const closeList = () => { if (inList) { html += `</${listType}>`; inList = false; listType = null; } };
-
-  for (let raw of lines) {
-    let line = raw.trim();
-    if (!line) { closeList(); continue; }
-    let m;
-    if ((m = line.match(/^###\s+(.*)$/))) { closeList(); html += `<h3>${inline(m[1])}</h3>`; continue; }
-    if ((m = line.match(/^##\s+(.*)$/)))  { closeList(); html += `<h2>${inline(m[1])}</h2>`; continue; }
-    if ((m = line.match(/^\*\*([^*]+):\*\*\s*(.*)$/))) {
-      closeList();
-      html += `<p><strong>${escapeHtml(m[1])}:</strong> ${inline(m[2])}</p>`;
-      continue;
-    }
-    if ((m = line.match(/^(\d+)\.\s+(.*)$/))) {
-      if (!inList || listType !== 'ol') { closeList(); html += '<ol>'; inList = true; listType = 'ol'; }
-      html += `<li>${inline(m[2])}</li>`;
-      continue;
-    }
-    if ((m = line.match(/^[-*]\s+(.*)$/))) {
-      if (!inList || listType !== 'ul') { closeList(); html += '<ul>'; inList = true; listType = 'ul'; }
-      html += `<li>${inline(m[1])}</li>`;
-      continue;
-    }
-    closeList();
-    html += `<p>${inline(line)}</p>`;
+  html += `<p><strong>Theme:</strong> ${escapeHtml(theme)}</p>`;
+  html += `<p><strong>Difficulty:</strong> ${escapeHtml(difficulty)}</p>`;
+  if (wordCount) html += `<p><strong>Word Count:</strong> ${escapeHtml(wordCount)}</p>`;
+  html += `<h3>📝 Instruction</h3>`;
+  html += `<p>${escapeHtml(instruction)}</p>`;
+  html += `<h3>📖 Article: ${escapeHtml(articleTitle)}</h3>`;
+  // Split article into paragraphs by sentence groups (every 3-4 sentences)
+  const sentencesArr = articleText.split(/(?<=[.!?])\s+/).filter(s => s.trim());
+  const paragraphs = [];
+  for (let i = 0; i < sentencesArr.length; i += 4) {
+    paragraphs.push(sentencesArr.slice(i, i+4).join(' '));
   }
-  closeList();
-  return html;
+  for (const p of paragraphs) html += `<p>${escapeHtml(p)}</p>`;
+
+  html += `<h3>📚 Vocabulary (20 words)</h3><ol>`;
+  for (const v of vocab) html += `<li>${escapeHtml(v)}</li>`;
+  html += `</ol>`;
+
+  html += `<h3>💬 Practice Sentences (10)</h3><ol>`;
+  for (const s of sentences) html += `<li>${escapeHtml(s)}</li>`;
+  html += `</ol>`;
+
+  out.push({ id, title, html });
 }
 
-const out = data.map(r => ({ id: r.id, title: r.title, html: mdToHtml(r.description) }));
 fs.writeFileSync('/tmp/tasks/converted.json', JSON.stringify(out));
-console.log('Row 0 sample:\n', out[0].html.slice(0, 600));
-console.log('\nRow 3 (was problematic):\n', out[3].html.slice(0, 600));
+console.log('Built', out.length, 'rows');
+console.log('Sample:\n', out[0].html.slice(0, 800));
