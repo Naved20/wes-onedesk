@@ -13,23 +13,25 @@ function inline(s){
 
 function mdToHtml(md) {
   const hasMarkdown = /\*\*[^*]+\*\*|###\s|\n\d+\.\s/.test(md);
-  // If already HTML and no markdown markers, return as-is.
   if (looksLikeHtml(md) && !hasMarkdown && !/&lt;p&gt;/i.test(md)) return md;
 
-  // Unescape double-escaped content
   if (/&lt;p&gt;/i.test(md)) {
     md = md.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
   }
-  // Strip existing HTML tags so we can re-render markdown cleanly
   if (looksLikeHtml(md)) {
     md = md.replace(/<\/(p|h[1-6]|li|ul|ol|div)>/gi, '\n')
            .replace(/<br\s*\/?>/gi, '\n')
            .replace(/<[^>]+>/g, ' ');
   }
-  // Normalize: insert newlines before structural markers
+  // Insert newlines before structural markers
   md = md.replace(/\s*###\s+/g, '\n### ')
          .replace(/\s+(\d+)\.\s+/g, '\n$1. ')
          .replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
+  // Split known headings from inline body
+  md = md.replace(/^### (📝 Instruction)[ \t]+/gm, '### $1\n')
+         .replace(/^### (📚 Vocabulary[^\n]*?)[ \t]+(?=\d+\.)/gm, '### $1\n')
+         .replace(/^### (💬 Practice Sentences[^\n]*?)[ \t]+(?=\d+\.)/gm, '### $1\n')
+         .replace(/^### (📖 Article:[ \t]*[^.\n]+?)\.[ \t]+/gm, '### $1\n');
 
   const lines = md.split(/\r?\n/);
   let html = '';
@@ -40,7 +42,6 @@ function mdToHtml(md) {
   for (let raw of lines) {
     let line = raw.trim();
     if (!line) { closeList(); continue; }
-
     let m;
     if ((m = line.match(/^###\s+(.*)$/))) { closeList(); html += `<h3>${inline(m[1])}</h3>`; continue; }
     if ((m = line.match(/^##\s+(.*)$/)))  { closeList(); html += `<h2>${inline(m[1])}</h2>`; continue; }
@@ -66,18 +67,7 @@ function mdToHtml(md) {
   return html;
 }
 
-// Special handling: row may be a single line with all content concatenated (no newlines).
-// Split such single-line content into segments at heading markers and list-item markers.
-function preNormalize(md){
-  if (md.includes('\n')) return md;
-  // Insert newlines before ###, before "1." style numbers, before **Theme:** style labels
-  let s = md;
-  s = s.replace(/\s*###\s+/g, '\n### ');
-  s = s.replace(/\s+(\d+)\.\s+/g, '\n$1. ');
-  s = s.replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
-  return s;
-}
-
-const out = data.map(r => ({ id: r.id, html: mdToHtml(preNormalize(r.description)) }));
+const out = data.map(r => ({ id: r.id, title: r.title, html: mdToHtml(r.description) }));
 fs.writeFileSync('/tmp/tasks/converted.json', JSON.stringify(out));
-console.log('Sample row 4 (problematic):\n', out[3].html.slice(0, 800));
+console.log('Row 0 sample:\n', out[0].html.slice(0, 600));
+console.log('\nRow 3 (was problematic):\n', out[3].html.slice(0, 600));
