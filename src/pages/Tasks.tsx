@@ -16,6 +16,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import {
@@ -97,6 +98,37 @@ function SortableTaskItem({ task }: { task: Task }) {
   );
 }
 
+// Skeleton Loading Component
+function TaskSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-4 w-1/4" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-8 rounded" />
+            <Skeleton className="h-8 w-8 rounded" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-4/6" />
+        </div>
+        <Skeleton className="h-32 w-full rounded-lg" />
+        <div className="pt-4 border-t">
+          <Skeleton className="h-10 w-32" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 interface Task {
   id: string;
   title: string;
@@ -142,9 +174,13 @@ const Tasks = () => {
   const { role, user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [reorderOpen, setReorderOpen] = useState(false);
+  const [allTasksForReorder, setAllTasksForReorder] = useState<Task[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -154,6 +190,8 @@ const Tasks = () => {
   const [responseDialogOpen, setResponseDialogOpen] = useState(false);
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
+  
+  const TASKS_PER_PAGE = 4;
   
   const [formData, setFormData] = useState({
     title: "",
@@ -205,11 +243,30 @@ const Tasks = () => {
   }, []);
 
   useEffect(() => {
-    fetchTasks();
+    fetchTasks(true); // Initial load
     if (role === "admin") {
       fetchEmployees();
     }
   }, [role]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      
+      // When user scrolls to 80% of the page (8th task out of 12)
+      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+      
+      if (scrollPercentage > 0.66 && !loadingMore && hasMore) {
+        fetchTasks(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loadingMore, hasMore, page]);
 
   const fetchEmployees = async () => {
     try {
@@ -225,18 +282,31 @@ const Tasks = () => {
     }
   };
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (reset: boolean = false) => {
     try {
+      if (reset) {
+        setLoading(true);
+        setPage(0);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = reset ? 0 : page;
+      const from = currentPage * TASKS_PER_PAGE;
+      const to = from + TASKS_PER_PAGE - 1;
+
       let query;
       
       if (role === "admin") {
         // Admin sees all tasks
         query = supabase
           .from("tasks" as any)
-          .select("*")
+          .select("*", { count: 'exact' })
           .eq("is_active", true)
           .order("display_order", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(from, to);
       } else {
         // Employees and managers only see tasks assigned to them
         const { data: assignedTasks, error: assignError } = await supabase
@@ -250,30 +320,53 @@ const Tasks = () => {
 
         if (taskIds.length === 0) {
           setTasks([]);
+          setHasMore(false);
           setLoading(false);
+          setLoadingMore(false);
           return;
         }
 
         query = supabase
           .from("tasks" as any)
-          .select("*")
+          .select("*", { count: 'exact' })
           .in("id", taskIds)
           .eq("is_active", true)
           .order("display_order", { ascending: true, nullsFirst: false })
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(from, to);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
-      setTasks((data || []) as any);
       
-      // Fetch responses for all tasks
-      if (data && data.length > 0) {
-        for (const task of data as any[]) {
-          await fetchResponses(task.id);
-          await fetchAssignments(task.id);
-        }
+      const newTasks = (data || []) as Task[];
+      
+      if (reset) {
+        setTasks(newTasks);
+      } else {
+        setTasks(prev => [...prev, ...newTasks]);
+      }
+      
+      // Check if there are more tasks to load
+      const totalLoaded = reset ? newTasks.length : tasks.length + newTasks.length;
+      setHasMore(count ? totalLoaded < count : newTasks.length === TASKS_PER_PAGE);
+      
+      if (!reset) {
+        setPage(currentPage + 1);
+      } else {
+        setPage(1);
+      }
+      
+      // Fetch responses and assignments in parallel for better performance
+      if (newTasks && newTasks.length > 0) {
+        const taskIds = newTasks.map(task => task.id);
+        
+        // Fetch all responses in one query
+        Promise.all(taskIds.map(id => fetchResponses(id))).catch(console.error);
+        
+        // Fetch all assignments in one query
+        Promise.all(taskIds.map(id => fetchAssignments(id))).catch(console.error);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -284,6 +377,7 @@ const Tasks = () => {
       });
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -572,7 +666,7 @@ const Tasks = () => {
 
       setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [] });
       setOpen(false);
-      fetchTasks();
+      fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
       console.error("Error creating task:", error);
       toast({
@@ -734,7 +828,7 @@ const Tasks = () => {
         description: "Task deleted successfully",
       });
 
-      fetchTasks();
+      fetchTasks(true); // Reset and reload
     } catch (error) {
       console.error("Error deleting task:", error);
       toast({
@@ -884,7 +978,7 @@ const Tasks = () => {
 
       setEditOpen(false);
       setEditingTask(null);
-      fetchTasks();
+      fetchTasks(true); // Reset and reload
     } catch (error) {
       console.error("Error updating task:", error);
       toast({
@@ -902,18 +996,50 @@ const Tasks = () => {
   const canDeleteTask = role === "admin";
   const canAddRemark = role === "admin";
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleReorderSave = async () => {
+    setReorderOpen(false);
+    toast({
+      title: "Success",
+      description: "Task order saved successfully",
+    });
+    fetchTasks(true); // Reload with new order
+  };
+
+  const fetchAllTasksForReorder = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("tasks" as any)
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setAllTasksForReorder((data || []) as any);
+    } catch (error) {
+      console.error("Error fetching all tasks:", error);
+    }
+  };
+
+  const handleReorderDialogOpen = (open: boolean) => {
+    setReorderOpen(open);
+    if (open) {
+      fetchAllTasksForReorder();
+    }
+  };
+
+  const handleDragEndReorder = async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
       return;
     }
 
-    const oldIndex = tasks.findIndex((task) => task.id === active.id);
-    const newIndex = tasks.findIndex((task) => task.id === over.id);
+    const oldIndex = allTasksForReorder.findIndex((task) => task.id === active.id);
+    const newIndex = allTasksForReorder.findIndex((task) => task.id === over.id);
 
-    const newTasks = arrayMove(tasks, oldIndex, newIndex);
-    setTasks(newTasks);
+    const newTasks = arrayMove(allTasksForReorder, oldIndex, newIndex);
+    setAllTasksForReorder(newTasks);
 
     // Update display_order in database
     try {
@@ -933,6 +1059,9 @@ const Tasks = () => {
         title: "Success",
         description: "Task order updated successfully",
       });
+      
+      // Refresh main task list
+      fetchTasks(true);
     } catch (error) {
       console.error("Error updating task order:", error);
       toast({
@@ -941,16 +1070,8 @@ const Tasks = () => {
         variant: "destructive",
       });
       // Revert on error
-      fetchTasks();
+      fetchAllTasksForReorder();
     }
-  };
-
-  const handleReorderSave = async () => {
-    setReorderOpen(false);
-    toast({
-      title: "Success",
-      description: "Task order saved successfully",
-    });
   };
 
   const renderFilePreview = (fileUrl: string | null, fileName: string | null) => {
@@ -1036,7 +1157,7 @@ const Tasks = () => {
           <div className="flex gap-2">
             {canCreateTask && (
               <>
-                <Dialog open={reorderOpen} onOpenChange={setReorderOpen}>
+                <Dialog open={reorderOpen} onOpenChange={handleReorderDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
                       <ArrowUpDown className="mr-2 h-4 w-4" />
@@ -1054,14 +1175,14 @@ const Tasks = () => {
                       <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
+                        onDragEnd={handleDragEndReorder}
                       >
                         <SortableContext
-                          items={tasks.map(t => t.id)}
+                          items={allTasksForReorder.map(t => t.id)}
                           strategy={verticalListSortingStrategy}
                         >
                           <div className="space-y-2">
-                            {tasks.map((task) => (
+                            {allTasksForReorder.map((task) => (
                               <SortableTaskItem key={task.id} task={task} />
                             ))}
                           </div>
@@ -1228,8 +1349,10 @@ const Tasks = () => {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="space-y-4">
+            {[...Array(4)].map((_, index) => (
+              <TaskSkeleton key={index} />
+            ))}
           </div>
         ) : tasks.length === 0 ? (
           <Card>
@@ -1511,6 +1634,22 @@ const Tasks = () => {
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {/* Loading more indicator */}
+        {loadingMore && (
+          <div className="space-y-4">
+            {[...Array(2)].map((_, index) => (
+              <TaskSkeleton key={`loading-${index}`} />
+            ))}
+          </div>
+        )}
+
+        {/* No more tasks indicator */}
+        {!loading && !loadingMore && !hasMore && tasks.length > 0 && (
+          <div className="text-center py-4 text-muted-foreground">
+            <p>No more tasks to load</p>
           </div>
         )}
       </div>
