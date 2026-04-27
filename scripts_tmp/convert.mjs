@@ -12,22 +12,24 @@ function inline(s){
 }
 
 function mdToHtml(md) {
-  // If already HTML and contains real tags (not escaped), return as-is.
-  if (looksLikeHtml(md) && !/&lt;p&gt;/i.test(md)) return md;
+  const hasMarkdown = /\*\*[^*]+\*\*|###\s|\n\d+\.\s/.test(md);
+  // If already HTML and no markdown markers, return as-is.
+  if (looksLikeHtml(md) && !hasMarkdown && !/&lt;p&gt;/i.test(md)) return md;
 
-  // If content was double-escaped (contains &lt;p&gt;), unescape first then strip outer tags
-  let stripped = false;
+  // Unescape double-escaped content
   if (/&lt;p&gt;/i.test(md)) {
     md = md.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
-    md = md.replace(/<[^>]+>/g,' ');
-    stripped = true;
   }
-  if (stripped) {
-    // After stripping tags, treat as a single concatenated line; insert newlines.
-    md = md.replace(/\s*###\s+/g, '\n### ')
-           .replace(/\s+(\d+)\.\s+/g, '\n$1. ')
-           .replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
+  // Strip existing HTML tags so we can re-render markdown cleanly
+  if (looksLikeHtml(md)) {
+    md = md.replace(/<\/(p|h[1-6]|li|ul|ol|div)>/gi, '\n')
+           .replace(/<br\s*\/?>/gi, '\n')
+           .replace(/<[^>]+>/g, ' ');
   }
+  // Normalize: insert newlines before structural markers
+  md = md.replace(/\s*###\s+/g, '\n### ')
+         .replace(/\s+(\d+)\.\s+/g, '\n$1. ')
+         .replace(/\s*\*\*([^*]+):\*\*\s*/g, '\n**$1:** ');
 
   const lines = md.split(/\r?\n/);
   let html = '';
