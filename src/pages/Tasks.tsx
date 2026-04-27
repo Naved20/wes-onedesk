@@ -13,9 +13,89 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Custom styles for Quill editor
+const editorStyle = `
+  .ql-container {
+    min-height: 150px;
+    font-size: 14px;
+  }
+  .ql-editor {
+    min-height: 150px;
+  }
+  .ql-toolbar {
+    border-top-left-radius: 0.375rem;
+    border-top-right-radius: 0.375rem;
+  }
+  .ql-container {
+    border-bottom-left-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+  }
+`;
+
+// Sortable Task Item Component for Reorder Dialog
+function SortableTaskItem({ task }: { task: Task }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 p-3 bg-card border rounded-lg hover:bg-accent/50 transition-colors"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="h-5 w-5 text-muted-foreground" />
+      </div>
+      <div className="flex-1">
+        <p className="font-medium">{task.title}</p>
+        {task.due_date && (
+          <p className="text-xs text-muted-foreground">
+            Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface Task {
   id: string;
@@ -28,6 +108,7 @@ interface Task {
   is_active: boolean;
   file_url: string | null;
   file_name: string | null;
+  display_order: number | null;
 }
 
 interface TaskResponse {
@@ -62,8 +143,11 @@ const Tasks = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [responses, setResponses] = useState<Record<string, TaskResponse[]>>({});
   const [remarks, setRemarks] = useState<Record<string, TaskRemark[]>>({});
   const [assignments, setAssignments] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
@@ -91,6 +175,34 @@ const Tasks = () => {
     remark_text: "",
     rating: 5,
   });
+
+  const [editFormData, setEditFormData] = useState({
+    title: "",
+    description: "",
+    due_date: "",
+    file: null as File | null,
+    keepExistingFile: true,
+    assign_to: "all" as "all" | "specific",
+    assigned_user_ids: [] as string[],
+  });
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Add custom styles
+  useEffect(() => {
+    const styleTag = document.createElement("style");
+    styleTag.innerHTML = editorStyle;
+    document.head.appendChild(styleTag);
+    return () => {
+      document.head.removeChild(styleTag);
+    };
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -123,6 +235,7 @@ const Tasks = () => {
           .from("tasks" as any)
           .select("*")
           .eq("is_active", true)
+          .order("display_order", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false });
       } else {
         // Employees and managers only see tasks assigned to them
@@ -146,6 +259,7 @@ const Tasks = () => {
           .select("*")
           .in("id", taskIds)
           .eq("is_active", true)
+          .order("display_order", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false });
       }
 
@@ -354,7 +468,9 @@ const Tasks = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.description.trim()) {
+    // Strip HTML tags for validation
+    const descriptionText = formData.description.replace(/<[^>]*>/g, '').trim();
+    if (!formData.title.trim() || !descriptionText) {
       toast({
         title: "Error",
         description: "Title and description are required",
@@ -629,9 +745,213 @@ const Tasks = () => {
     }
   };
 
+  const openEditDialog = (task: Task) => {
+    setEditingTask(task);
+    
+    // Fetch current assignments for this task
+    const currentAssignments = assignments[task.id] || [];
+    const assignedUserIds = currentAssignments.map(a => a.user_id);
+    
+    setEditFormData({
+      title: task.title,
+      description: task.description,
+      due_date: task.due_date ? task.due_date.split('T')[0] : "",
+      file: null,
+      keepExistingFile: true,
+      assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
+      assigned_user_ids: assignedUserIds,
+    });
+    setEditOpen(true);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+    
+    // Strip HTML tags for validation
+    const descriptionText = editFormData.description.replace(/<[^>]*>/g, '').trim();
+    if (!editFormData.title.trim() || !descriptionText) {
+      toast({
+        title: "Error",
+        description: "Title and description are required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editFormData.assign_to === "specific" && editFormData.assigned_user_ids.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one employee",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let fileUrl = editingTask.file_url;
+      let fileName = editingTask.file_name;
+
+      // Handle file update
+      if (editFormData.file) {
+        // Delete old file if exists
+        if (editingTask.file_url) {
+          const oldFilePath = editingTask.file_url.split('/').pop();
+          if (oldFilePath) {
+            await supabase.storage.from('tasks').remove([oldFilePath]);
+          }
+        }
+
+        // Upload new file
+        const fileExt = editFormData.file.name.split('.').pop();
+        const filePath = `${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('tasks')
+          .upload(filePath, editFormData.file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('tasks')
+          .getPublicUrl(filePath);
+
+        fileUrl = publicUrl;
+        fileName = editFormData.file.name;
+      } else if (!editFormData.keepExistingFile && editingTask.file_url) {
+        // Remove existing file if user chose to remove it
+        const oldFilePath = editingTask.file_url.split('/').pop();
+        if (oldFilePath) {
+          await supabase.storage.from('tasks').remove([oldFilePath]);
+        }
+        fileUrl = null;
+        fileName = null;
+      }
+
+      // Update the task
+      const { error: taskError } = await supabase
+        .from("tasks" as any)
+        .update({
+          title: editFormData.title,
+          description: editFormData.description,
+          due_date: editFormData.due_date || null,
+          file_url: fileUrl,
+          file_name: fileName,
+        })
+        .eq("id", editingTask.id);
+
+      if (taskError) throw taskError;
+
+      // Update task assignments
+      // First, delete existing assignments
+      const { error: deleteError } = await supabase
+        .from("task_assignments" as any)
+        .delete()
+        .eq("task_id", editingTask.id);
+
+      if (deleteError) throw deleteError;
+
+      // Then, create new assignments
+      if (editFormData.assign_to === "all") {
+        const assignments = employees.map(emp => ({
+          task_id: editingTask.id,
+          user_id: emp.user_id,
+        }));
+
+        const { error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .insert(assignments);
+
+        if (assignError) throw assignError;
+      } else {
+        const assignments = editFormData.assigned_user_ids.map(userId => ({
+          task_id: editingTask.id,
+          user_id: userId,
+        }));
+
+        const { error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .insert(assignments);
+
+        if (assignError) throw assignError;
+      }
+
+      toast({
+        title: "Success",
+        description: "Task updated successfully",
+      });
+
+      setEditOpen(false);
+      setEditingTask(null);
+      fetchTasks();
+    } catch (error) {
+      console.error("Error updating task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update task",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const canCreateTask = role === "admin";
+  const canEditTask = role === "admin";
   const canDeleteTask = role === "admin";
   const canAddRemark = role === "admin";
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = tasks.findIndex((task) => task.id === active.id);
+    const newIndex = tasks.findIndex((task) => task.id === over.id);
+
+    const newTasks = arrayMove(tasks, oldIndex, newIndex);
+    setTasks(newTasks);
+
+    // Update display_order in database
+    try {
+      const updates = newTasks.map((task, index) => ({
+        id: task.id,
+        display_order: index,
+      }));
+
+      for (const update of updates) {
+        await supabase
+          .from("tasks" as any)
+          .update({ display_order: update.display_order })
+          .eq("id", update.id);
+      }
+
+      toast({
+        title: "Success",
+        description: "Task order updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating task order:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update task order",
+        variant: "destructive",
+      });
+      // Revert on error
+      fetchTasks();
+    }
+  };
+
+  const handleReorderSave = async () => {
+    setReorderOpen(false);
+    toast({
+      title: "Success",
+      description: "Task order saved successfully",
+    });
+  };
 
   const renderFilePreview = (fileUrl: string | null, fileName: string | null) => {
     if (!fileUrl || !fileName) return null;
@@ -713,14 +1033,59 @@ const Tasks = () => {
             <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
             <p className="text-muted-foreground">View and respond to assigned tasks</p>
           </div>
-          {canCreateTask && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Task
-                </Button>
-              </DialogTrigger>
+          <div className="flex gap-2">
+            {canCreateTask && (
+              <>
+                <Dialog open={reorderOpen} onOpenChange={setReorderOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <ArrowUpDown className="mr-2 h-4 w-4" />
+                      Reorder Tasks
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px] max-h-[80vh]">
+                    <DialogHeader>
+                      <DialogTitle>Reorder Tasks</DialogTitle>
+                      <DialogDescription>
+                        Drag and drop tasks to change their order
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="overflow-y-auto max-h-[60vh] pr-2">
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext
+                          items={tasks.map(t => t.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="space-y-2">
+                            {tasks.map((task) => (
+                              <SortableTaskItem key={task.id} task={task} />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setReorderOpen(false)}
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={open} onOpenChange={setOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Task
+                    </Button>
+                  </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                   <DialogTitle>Create New Task</DialogTitle>
@@ -741,14 +1106,25 @@ const Tasks = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Enter task description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={5}
-                      required
-                    />
+                    <div className="border rounded-md">
+                      <ReactQuill
+                        theme="snow"
+                        value={formData.description}
+                        onChange={(value) => setFormData({ ...formData, description: value })}
+                        modules={{
+                          toolbar: [
+                            [{ header: [1, 2, 3, false] }],
+                            ["bold", "italic", "underline", "strike"],
+                            [{ list: "ordered" }, { list: "bullet" }],
+                            [{ color: [] }, { background: [] }],
+                            ["link"],
+                            ["clean"],
+                          ],
+                        }}
+                        className="bg-white dark:bg-gray-950"
+                        style={{ minHeight: "150px" }}
+                      />
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
@@ -846,7 +1222,9 @@ const Tasks = () => {
                 </form>
               </DialogContent>
             </Dialog>
-          )}
+              </>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -884,6 +1262,16 @@ const Tasks = () => {
                         <span className="text-sm text-muted-foreground">
                           {format(new Date(task.created_at), "MMM dd, yyyy")}
                         </span>
+                        {canEditTask && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => openEditDialog(task)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
                         {canDeleteTask && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -914,9 +1302,10 @@ const Tasks = () => {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="text-muted-foreground whitespace-pre-wrap">
-                      {task.description}
-                    </div>
+                    <div 
+                      className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4"
+                      dangerouslySetInnerHTML={{ __html: task.description }}
+                    />
                     
                     {/* Assigned To Section - Only show for admin */}
                     {role === "admin" && assignments[task.id] && assignments[task.id].length > 0 && (
@@ -1228,6 +1617,165 @@ const Tasks = () => {
               </Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? "Adding..." : "Add Remark"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Task Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+            <DialogDescription>
+              Update task details and assignments
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                placeholder="Enter task title"
+                value={editFormData.title}
+                onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Description</Label>
+              <div className="border rounded-md">
+                <ReactQuill
+                  theme="snow"
+                  value={editFormData.description}
+                  onChange={(value) => setEditFormData({ ...editFormData, description: value })}
+                  modules={{
+                    toolbar: [
+                      [{ header: [1, 2, 3, false] }],
+                      ["bold", "italic", "underline", "strike"],
+                      [{ list: "ordered" }, { list: "bullet" }],
+                      [{ color: [] }, { background: [] }],
+                      ["link"],
+                      ["clean"],
+                    ],
+                  }}
+                  className="bg-white dark:bg-gray-950"
+                  style={{ minHeight: "150px" }}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-assign_to">Assign To</Label>
+              <Select 
+                value={editFormData.assign_to} 
+                onValueChange={(value: "all" | "specific") => 
+                  setEditFormData({ ...editFormData, assign_to: value, assigned_user_ids: value === "all" ? [] : editFormData.assigned_user_ids })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select assignment type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Employees</SelectItem>
+                  <SelectItem value="specific">Specific Employee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {editFormData.assign_to === "specific" && (
+              <div className="space-y-2">
+                <Label>Select Employees (Multiple)</Label>
+                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                  {employees.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No employees found</p>
+                  ) : (
+                    employees.map((emp) => (
+                      <div key={emp.user_id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-emp-${emp.user_id}`}
+                          checked={editFormData.assigned_user_ids.includes(emp.user_id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setEditFormData({
+                                ...editFormData,
+                                assigned_user_ids: [...editFormData.assigned_user_ids, emp.user_id]
+                              });
+                            } else {
+                              setEditFormData({
+                                ...editFormData,
+                                assigned_user_ids: editFormData.assigned_user_ids.filter(id => id !== emp.user_id)
+                              });
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor={`edit-emp-${emp.user_id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {emp.first_name} {emp.last_name} ({emp.email})
+                        </Label>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {editFormData.assigned_user_ids.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {editFormData.assigned_user_ids.length} employee(s) selected
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-due_date">Due Date (Optional)</Label>
+              <Input
+                id="edit-due_date"
+                type="date"
+                value={editFormData.due_date}
+                onChange={(e) => setEditFormData({ ...editFormData, due_date: e.target.value })}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Attachment</Label>
+              {editingTask?.file_url && editFormData.keepExistingFile && !editFormData.file && (
+                <div className="flex items-center gap-2 p-2 border rounded-md bg-muted">
+                  <File className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm flex-1">{editingTask.file_name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditFormData({ ...editFormData, keepExistingFile: false })}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+              {(!editingTask?.file_url || !editFormData.keepExistingFile) && (
+                <>
+                  <Input
+                    id="edit-file"
+                    type="file"
+                    onChange={(e) => setEditFormData({ ...editFormData, file: e.target.files?.[0] || null, keepExistingFile: false })}
+                  />
+                  {editFormData.file && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {editFormData.file.name}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Updating..." : "Update Task"}
               </Button>
             </div>
           </form>
