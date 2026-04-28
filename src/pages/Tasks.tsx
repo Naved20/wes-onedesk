@@ -1069,6 +1069,20 @@ const Tasks = () => {
   const canDeleteTask = role === "admin";
   const canAddRemark = role === "admin";
 
+  // Helper: can current user remark on this specific response?
+  const canRemarkOnResponse = (taskId: string, responseUserId: string) => {
+    if (role === "admin" || role === "manager") return true;
+    const reviewers = peerReviewers[taskId] || [];
+    const isReviewer = reviewers.some(r => r.user_id === user?.id);
+    return isReviewer && responseUserId !== user?.id;
+  };
+
+  // Helper: is current user a peer reviewer for this task (so we render the "Responses to review" section even for employees)?
+  const isPeerReviewerOf = (taskId: string) => {
+    const reviewers = peerReviewers[taskId] || [];
+    return reviewers.some(r => r.user_id === user?.id);
+  };
+
   const handleReorderSave = async () => {
     setReorderOpen(false);
     toast({
