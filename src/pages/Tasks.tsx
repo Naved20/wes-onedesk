@@ -664,12 +664,24 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
+      // Insert peer reviewers (optional)
+      if (formData.peer_reviewer_ids.length > 0) {
+        const reviewers = formData.peer_reviewer_ids.map(uid => ({
+          task_id: (taskData as any).id,
+          user_id: uid,
+        }));
+        const { error: revError } = await supabase
+          .from("task_peer_reviewers" as any)
+          .insert(reviewers);
+        if (revError) throw revError;
+      }
+
       toast({
         title: "Success",
         description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [] });
+      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [] });
       setOpen(false);
       fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
