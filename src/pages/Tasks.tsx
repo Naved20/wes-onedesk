@@ -206,6 +206,7 @@ const Tasks = () => {
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
+    link: "",
     file: null as File | null,
   });
 
@@ -720,6 +721,7 @@ const Tasks = () => {
           task_id: selectedTask.id,
           user_id: user?.id,
           response_text: responseFormData.response_text,
+          link: responseFormData.link.trim() || null,
           file_url: fileUrl,
           file_name: fileName,
         });
@@ -731,7 +733,7 @@ const Tasks = () => {
         description: "Response submitted successfully",
       });
 
-      setResponseFormData({ response_text: "", file: null });
+      setResponseFormData({ response_text: "", link: "", file: null });
       setResponseDialogOpen(false);
       setSelectedTask(null);
       
@@ -1503,6 +1505,18 @@ const Tasks = () => {
                                         )}
                                       </div>
                                       <p className="text-sm whitespace-pre-wrap">{response.response_text}</p>
+                                      {response.link && (
+                                        <div className="pt-2">
+                                          <a 
+                                            href={response.link} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-primary hover:underline flex items-center gap-1"
+                                          >
+                                            🔗 {response.link}
+                                          </a>
+                                        </div>
+                                      )}
                                       {response.file_url && response.file_name && (
                                         <div className="pt-2 border-t">
                                           {renderFilePreview(response.file_url, response.file_name)}
@@ -1588,6 +1602,18 @@ const Tasks = () => {
                                     </p>
                                   </div>
                                   <p className="text-sm whitespace-pre-wrap">{userResponse.response_text}</p>
+                                  {userResponse.link && (
+                                    <div className="pt-2">
+                                      <a 
+                                        href={userResponse.link} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                                      >
+                                        🔗 {userResponse.link}
+                                      </a>
+                                    </div>
+                                  )}
                                   {userResponse.file_url && userResponse.file_name && (
                                     <div className="pt-2 border-t">
                                       {renderFilePreview(userResponse.file_url, userResponse.file_name)}
@@ -1674,6 +1700,19 @@ const Tasks = () => {
                 rows={5}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="response_link">Link (Optional)</Label>
+              <Input
+                id="response_link"
+                type="url"
+                placeholder="https://example.com"
+                value={responseFormData.link}
+                onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Add a link related to your response (e.g., Google Drive, GitHub, etc.)
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="response_file">Attachment (Optional)</Label>

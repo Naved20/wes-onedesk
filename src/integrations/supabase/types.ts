@@ -1219,6 +1219,7 @@ export type Database = {
           file_name: string | null
           file_url: string | null
           id: string
+          link: string | null
           response_text: string
           task_id: string
           updated_at: string | null
@@ -1229,6 +1230,7 @@ export type Database = {
           file_name?: string | null
           file_url?: string | null
           id?: string
+          link?: string | null
           response_text: string
           task_id: string
           updated_at?: string | null
@@ -1239,6 +1241,7 @@ export type Database = {
           file_name?: string | null
           file_url?: string | null
           id?: string
+          link?: string | null
           response_text?: string
           task_id?: string
           updated_at?: string | null
