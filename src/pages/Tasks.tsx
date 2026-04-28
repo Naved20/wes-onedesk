@@ -226,6 +226,7 @@ const Tasks = () => {
     keepExistingFile: true,
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
+    peer_reviewer_ids: [] as string[],
   });
 
   // Drag and drop sensors
