@@ -188,6 +188,7 @@ const Tasks = () => {
   const [responses, setResponses] = useState<Record<string, TaskResponse[]>>({});
   const [remarks, setRemarks] = useState<Record<string, TaskRemark[]>>({});
   const [assignments, setAssignments] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
+  const [peerReviewers, setPeerReviewers] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
   const [responseDialogOpen, setResponseDialogOpen] = useState(false);
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
@@ -201,6 +202,7 @@ const Tasks = () => {
     file: null as File | null,
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
+    peer_reviewer_ids: [] as string[],
   });
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
