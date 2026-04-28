@@ -1396,6 +1396,49 @@ const Tasks = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Peer Reviewers (Optional) */}
+                  <div className="space-y-2">
+                    <Label>Peer Reviewers (Optional)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Select employees who can review and add remarks on others' responses for this task.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                      {employees.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No employees found</p>
+                      ) : (
+                        employees.map((emp) => (
+                          <div key={`rev-${emp.user_id}`} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`rev-${emp.user_id}`}
+                              checked={formData.peer_reviewer_ids.includes(emp.user_id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setFormData({
+                                    ...formData,
+                                    peer_reviewer_ids: [...formData.peer_reviewer_ids, emp.user_id],
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    peer_reviewer_ids: formData.peer_reviewer_ids.filter(id => id !== emp.user_id),
+                                  });
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`rev-${emp.user_id}`} className="text-sm font-normal cursor-pointer">
+                              {emp.first_name} {emp.last_name}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {formData.peer_reviewer_ids.length > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        {formData.peer_reviewer_ids.length} peer reviewer(s) selected
+                      </p>
+                    )}
+                  </div>
                   
                   <div className="space-y-2">
                     <Label htmlFor="due_date">Due Date (Optional)</Label>
