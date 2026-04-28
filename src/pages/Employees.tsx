@@ -22,15 +22,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { Search, Plus, Eye, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Eye, Edit, Trash2, X } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
 type EmployeeProfile = Database["public"]["Tables"]["employee_profiles"]["Row"];
 type AppRole = Database["public"]["Enums"]["app_role"];
+type Shift = Database["public"]["Tables"]["shifts"]["Row"];
 
 interface EmployeeWithRole extends EmployeeProfile {
   role?: AppRole;
+  shift_name?: string;
 }
 
 const createUserSchema = z.object({
@@ -45,10 +47,16 @@ export default function Employees() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const [employees, setEmployees] = useState<EmployeeWithRole[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterInstitution, setFilterInstitution] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterShift, setFilterShift] = useState<string>("all");
+  const [filterRole, setFilterRole] = useState<string>("all");
+  const [filterDepartment, setFilterDepartment] = useState<string>("all");
+  const [filterDesignation, setFilterDesignation] = useState<string>("all");
+  const [filterEmploymentType, setFilterEmploymentType] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -78,7 +86,23 @@ export default function Employees() {
 
   useEffect(() => {
     fetchEmployees();
+    fetchShifts();
   }, []);
+
+  const fetchShifts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("shifts")
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+
+      if (error) throw error;
+      setShifts(data || []);
+    } catch (error) {
+      console.error("Error fetching shifts:", error);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -97,11 +121,28 @@ export default function Employees() {
           .select("user_id, role")
           .in("user_id", userIds);
 
+        // Fetch current shifts for all employees
+        const { data: shiftsData } = await supabase
+          .from("employee_shifts")
+          .select(`
+            user_id,
+            shift_id,
+            shifts (
+              name
+            )
+          `)
+          .in("user_id", userIds)
+          .is("effective_to", null);
+
         const roleMap = new Map(rolesData?.map(r => [r.user_id, r.role]) || []);
+        const shiftMap = new Map(
+          shiftsData?.map(s => [s.user_id, (s.shifts as any)?.name]) || []
+        );
         
         const employeesWithRoles: EmployeeWithRole[] = profilesData.map(profile => ({
           ...profile,
           role: roleMap.get(profile.user_id),
+          shift_name: shiftMap.get(profile.user_id),
         }));
         
         setEmployees(employeesWithRoles);
@@ -369,8 +410,49 @@ export default function Employees() {
       (filterStatus === "active" && emp.is_active) ||
       (filterStatus === "inactive" && !emp.is_active);
     
-    return matchesSearch && matchesInstitution && matchesStatus;
+    // Shift filter
+    const matchesShift = filterShift === "all" || 
+      emp.shift_name === filterShift;
+    
+    // Role filter
+    const matchesRole = filterRole === "all" || 
+      emp.role === filterRole;
+    
+    // Department filter
+    const matchesDepartment = filterDepartment === "all" || 
+      emp.department === filterDepartment;
+    
+    // Designation filter
+    const matchesDesignation = filterDesignation === "all" || 
+      emp.designation === filterDesignation;
+    
+    // Employment Type filter
+    const matchesEmploymentType = filterEmploymentType === "all" || 
+      emp.employment_type === filterEmploymentType;
+    
+    return matchesSearch && matchesInstitution && matchesStatus && 
+           matchesShift && matchesRole && matchesDepartment && 
+           matchesDesignation && matchesEmploymentType;
   });
+
+  // Get unique values for filters
+  const uniqueDepartments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
+  const uniqueDesignations = Array.from(new Set(employees.map(e => e.designation).filter(Boolean)));
+  const uniqueEmploymentTypes = Array.from(new Set(employees.map(e => e.employment_type).filter(Boolean)));
+
+  const clearAllFilters = () => {
+    setFilterInstitution("all");
+    setFilterStatus("all");
+    setFilterShift("all");
+    setFilterRole("all");
+    setFilterDepartment("all");
+    setFilterDesignation("all");
+    setFilterEmploymentType("all");
+  };
+
+  const hasActiveFilters = filterInstitution !== "all" || filterStatus !== "all" || 
+    filterShift !== "all" || filterRole !== "all" || filterDepartment !== "all" || 
+    filterDesignation !== "all" || filterEmploymentType !== "all";
 
   return (
     <DashboardLayout>
@@ -514,7 +596,7 @@ export default function Employees() {
               </div>
               
               {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 <div className="space-y-2">
                   <Label className="text-sm text-muted-foreground">Institution</Label>
                   <Select value={filterInstitution} onValueChange={setFilterInstitution}>
@@ -532,6 +614,24 @@ export default function Employees() {
                 </div>
                 
                 <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Shift</Label>
+                  <Select value={filterShift} onValueChange={setFilterShift}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Shifts" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Shifts</SelectItem>
+                      {shifts.map((shift) => (
+                        <SelectItem key={shift.id} value={shift.name}>
+                          {shift.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+          
+                
+                <div className="space-y-2">
                   <Label className="text-sm text-muted-foreground">Status</Label>
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
                     <SelectTrigger>
@@ -544,10 +644,31 @@ export default function Employees() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+  
+                
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Designation</Label>
+                  <Select value={filterDesignation} onValueChange={setFilterDesignation}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Designations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Designations</SelectItem>
+                      {uniqueDesignations.map((desig) => (
+                        <SelectItem key={desig} value={desig!}>
+                          {desig}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+  
               </div>
               
               {/* Active Filters Display */}
-              {(filterInstitution !== "all" || filterStatus !== "all") && (
+              {hasActiveFilters && (
                 <div className="flex flex-wrap gap-2 items-center">
                   <span className="text-sm text-muted-foreground">Active filters:</span>
                   {filterInstitution !== "all" && (
@@ -557,7 +678,29 @@ export default function Employees() {
                         onClick={() => setFilterInstitution("all")}
                         className="ml-1 hover:text-destructive"
                       >
-                        ×
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filterShift !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Shift: {filterShift}
+                      <button
+                        onClick={() => setFilterShift("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filterRole !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Role: {filterRole}
+                      <button
+                        onClick={() => setFilterRole("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   )}
@@ -568,17 +711,47 @@ export default function Employees() {
                         onClick={() => setFilterStatus("all")}
                         className="ml-1 hover:text-destructive"
                       >
-                        ×
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filterDepartment !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Department: {filterDepartment}
+                      <button
+                        onClick={() => setFilterDepartment("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filterDesignation !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Designation: {filterDesignation}
+                      <button
+                        onClick={() => setFilterDesignation("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  {filterEmploymentType !== "all" && (
+                    <Badge variant="secondary" className="gap-1">
+                      Employment: {filterEmploymentType}
+                      <button
+                        onClick={() => setFilterEmploymentType("all")}
+                        className="ml-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setFilterInstitution("all");
-                      setFilterStatus("all");
-                    }}
+                    onClick={clearAllFilters}
                     className="h-6 text-xs"
                   >
                     Clear all
@@ -610,7 +783,9 @@ export default function Employees() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Designation</TableHead>
+                      <TableHead>Department</TableHead>
                       <TableHead>Institution</TableHead>
+                      <TableHead>Shift</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -627,7 +802,15 @@ export default function Employees() {
                         </TableCell>
                         <TableCell>{employee.email}</TableCell>
                         <TableCell>{employee.designation || "-"}</TableCell>
+                        <TableCell>{employee.department || "-"}</TableCell>
                         <TableCell>{employee.institution_assignment || "-"}</TableCell>
+                        <TableCell>
+                          {employee.shift_name ? (
+                            <Badge variant="outline">{employee.shift_name}</Badge>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge 
                             variant={
