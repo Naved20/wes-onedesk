@@ -1584,7 +1584,7 @@ const Tasks = () => {
                                             {format(new Date(response.created_at), "MMM dd, yyyy HH:mm")}
                                           </p>
                                         </div>
-                                        {canAddRemark && (
+                                        {canRemarkOnResponse(task.id, response.user_id) && (
                                           <Button
                                             size="sm"
                                             variant="outline"
