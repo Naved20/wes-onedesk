@@ -864,6 +864,7 @@ const Tasks = () => {
     const currentAssignments = assignments[task.id] || [];
     const assignedUserIds = currentAssignments.map(a => a.user_id);
     
+    const currentReviewers = peerReviewers[task.id] || [];
     setEditFormData({
       title: task.title,
       description: task.description,
@@ -872,6 +873,7 @@ const Tasks = () => {
       keepExistingFile: true,
       assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
       assigned_user_ids: assignedUserIds,
+      peer_reviewer_ids: currentReviewers.map(r => r.user_id),
     });
     setEditOpen(true);
   };
