@@ -991,6 +991,23 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
+      // Update peer reviewers: delete then re-insert
+      await supabase
+        .from("task_peer_reviewers" as any)
+        .delete()
+        .eq("task_id", editingTask.id);
+
+      if (editFormData.peer_reviewer_ids.length > 0) {
+        const reviewers = editFormData.peer_reviewer_ids.map(uid => ({
+          task_id: editingTask.id,
+          user_id: uid,
+        }));
+        const { error: revError } = await supabase
+          .from("task_peer_reviewers" as any)
+          .insert(reviewers);
+        if (revError) throw revError;
+      }
+
       toast({
         title: "Success",
         description: "Task updated successfully",
