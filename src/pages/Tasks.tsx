@@ -1762,7 +1762,7 @@ const Tasks = () => {
                                   {/* Remarks on employee's response */}
                                   {remarks[userResponse.id] && remarks[userResponse.id].length > 0 && (
                                     <div className="mt-4 space-y-2 pl-4 border-l-2 border-primary">
-                                      <p className="text-sm font-medium text-primary">Remarks from Admin/Manager:</p>
+                                      <p className="text-sm font-medium text-primary">Remarks:</p>
                                       {remarks[userResponse.id].map((remark) => (
                                         <div key={remark.id} className="bg-muted p-3 rounded-md">
                                           <div className="flex items-center justify-between mb-2">
