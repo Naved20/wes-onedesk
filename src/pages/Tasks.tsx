@@ -372,6 +372,9 @@ const Tasks = () => {
         
         // Fetch all assignments in one query
         Promise.all(taskIds.map(id => fetchAssignments(id))).catch(console.error);
+
+        // Fetch peer reviewers
+        Promise.all(taskIds.map(id => fetchPeerReviewers(id))).catch(console.error);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
