@@ -565,6 +565,39 @@ const Tasks = () => {
     }
   };
 
+  const fetchPeerReviewers = async (taskId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("task_peer_reviewers" as any)
+        .select("user_id")
+        .eq("task_id", taskId);
+      if (error) {
+        console.error("Error fetching peer reviewers:", error);
+        return;
+      }
+      const userIds = (data || []).map((r: any) => r.user_id);
+      if (userIds.length === 0) {
+        setPeerReviewers(prev => ({ ...prev, [taskId]: [] }));
+        return;
+      }
+      const { data: profiles } = await supabase
+        .from("employee_profiles")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+      const reviewers = userIds.map(uid => {
+        const p = (profiles || []).find((x: any) => x.user_id === uid);
+        return {
+          user_id: uid,
+          first_name: p?.first_name || "Unknown",
+          last_name: p?.last_name || "User",
+        };
+      });
+      setPeerReviewers(prev => ({ ...prev, [taskId]: reviewers }));
+    } catch (error) {
+      console.error("Error fetching peer reviewers:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Strip HTML tags for validation
