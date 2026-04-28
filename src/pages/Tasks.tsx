@@ -148,6 +148,7 @@ interface TaskResponse {
   task_id: string;
   user_id: string;
   response_text: string;
+  link: string | null;
   file_url: string | null;
   file_name: string | null;
   created_at: string;
