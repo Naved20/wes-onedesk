@@ -1549,19 +1549,27 @@ const Tasks = () => {
 
                     {/* Response Section */}
                     <div className="space-y-4">
-                      {/* Admin/Manager: Show all responses */}
-                      {(role === "admin" || role === "manager") && (
+                      {/* Admin/Manager OR peer reviewer: Show responses */}
+                      {(role === "admin" || role === "manager" || isPeerReviewerOf(task.id)) && (
                         <>
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-semibold flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              Responses ({taskResponses.length})
-                            </h3>
-                          </div>
+                          {(() => {
+                            const isAdminOrMgr = role === "admin" || role === "manager";
+                            // Peer reviewers see only OTHERS' responses (not their own)
+                            const visibleResponses = isAdminOrMgr
+                              ? taskResponses
+                              : taskResponses.filter(r => r.user_id !== user?.id);
+                            return (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <h3 className="font-semibold flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4" />
+                                    {isAdminOrMgr ? "Responses" : "Responses to Review"} ({visibleResponses.length})
+                                  </h3>
+                                </div>
 
-                          {taskResponses.length > 0 && (
-                            <div className="space-y-4">
-                              {taskResponses.map((response) => {
+                                {visibleResponses.length > 0 && (
+                                  <div className="space-y-4">
+                                    {visibleResponses.map((response) => {
                                 const responseRemarks = remarks[response.id] || [];
                                 
                                 return (
