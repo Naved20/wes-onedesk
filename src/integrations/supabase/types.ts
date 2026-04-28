@@ -1175,6 +1175,27 @@ export type Database = {
           },
         ]
       }
+      task_peer_reviewers: {
+        Row: {
+          created_at: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       task_remarks: {
         Row: {
           created_at: string | null
@@ -1435,6 +1456,10 @@ export type Database = {
       }
       is_manager_of_user: {
         Args: { _employee_id: string; _manager_id: string }
+        Returns: boolean
+      }
+      is_peer_reviewer: {
+        Args: { _task_id: string; _user_id: string }
         Returns: boolean
       }
       is_within_checkin_window: { Args: never; Returns: boolean }
