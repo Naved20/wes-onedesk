@@ -391,119 +391,90 @@ const Tasks = () => {
 
   const fetchResponses = async (taskId: string) => {
     try {
-      const { data, error } = await supabase
+      // Fetch responses without join first
+      const { data: responsesData, error: responsesError } = await supabase
         .from("task_responses" as any)
-        .select(`
-          *,
-          employee_profiles(first_name, last_name)
-        `)
+        .select("*")
         .eq("task_id", taskId)
         .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching responses with join:", error);
-        // If the join fails, try fetching without the join
-        const { data: responsesData, error: responsesError } = await supabase
-          .from("task_responses" as any)
-          .select("*")
-          .eq("task_id", taskId)
-          .order("created_at", { ascending: false });
-        
-        if (responsesError) throw responsesError;
-        
-        console.log("Fetched responses without join:", responsesData);
-        
-        // Manually fetch employee profiles
-        if (responsesData && responsesData.length > 0) {
-          const enrichedData = await Promise.all(
-            responsesData.map(async (response: any) => {
-              console.log("Fetching profile for user_id:", response.user_id);
-              
-              const { data: profile, error: profileError } = await supabase
-                .from("employee_profiles")
-                .select("first_name, last_name")
-                .eq("user_id", response.user_id)
-                .single();
-              
-              if (profileError) {
-                console.error("Error fetching profile for user_id:", response.user_id, profileError);
-              }
-              
-              console.log("Profile data:", profile);
-              
-              return {
-                ...response,
-                employee_profiles: profile || { first_name: "Unknown", last_name: "User" }
-              };
-            })
-          );
-          
-          console.log("Enriched responses:", enrichedData);
-          setResponses(prev => ({ ...prev, [taskId]: enrichedData as any }));
-          
-          // Fetch remarks for each response
-          for (const response of enrichedData) {
-            await fetchRemarks(response.id);
-          }
-        }
-        return;
+      
+      if (responsesError) {
+        console.error("Error fetching responses:", responsesError);
+        throw responsesError;
       }
       
-      console.log("Fetched responses with join:", data);
+      console.log("📝 Raw responses:", responsesData);
       
-      // Check if any response has null employee_profiles and fetch manually
-      const enrichedData = await Promise.all(
-        (data || []).map(async (response: any) => {
-          if (!response.employee_profiles || !response.employee_profiles.first_name) {
-            console.log("Missing profile in join result, fetching manually for user_id:", response.user_id);
-            
-            const { data: profile, error: profileError } = await supabase
-              .from("employee_profiles")
-              .select("first_name, last_name")
-              .eq("user_id", response.user_id)
-              .single();
-            
-            if (profileError) {
-              console.error("Error fetching profile:", profileError);
-            }
-            
-            return {
-              ...response,
-              employee_profiles: profile || { first_name: "Unknown", last_name: "User" }
-            };
-          }
-          return response;
-        })
-      );
-      
-      console.log("Final enriched responses:", enrichedData);
-      setResponses(prev => ({ ...prev, [taskId]: enrichedData as any }));
-      
-      // Fetch remarks for each response
-      if (enrichedData && enrichedData.length > 0) {
+      // Manually fetch employee profiles for all responses
+      if (responsesData && responsesData.length > 0) {
+        const userIds = [...new Set(responsesData.map((r: any) => r.user_id))];
+        console.log("👥 User IDs to fetch:", userIds);
+        
+        const { data: profiles, error: profilesError } = await supabase
+          .from("employee_profiles")
+          .select("user_id, first_name, last_name")
+          .in("user_id", userIds);
+        
+        console.log("👤 Profiles fetched:", profiles);
+        if (profilesError) console.error("❌ Profiles error:", profilesError);
+        
+        // For missing profiles, create placeholder from response data
+        const missingUserIds = userIds.filter(uid => 
+          !(profiles || []).some((p: any) => p.user_id === uid)
+        );
+        
+        console.log("⚠️ Missing profiles for user_ids:", missingUserIds);
+        
+        // Create placeholder profiles for missing users
+        const placeholderProfiles = missingUserIds.map((userId, index) => ({
+          user_id: userId,
+          first_name: `Employee`,
+          last_name: `#${userId.substring(0, 4)}`
+        }));
+        
+        console.log("📝 Placeholder profiles created:", placeholderProfiles);
+        
+        // Combine employee_profiles and placeholder profiles
+        const allProfiles = [...(profiles || []), ...placeholderProfiles];
+        
+        // Map profiles to responses
+        const enrichedData = responsesData.map((response: any) => {
+          const profile = allProfiles.find((p: any) => p.user_id === response.user_id);
+          console.log(`🔗 Mapping user_id ${response.user_id}:`, profile);
+          
+          return {
+            ...response,
+            employee_profiles: profile || { first_name: "Unknown", last_name: "User" }
+          };
+        });
+        
+        console.log("✅ Final enriched responses:", enrichedData);
+        setResponses(prev => ({ ...prev, [taskId]: enrichedData as any }));
+        
+        // Fetch remarks for each response
         for (const response of enrichedData) {
           await fetchRemarks(response.id);
         }
       }
     } catch (error) {
-      console.error("Error fetching responses:", error);
+      console.error("Error in fetchResponses:", error);
     }
   };
 
   const fetchRemarks = async (responseId: string) => {
     try {
-      const { data, error } = await supabase
+      // First try with join
+      let { data, error } = await supabase
         .from("task_remarks" as any)
         .select(`
           *,
-          employee_profiles(first_name, last_name)
+          employee_profiles:remarked_by(first_name, last_name)
         `)
         .eq("response_id", responseId)
-        .order("created_at", { ascending: false});
+        .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching remarks:", error);
-        // If the join fails, try fetching without the join
+      // If join fails or returns null profiles, fetch manually
+      if (error || !data || data.some((r: any) => !r.employee_profiles)) {
         const { data: remarksData, error: remarksError } = await supabase
           .from("task_remarks" as any)
           .select("*")
@@ -542,16 +513,46 @@ const Tasks = () => {
 
   const fetchAssignments = async (taskId: string) => {
     try {
-      const { data, error } = await supabase
+      // First try with join
+      let { data, error } = await supabase
         .from("task_assignments" as any)
         .select(`
           user_id,
-          employee_profiles(first_name, last_name)
+          employee_profiles:user_id(first_name, last_name)
         `)
         .eq("task_id", taskId);
 
-      if (error) {
-        console.error("Error fetching assignments:", error);
+      // If join fails or returns null profiles, fetch manually
+      if (error || !data || data.some((a: any) => !a.employee_profiles)) {
+        const { data: assignmentsData, error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .select("user_id")
+          .eq("task_id", taskId);
+
+        if (assignError) {
+          console.error("Error fetching assignments:", assignError);
+          return;
+        }
+
+        // Manually fetch employee profiles
+        if (assignmentsData && assignmentsData.length > 0) {
+          const userIds = assignmentsData.map((a: any) => a.user_id);
+          const { data: profiles } = await supabase
+            .from("employee_profiles")
+            .select("user_id, first_name, last_name")
+            .in("user_id", userIds);
+
+          const assignedEmployees = userIds.map(userId => {
+            const profile = (profiles || []).find((p: any) => p.user_id === userId);
+            return {
+              user_id: userId,
+              first_name: profile?.first_name || "Unknown",
+              last_name: profile?.last_name || "User",
+            };
+          });
+
+          setAssignments(prev => ({ ...prev, [taskId]: assignedEmployees }));
+        }
         return;
       }
 
@@ -1505,11 +1506,18 @@ const Tasks = () => {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <CardTitle className="text-xl">{task.title}</CardTitle>
-                        {task.due_date && (
-                          <Badge variant="outline" className="mt-2">
-                            Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
-                          </Badge>
-                        )}
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {task.due_date && (
+                            <Badge variant="outline">
+                              Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
+                            </Badge>
+                          )}
+                          {isPeerReviewerOf(task.id) && (
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                               Peer Reviewer
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">
@@ -1621,7 +1629,9 @@ const Tasks = () => {
                                       <div className="flex items-start justify-between">
                                         <div>
                                           <p className="font-medium">
-                                            {response.employee_profiles?.first_name} {response.employee_profiles?.last_name}
+                                            {response.employee_profiles?.first_name && response.employee_profiles?.last_name
+                                              ? `${response.employee_profiles.first_name} ${response.employee_profiles.last_name}`
+                                              : "Unknown User"}
                                           </p>
                                           <p className="text-xs text-muted-foreground">
                                             {format(new Date(response.created_at), "MMM dd, yyyy HH:mm")}

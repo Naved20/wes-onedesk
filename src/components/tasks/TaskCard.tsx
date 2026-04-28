@@ -10,6 +10,8 @@ import {
 import { Calendar, MoreVertical, User, Tag } from 'lucide-react';
 import { format } from 'date-fns';
 import { Task } from './TaskBoard';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TaskCardProps {
   task: Task;
@@ -26,6 +28,22 @@ const priorityColors = {
 
 export const TaskCard = ({ task, onEdit, onStatusChange }: TaskCardProps) => {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
+
+  const { data: assignedEmployee } = useQuery({
+    queryKey: ['employee', task.assigned_to],
+    queryFn: async () => {
+      if (!task.assigned_to) return null;
+      const { data, error } = await supabase
+        .from('employee_profiles')
+        .select('first_name, last_name')
+        .eq('user_id', task.assigned_to)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!task.assigned_to,
+  });
 
   return (
     <Card className={`p-3 cursor-pointer hover:shadow-md transition-shadow ${isOverdue ? 'border-red-300' : ''}`}>
@@ -96,6 +114,13 @@ export const TaskCard = ({ task, onEdit, onStatusChange }: TaskCardProps) => {
             <Calendar className="h-3 w-3" />
             <span>{format(new Date(task.due_date), 'MMM dd, yyyy')}</span>
             {isOverdue && <span className="font-medium">(Overdue)</span>}
+          </div>
+        )}
+
+        {task.assigned_to && assignedEmployee && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <User className="h-3 w-3" />
+            <span>{assignedEmployee.first_name} {assignedEmployee.last_name}</span>
           </div>
         )}
 

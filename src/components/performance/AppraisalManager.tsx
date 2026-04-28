@@ -9,8 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Download, Trash2, FileText, Calendar } from "lucide-react";
+import { Upload, Download, Trash2, FileText, Calendar, CheckSquare, Star } from "lucide-react";
 import { format } from "date-fns";
 
 interface Appraisal {
@@ -25,6 +27,10 @@ interface Appraisal {
   appraisal_period_start: string;
   appraisal_period_end: string;
   notes: string | null;
+  review_status?: "pending" | "reviewed";
+  review_rating?: number;
+  review_comments?: string;
+  reviewed_at?: string;
   employee_profiles: {
     first_name: string;
     last_name: string;
@@ -43,6 +49,13 @@ export function AppraisalManager() {
   const [notes, setNotes] = useState("");
   const [appraisalType] = useState<"monthly">("monthly"); // Fixed to monthly for now
   const [employeeProfileId, setEmployeeProfileId] = useState<string | null>(null);
+  
+  // Batch review states
+  const [selectedAppraisals, setSelectedAppraisals] = useState<Set<string>>(new Set());
+  const [showBatchReviewDialog, setShowBatchReviewDialog] = useState(false);
+  const [batchRating, setBatchRating] = useState<number>(5);
+  const [batchComments, setBatchComments] = useState("");
+  const [reviewing, setReviewing] = useState(false);
 
   const isAdmin = role === "admin";
 
@@ -232,6 +245,71 @@ export function AppraisalManager() {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " KB";
     return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+  };
+
+  const toggleAppraisalSelection = (appraisalId: string) => {
+    const newSelection = new Set(selectedAppraisals);
+    if (newSelection.has(appraisalId)) {
+      newSelection.delete(appraisalId);
+    } else {
+      newSelection.add(appraisalId);
+    }
+    setSelectedAppraisals(newSelection);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedAppraisals.size === appraisals.length) {
+      setSelectedAppraisals(new Set());
+    } else {
+      setSelectedAppraisals(new Set(appraisals.map(a => a.id)));
+    }
+  };
+
+  const handleBatchReview = async () => {
+    if (selectedAppraisals.size === 0) {
+      toast.error("Please select at least one appraisal to review");
+      return;
+    }
+
+    if (!batchComments.trim()) {
+      toast.error("Please add review comments");
+      return;
+    }
+
+    try {
+      setReviewing(true);
+
+      const updates = Array.from(selectedAppraisals).map(appraisalId => 
+        supabase
+          .from("appraisals")
+          .update({
+            review_status: "reviewed",
+            review_rating: batchRating,
+            review_comments: batchComments,
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq("id", appraisalId)
+      );
+
+      const results = await Promise.all(updates);
+      
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        throw new Error("Some reviews failed to save");
+      }
+
+      toast.success(`Successfully reviewed ${selectedAppraisals.size} appraisal(s)`);
+      setShowBatchReviewDialog(false);
+      setSelectedAppraisals(new Set());
+      setBatchRating(5);
+      setBatchComments("");
+      fetchAppraisals();
+    } catch (error: any) {
+      console.error("Error reviewing appraisals:", error);
+      toast.error("Failed to save reviews");
+    } finally {
+      setReviewing(false);
+    }
   };
 
   return (
