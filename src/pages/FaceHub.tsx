@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { loadFaceModels, getAveragedFaceDescriptor, findBestMatch, MATCH_THRESHOLD } from "@/lib/faceApi";
+import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import wesLogo from "@/assets/wes-logo.jpg";
 
 interface HistoryRow {
@@ -60,22 +60,16 @@ export default function FaceHub() {
   };
 
   const fetchHistory = async () => {
-    const { data } = await supabase
-      .from("face_checkin_history")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (!data) return;
-    const userIds = Array.from(new Set(data.map((r) => r.user_id).filter(Boolean))) as string[];
-    let nameMap = new Map<string, string>();
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("employee_profiles")
-        .select("user_id, first_name, last_name")
-        .in("user_id", userIds);
-      profiles?.forEach((p) => nameMap.set(p.user_id, `${p.first_name} ${p.last_name}`));
+    const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
+      body: { action: "history" },
+    });
+
+    if (error || !data?.ok) {
+      console.error("Face history load failed:", error ?? data?.message);
+      return;
     }
-    setHistory(data.map((r) => ({ ...r, employee_name: r.user_id ? nameMap.get(r.user_id) : undefined })));
+
+    setHistory(data.history ?? []);
   };
 
   const handleScan = async () => {
@@ -101,110 +95,17 @@ export default function FaceHub() {
         return;
       }
 
-      const { data: enrolled, error: enrollErr } = await supabase
-        .from("face_descriptors")
-        .select("user_id, descriptor")
-        .eq("is_active", true);
-
-      if (enrollErr) {
-        setLastResult({ ok: false, msg: `DB error: ${enrollErr.message}` });
-        return;
-      }
-      if (!enrolled || enrolled.length === 0) {
-        setLastResult({ ok: false, msg: "No enrolled faces in system." });
-        return;
-      }
-
-      const candidates = enrolled.map((e) => ({
-        user_id: e.user_id,
-        descriptor: e.descriptor as unknown as number[],
-      }));
-      console.log(`[FaceHub] Comparing against ${candidates.length} enrolled faces`);
-      const match = findBestMatch(descriptor, candidates);
-      console.log(`[FaceHub] Best match distance: ${match?.distance.toFixed(4)} (threshold: ${MATCH_THRESHOLD})`);
-      setLastDistance(match?.distance ?? null);
-
-      if (!match || match.distance > MATCH_THRESHOLD) {
-        setLastResult({
-          ok: false,
-          msg: `Face not recognized (distance: ${match?.distance.toFixed(3) ?? "n/a"})`,
-        });
-        await supabase.from("face_checkin_history").insert({
-          user_id: null,
-          matched: false,
-          match_distance: match?.distance ?? null,
-          notes: "No match above threshold",
-        });
-        fetchHistory();
-        return;
-      }
-
-      // Get profile for greeting
-      const { data: profile } = await supabase
-        .from("employee_profiles")
-        .select("first_name, last_name")
-        .eq("user_id", match.user_id)
-        .maybeSingle();
-      const empName = profile ? `${profile.first_name} ${profile.last_name}` : "Employee";
-
-      // Get today's shift
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: shiftRows } = await supabase.rpc("get_employee_shift", {
-        p_user_id: match.user_id,
-        p_date: today,
+      const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
+        body: { descriptor: Array.from(descriptor) },
       });
-      const shiftId = shiftRows?.[0]?.shift_id ?? null;
 
-      // Check existing attendance for today
-      const { data: existing } = await supabase
-        .from("attendance")
-        .select("id, check_in_time")
-        .eq("user_id", match.user_id)
-        .eq("date", today)
-        .maybeSingle();
-
-      let attendanceId: string | null = null;
-      if (existing?.check_in_time) {
-        setLastResult({ ok: true, msg: `${empName} already checked in today.` });
-        attendanceId = existing.id;
-      } else if (existing) {
-        const { data: upd } = await supabase
-          .from("attendance")
-          .update({
-            check_in_time: new Date().toISOString(),
-            status: "approved",
-            shift_id: shiftId,
-            notes: "Face recognition check-in",
-          })
-          .eq("id", existing.id)
-          .select("id")
-          .single();
-        attendanceId = upd?.id ?? null;
-        setLastResult({ ok: true, msg: `Welcome, ${empName}! Check-in recorded.` });
-      } else {
-        const { data: ins } = await supabase
-          .from("attendance")
-          .insert({
-            user_id: match.user_id,
-            date: today,
-            check_in_time: new Date().toISOString(),
-            status: "approved",
-            shift_id: shiftId,
-            notes: "Face recognition check-in",
-          })
-          .select("id")
-          .single();
-        attendanceId = ins?.id ?? null;
-        setLastResult({ ok: true, msg: `Welcome, ${empName}! Check-in recorded.` });
+      if (error || !data) {
+        setLastResult({ ok: false, msg: error?.message ?? "Face check-in failed." });
+        return;
       }
 
-      await supabase.from("face_checkin_history").insert({
-        user_id: match.user_id,
-        matched: true,
-        match_distance: match.distance,
-        attendance_id: attendanceId,
-        notes: `Matched ${empName}`,
-      });
+      setLastDistance(typeof data.distance === "number" ? data.distance : null);
+      setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
       fetchHistory();
     } catch (e: any) {
       setLastResult({ ok: false, msg: e.message ?? "Scan failed" });
