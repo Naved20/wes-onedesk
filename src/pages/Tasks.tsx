@@ -148,6 +148,7 @@ interface TaskResponse {
   task_id: string;
   user_id: string;
   response_text: string;
+  link: string | null;
   file_url: string | null;
   file_name: string | null;
   created_at: string;
@@ -187,6 +188,7 @@ const Tasks = () => {
   const [responses, setResponses] = useState<Record<string, TaskResponse[]>>({});
   const [remarks, setRemarks] = useState<Record<string, TaskRemark[]>>({});
   const [assignments, setAssignments] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
+  const [peerReviewers, setPeerReviewers] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
   const [responseDialogOpen, setResponseDialogOpen] = useState(false);
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
@@ -200,6 +202,7 @@ const Tasks = () => {
     file: null as File | null,
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
+    peer_reviewer_ids: [] as string[],
   });
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
@@ -223,6 +226,7 @@ const Tasks = () => {
     keepExistingFile: true,
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
+    peer_reviewer_ids: [] as string[],
   });
 
   // Drag and drop sensors
@@ -368,6 +372,9 @@ const Tasks = () => {
         
         // Fetch all assignments in one query
         Promise.all(taskIds.map(id => fetchAssignments(id))).catch(console.error);
+
+        // Fetch peer reviewers
+        Promise.all(taskIds.map(id => fetchPeerReviewers(id))).catch(console.error);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -561,6 +568,39 @@ const Tasks = () => {
     }
   };
 
+  const fetchPeerReviewers = async (taskId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("task_peer_reviewers" as any)
+        .select("user_id")
+        .eq("task_id", taskId);
+      if (error) {
+        console.error("Error fetching peer reviewers:", error);
+        return;
+      }
+      const userIds = (data || []).map((r: any) => r.user_id);
+      if (userIds.length === 0) {
+        setPeerReviewers(prev => ({ ...prev, [taskId]: [] }));
+        return;
+      }
+      const { data: profiles } = await supabase
+        .from("employee_profiles")
+        .select("user_id, first_name, last_name")
+        .in("user_id", userIds);
+      const reviewers = userIds.map(uid => {
+        const p = (profiles || []).find((x: any) => x.user_id === uid);
+        return {
+          user_id: uid,
+          first_name: p?.first_name || "Unknown",
+          last_name: p?.last_name || "User",
+        };
+      });
+      setPeerReviewers(prev => ({ ...prev, [taskId]: reviewers }));
+    } catch (error) {
+      console.error("Error fetching peer reviewers:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Strip HTML tags for validation
@@ -660,12 +700,24 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
+      // Insert peer reviewers (optional)
+      if (formData.peer_reviewer_ids.length > 0) {
+        const reviewers = formData.peer_reviewer_ids.map(uid => ({
+          task_id: (taskData as any).id,
+          user_id: uid,
+        }));
+        const { error: revError } = await supabase
+          .from("task_peer_reviewers" as any)
+          .insert(reviewers);
+        if (revError) throw revError;
+      }
+
       toast({
         title: "Success",
         description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [] });
+      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [] });
       setOpen(false);
       fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
@@ -848,6 +900,7 @@ const Tasks = () => {
     const currentAssignments = assignments[task.id] || [];
     const assignedUserIds = currentAssignments.map(a => a.user_id);
     
+    const currentReviewers = peerReviewers[task.id] || [];
     setEditFormData({
       title: task.title,
       description: task.description,
@@ -856,6 +909,7 @@ const Tasks = () => {
       keepExistingFile: true,
       assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
       assigned_user_ids: assignedUserIds,
+      peer_reviewer_ids: currentReviewers.map(r => r.user_id),
     });
     setEditOpen(true);
   };
@@ -973,6 +1027,23 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
+      // Update peer reviewers: delete then re-insert
+      await supabase
+        .from("task_peer_reviewers" as any)
+        .delete()
+        .eq("task_id", editingTask.id);
+
+      if (editFormData.peer_reviewer_ids.length > 0) {
+        const reviewers = editFormData.peer_reviewer_ids.map(uid => ({
+          task_id: editingTask.id,
+          user_id: uid,
+        }));
+        const { error: revError } = await supabase
+          .from("task_peer_reviewers" as any)
+          .insert(reviewers);
+        if (revError) throw revError;
+      }
+
       toast({
         title: "Success",
         description: "Task updated successfully",
@@ -997,6 +1068,20 @@ const Tasks = () => {
   const canEditTask = role === "admin";
   const canDeleteTask = role === "admin";
   const canAddRemark = role === "admin";
+
+  // Helper: can current user remark on this specific response?
+  const canRemarkOnResponse = (taskId: string, responseUserId: string) => {
+    if (role === "admin" || role === "manager") return true;
+    const reviewers = peerReviewers[taskId] || [];
+    const isReviewer = reviewers.some(r => r.user_id === user?.id);
+    return isReviewer && responseUserId !== user?.id;
+  };
+
+  // Helper: is current user a peer reviewer for this task (so we render the "Responses to review" section even for employees)?
+  const isPeerReviewerOf = (taskId: string) => {
+    const reviewers = peerReviewers[taskId] || [];
+    return reviewers.some(r => r.user_id === user?.id);
+  };
 
   const handleReorderSave = async () => {
     setReorderOpen(false);
@@ -1311,6 +1396,49 @@ const Tasks = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Peer Reviewers (Optional) */}
+                  <div className="space-y-2">
+                    <Label>Peer Reviewers (Optional)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Select employees who can review and add remarks on others' responses for this task.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                      {employees.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No employees found</p>
+                      ) : (
+                        employees.map((emp) => (
+                          <div key={`rev-${emp.user_id}`} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`rev-${emp.user_id}`}
+                              checked={formData.peer_reviewer_ids.includes(emp.user_id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setFormData({
+                                    ...formData,
+                                    peer_reviewer_ids: [...formData.peer_reviewer_ids, emp.user_id],
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    peer_reviewer_ids: formData.peer_reviewer_ids.filter(id => id !== emp.user_id),
+                                  });
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`rev-${emp.user_id}`} className="text-sm font-normal cursor-pointer">
+                              {emp.first_name} {emp.last_name}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {formData.peer_reviewer_ids.length > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        {formData.peer_reviewer_ids.length} peer reviewer(s) selected
+                      </p>
+                    )}
+                  </div>
                   
                   <div className="space-y-2">
                     <Label htmlFor="due_date">Due Date (Optional)</Label>
@@ -1464,19 +1592,27 @@ const Tasks = () => {
 
                     {/* Response Section */}
                     <div className="space-y-4">
-                      {/* Admin/Manager: Show all responses */}
-                      {(role === "admin" || role === "manager") && (
+                      {/* Admin/Manager OR peer reviewer: Show responses */}
+                      {(role === "admin" || role === "manager" || isPeerReviewerOf(task.id)) && (
                         <>
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-semibold flex items-center gap-2">
-                              <MessageSquare className="h-4 w-4" />
-                              Responses ({taskResponses.length})
-                            </h3>
-                          </div>
+                          {(() => {
+                            const isAdminOrMgr = role === "admin" || role === "manager";
+                            // Peer reviewers see only OTHERS' responses (not their own)
+                            const visibleResponses = isAdminOrMgr
+                              ? taskResponses
+                              : taskResponses.filter(r => r.user_id !== user?.id);
+                            return (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <h3 className="font-semibold flex items-center gap-2">
+                                    <MessageSquare className="h-4 w-4" />
+                                    {isAdminOrMgr ? "Responses" : "Responses to Review"} ({visibleResponses.length})
+                                  </h3>
+                                </div>
 
-                          {taskResponses.length > 0 && (
-                            <div className="space-y-4">
-                              {taskResponses.map((response) => {
+                                {visibleResponses.length > 0 && (
+                                  <div className="space-y-4">
+                                    {visibleResponses.map((response) => {
                                 const responseRemarks = remarks[response.id] || [];
                                 
                                 return (
@@ -1491,7 +1627,7 @@ const Tasks = () => {
                                             {format(new Date(response.created_at), "MMM dd, yyyy HH:mm")}
                                           </p>
                                         </div>
-                                        {canAddRemark && (
+                                        {canRemarkOnResponse(task.id, response.user_id) && (
                                           <Button
                                             size="sm"
                                             variant="outline"
@@ -1557,7 +1693,10 @@ const Tasks = () => {
                                 );
                               })}
                             </div>
-                          )}
+                                )}
+                              </>
+                            );
+                          })()}
                         </>
                       )}
 
@@ -1623,7 +1762,7 @@ const Tasks = () => {
                                   {/* Remarks on employee's response */}
                                   {remarks[userResponse.id] && remarks[userResponse.id].length > 0 && (
                                     <div className="mt-4 space-y-2 pl-4 border-l-2 border-primary">
-                                      <p className="text-sm font-medium text-primary">Remarks from Admin/Manager:</p>
+                                      <p className="text-sm font-medium text-primary">Remarks:</p>
                                       {remarks[userResponse.id].map((remark) => (
                                         <div key={remark.id} className="bg-muted p-3 rounded-md">
                                           <div className="flex items-center justify-between mb-2">
@@ -1905,6 +2044,49 @@ const Tasks = () => {
                 )}
               </div>
             )}
+
+            {/* Peer Reviewers (Optional) */}
+            <div className="space-y-2">
+              <Label>Peer Reviewers (Optional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Select employees who can review and add remarks on others' responses for this task.
+              </p>
+              <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                {employees.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No employees found</p>
+                ) : (
+                  employees.map((emp) => (
+                    <div key={`edit-rev-${emp.user_id}`} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-rev-${emp.user_id}`}
+                        checked={editFormData.peer_reviewer_ids.includes(emp.user_id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setEditFormData({
+                              ...editFormData,
+                              peer_reviewer_ids: [...editFormData.peer_reviewer_ids, emp.user_id],
+                            });
+                          } else {
+                            setEditFormData({
+                              ...editFormData,
+                              peer_reviewer_ids: editFormData.peer_reviewer_ids.filter(id => id !== emp.user_id),
+                            });
+                          }
+                        }}
+                      />
+                      <Label htmlFor={`edit-rev-${emp.user_id}`} className="text-sm font-normal cursor-pointer">
+                        {emp.first_name} {emp.last_name}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+              {editFormData.peer_reviewer_ids.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {editFormData.peer_reviewer_ids.length} peer reviewer(s) selected
+                </p>
+              )}
+            </div>
             
             <div className="space-y-2">
               <Label htmlFor="edit-due_date">Due Date (Optional)</Label>
