@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import wesLogo from "@/assets/wes-logo.jpg";
@@ -14,13 +13,11 @@ import {
   DollarSign,
   Bell,
   Settings,
-  LogOut,
   Menu,
   X,
   Building,
   Star,
   Megaphone,
-  UserCircle,
   Cloud,
   CheckSquare,
   ScanFace,
@@ -48,7 +45,7 @@ const navItems: NavItem[] = [
   { label: "Shift Assignments", href: "/shift-assignments", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Institutions", href: "/institutions", icon: <Building className="h-5 w-5" />, roles: ["admin"] },
   { label: "Face ID Management", href: "/face-id-management", icon: <ScanFace className="h-5 w-5" />, roles: ["admin"] },
-  { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" />, roles: ["admin"] },
+  { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
 ];
 
 interface DashboardLayoutProps {
@@ -58,31 +55,12 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, role, signOut } = useAuth();
+  const { user, role } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [myProfileId, setMyProfileId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user?.id) {
-      supabase
-        .from("employee_profiles")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) setMyProfileId(data.id);
-        });
-    }
-  }, [user?.id]);
 
   const filteredNavItems = navItems.filter((item) => 
     role && item.roles.includes(role)
   );
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/auth");
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,7 +128,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* User section */}
           <div className="border-t p-4">
-            <div className="flex items-center mb-3">
+            <div className="flex items-center">
               <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-sm font-medium text-primary">
                   {user?.email?.charAt(0).toUpperCase()}
@@ -161,27 +139,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <p className="text-xs text-muted-foreground capitalize">{role}</p>
               </div>
             </div>
-            {myProfileId && (
-              <Button
-                variant="outline"
-                className="w-full justify-start mb-2"
-                onClick={() => {
-                  navigate(`/employee/${myProfileId}`);
-                  setSidebarOpen(false);
-                }}
-              >
-                <UserCircle className="h-4 w-4 mr-2" />
-                My Profile
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={handleSignOut}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
           </div>
         </div>
       </aside>

@@ -17,6 +17,13 @@ import Performance from "./pages/Performance";
 import Announcements from "./pages/Announcements";
 import Institutions from "./pages/Institutions";
 import Settings from "./pages/Settings";
+import AccountInfo from "./pages/settings/AccountInfo";
+import ChangePassword from "./pages/settings/ChangePassword";
+import Notifications from "./pages/settings/Notifications";
+import Privacy from "./pages/settings/Privacy";
+import Appearance from "./pages/settings/Appearance";
+import Language from "./pages/settings/Language";
+import SupportRequests from "./pages/settings/SupportRequests";
 import ShiftManagement from "./pages/ShiftManagement";
 import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
 import GoogleDrive from "./pages/GoogleDrive";
@@ -55,7 +62,14 @@ const App = () => (
             <Route path="/institutions" element={<ProtectedRoute allowedRoles={["admin"]}><Institutions /></ProtectedRoute>} />
             <Route path="/google-drive" element={<ProtectedRoute><GoogleDrive /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><Settings /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/settings/account" element={<ProtectedRoute><AccountInfo /></ProtectedRoute>} />
+            <Route path="/settings/password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
+            <Route path="/settings/support" element={<ProtectedRoute><SupportRequests /></ProtectedRoute>} />
+            <Route path="/settings/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+            <Route path="/settings/privacy" element={<ProtectedRoute><Privacy /></ProtectedRoute>} />
+            <Route path="/settings/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
+            <Route path="/settings/language" element={<ProtectedRoute><Language /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

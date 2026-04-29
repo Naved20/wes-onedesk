@@ -1,179 +1,182 @@
-import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Settings as SettingsIcon, Lock, User } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Lock, User, Bell, Shield, Palette, Globe, ChevronRight, UserCircle, LogOut, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface SettingsMenuItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+  href?: string;
+  action?: () => void;
+  variant?: "default" | "danger";
+}
 
 export default function Settings() {
-  const { user } = useAuth();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [updating, setUpdating] = useState(false);
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Validation
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Please fill all password fields",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      toast({
-        title: "Error",
-        description: "New password must be at least 6 characters",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "New passwords do not match",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setUpdating(true);
-    try {
-      // First verify current password by trying to sign in
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user?.email || "",
-        password: currentPassword,
-      });
-
-      if (signInError) {
-        toast({
-          title: "Error",
-          description: "Current password is incorrect",
-          variant: "destructive",
-        });
-        return;
+  useEffect(() => {
+    const fetchProfileId = async () => {
+      if (user?.id) {
+        setLoadingProfile(true);
+        try {
+          const { data } = await supabase
+            .from("employee_profiles")
+            .select("id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+          
+          if (data) setMyProfileId(data.id);
+        } catch (error) {
+          console.error("Error fetching profile:", error);
+        } finally {
+          setLoadingProfile(false);
+        }
       }
+    };
+    
+    fetchProfileId();
+  }, [user?.id]);
 
-      // Update password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
 
-      if (updateError) {
-        throw updateError;
-      }
-
-      toast({
-        title: "Success",
-        description: "Password updated successfully",
-      });
-
-      // Clear form
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (error: any) {
-      console.error("Error updating password:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update password",
-        variant: "destructive",
-      });
-    } finally {
-      setUpdating(false);
+  const handleProfileClick = () => {
+    if (myProfileId) {
+      navigate(`/employee/${myProfileId}`);
     }
   };
+
+  const settingsMenu: SettingsMenuItem[] = [
+    {
+      id: "profile",
+      label: "My Profile",
+      icon: <UserCircle className="h-5 w-5" />,
+      description: loadingProfile 
+        ? "Loading profile..." 
+        : myProfileId 
+          ? "View and edit your profile information"
+          : "Profile not available",
+      action: handleProfileClick
+    },
+    {
+      id: "account",
+      label: "Account Information",
+      icon: <User className="h-5 w-5" />,
+      description: "View and manage your account details",
+      href: "/settings/account"
+    },
+    {
+      id: "password",
+      label: "Change Password",
+      icon: <Lock className="h-5 w-5" />,
+      description: "Update your account password",
+      href: "/settings/password"
+    },
+    {
+      id: "support",
+      label: "Support & Requests",
+      icon: <HelpCircle className="h-5 w-5" />,
+      description: "Submit and track your support requests",
+      href: "/settings/support"
+    },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: <Bell className="h-5 w-5" />,
+      description: "Manage notification preferences",
+      href: "/settings/notifications"
+    },
+    {
+      id: "privacy",
+      label: "Privacy & Security",
+      icon: <Shield className="h-5 w-5" />,
+      description: "Control your privacy settings",
+      href: "/settings/privacy"
+    },
+    {
+      id: "appearance",
+      label: "Appearance",
+      icon: <Palette className="h-5 w-5" />,
+      description: "Customize the look and feel",
+      href: "/settings/appearance"
+    },
+    {
+      id: "language",
+      label: "Language & Region",
+      icon: <Globe className="h-5 w-5" />,
+      description: "Set your language preferences",
+      href: "/settings/language"
+    },
+    {
+      id: "logout",
+      label: "Sign Out",
+      icon: <LogOut className="h-5 w-5" />,
+      description: "Sign out from your account",
+      action: handleSignOut,
+      variant: "danger"
+    }
+  ];
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Manage your account settings</p>
+          <p className="text-muted-foreground">Manage your account settings and preferences</p>
         </div>
 
-        {/* User Info Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Account Information
-            </CardTitle>
-            <CardDescription>Your current account details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Email</Label>
-              <p className="text-lg font-medium">{user?.email}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Change Password Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
-              Change Password
-            </CardTitle>
-            <CardDescription>Update your account password</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Current Password *</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter your current password"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">New Password *</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password (min 6 characters)"
-                  minLength={6}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm New Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter new password"
-                  minLength={6}
-                  required
-                />
-              </div>
-
-              <Button type="submit" disabled={updating}>
-                {updating ? "Updating..." : "Update Password"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-2">
+          {settingsMenu.map((item) => {
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  if (item.action) {
+                    item.action();
+                  } else if (item.href) {
+                    navigate(item.href);
+                  }
+                }}
+                disabled={item.id === "profile" && (loadingProfile || !myProfileId)}
+                className={`w-full flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent transition-colors text-left group ${
+                  item.variant === "danger" ? "hover:bg-destructive/10 hover:border-destructive" : ""
+                } ${item.id === "profile" && (loadingProfile || !myProfileId) ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-lg ${
+                    item.variant === "danger" 
+                      ? "bg-destructive/10 text-destructive" 
+                      : "bg-primary/10 text-primary"
+                  }`}>
+                    {item.icon}
+                  </div>
+                  <div>
+                    <h3 className={`font-medium ${
+                      item.variant === "danger" ? "text-destructive" : ""
+                    }`}>
+                      {item.label}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
+                </div>
+                <ChevronRight className={`h-5 w-5 transition-colors ${
+                  item.variant === "danger"
+                    ? "text-destructive"
+                    : "text-muted-foreground group-hover:text-foreground"
+                }`} />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </DashboardLayout>
   );
