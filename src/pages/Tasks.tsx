@@ -2165,6 +2165,44 @@ const Tasks = () => {
               </div>
             )}
 
+            {/* Peer Reviewer Groups (Optional) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Peer Reviewer Groups (Optional)</Label>
+                <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                  Manage groups <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Updating groups here re-snapshots reviewers for this task.
+              </p>
+              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+                {reviewerGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No groups available</p>
+                ) : (
+                  reviewerGroups.map(g => (
+                    <div key={`edit-grp-${g.id}`} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-grp-${g.id}`}
+                        checked={editFormData.peer_reviewer_group_ids.includes(g.id)}
+                        onCheckedChange={(checked) => {
+                          setEditFormData(prev => ({
+                            ...prev,
+                            peer_reviewer_group_ids: checked
+                              ? [...prev.peer_reviewer_group_ids, g.id]
+                              : prev.peer_reviewer_group_ids.filter(id => id !== g.id),
+                          }));
+                        }}
+                      />
+                      <Label htmlFor={`edit-grp-${g.id}`} className="text-sm font-normal cursor-pointer">
+                        {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {/* Peer Reviewers (Optional) */}
             <div className="space-y-2">
               <Label>Peer Reviewers (Optional)</Label>
