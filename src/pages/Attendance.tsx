@@ -1328,18 +1328,32 @@ export default function Attendance() {
                               return <div key={`empty-${index}`} className="aspect-square" />;
                             }
 
-                            const dateStr = format(
-                              new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), day),
-                              "yyyy-MM-dd"
-                            );
+                            const currentDate = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), day);
+                            const dateStr = format(currentDate, "yyyy-MM-dd");
                             const record = recordMap.get(dateStr);
+                            const dayOfWeek = currentDate.getDay();
+                            const isSunday = dayOfWeek === 0;
+                            
+                            // Check if it's a holiday
+                            const isHoliday = holidays.some(h => h.date === dateStr);
 
                             // Determine display info
                             let displayInfo = '';
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
-                            if (record) {
+                            // Priority 1: If it's a Sunday (weekend)
+                            if (isSunday && !record) {
+                              displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+                              statusTag = '';
+                            }
+                            // Priority 2: If it's a holiday
+                            else if (isHoliday && !record) {
+                              displayColor = 'bg-pink-50 dark:bg-pink-950/20 border-pink-300 dark:border-pink-700';
+                              statusTag = 'HO';
+                            }
+                            // Priority 3: If there's an attendance record
+                            else if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
                               // Rejected attendance is treated as Absent regardless of check-in
@@ -1387,10 +1401,10 @@ export default function Attendance() {
                                 }}
                               >
                                 <span className="font-bold text-base">{day}</span>
-                                {record && statusTag && (
+                                {statusTag && (
                                   <>
                                     <span className="font-bold text-lg mt-1">{statusTag}</span>
-                                    {record.is_late && statusTag !== 'LT' && (
+                                    {record?.is_late && statusTag !== 'LT' && (
                                       <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 leading-none">LT</span>
                                     )}
                                     {displayInfo && (
