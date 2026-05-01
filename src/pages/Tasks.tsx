@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -203,9 +204,11 @@ const Tasks = () => {
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
+    peer_reviewer_group_ids: [] as string[],
   });
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
+  const [reviewerGroups, setReviewerGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
@@ -227,6 +230,7 @@ const Tasks = () => {
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
+    peer_reviewer_group_ids: [] as string[],
   });
 
   // Drag and drop sensors
@@ -251,6 +255,7 @@ const Tasks = () => {
     fetchTasks(true); // Initial load
     if (role === "admin") {
       fetchEmployees();
+      fetchReviewerGroups();
     }
   }, [role]);
 
@@ -602,6 +607,24 @@ const Tasks = () => {
     }
   };
 
+  const fetchReviewerGroups = async () => {
+    try {
+      const [{ data: groups }, { data: members }] = await Promise.all([
+        (supabase as any).from("peer_reviewer_groups").select("id, name").order("name"),
+        (supabase as any).from("peer_reviewer_group_members").select("group_id, user_id"),
+      ]);
+      const memberRows = (members || []) as Array<{ group_id: string; user_id: string }>;
+      const enriched = (groups || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        member_ids: memberRows.filter(m => m.group_id === g.id).map(m => m.user_id),
+      }));
+      setReviewerGroups(enriched);
+    } catch (e) {
+      console.error("Error fetching reviewer groups:", e);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Strip HTML tags for validation
@@ -701,9 +724,13 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
-      // Insert peer reviewers (optional)
-      if (formData.peer_reviewer_ids.length > 0) {
-        const reviewers = formData.peer_reviewer_ids.map(uid => ({
+      // Snapshot peer reviewers from selected groups + individuals (union, dedup)
+      const groupMemberIds = formData.peer_reviewer_group_ids
+        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+      const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
+
+      if (allReviewerIds.length > 0) {
+        const reviewers = allReviewerIds.map(uid => ({
           task_id: (taskData as any).id,
           user_id: uid,
         }));
@@ -713,12 +740,24 @@ const Tasks = () => {
         if (revError) throw revError;
       }
 
+      // Record which groups were assigned (for UI display & edit pre-select)
+      if (formData.peer_reviewer_group_ids.length > 0) {
+        const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
+          task_id: (taskData as any).id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
+      }
+
       toast({
         title: "Success",
         description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [] });
+      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [], peer_reviewer_group_ids: [] });
       setOpen(false);
       fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
@@ -894,7 +933,7 @@ const Tasks = () => {
     }
   };
 
-  const openEditDialog = (task: Task) => {
+  const openEditDialog = async (task: Task) => {
     setEditingTask(task);
     
     // Fetch current assignments for this task
@@ -902,6 +941,19 @@ const Tasks = () => {
     const assignedUserIds = currentAssignments.map(a => a.user_id);
     
     const currentReviewers = peerReviewers[task.id] || [];
+
+    // Fetch which groups were assigned to this task
+    let groupIds: string[] = [];
+    try {
+      const { data } = await (supabase as any)
+        .from("task_peer_reviewer_groups")
+        .select("group_id")
+        .eq("task_id", task.id);
+      groupIds = (data || []).map((r: any) => r.group_id);
+    } catch (e) {
+      console.error("Error fetching task groups:", e);
+    }
+
     setEditFormData({
       title: task.title,
       description: task.description,
@@ -911,6 +963,7 @@ const Tasks = () => {
       assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
       assigned_user_ids: assignedUserIds,
       peer_reviewer_ids: currentReviewers.map(r => r.user_id),
+      peer_reviewer_group_ids: groupIds,
     });
     setEditOpen(true);
   };
@@ -1028,14 +1081,22 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
-      // Update peer reviewers: delete then re-insert
+      // Update peer reviewers: delete then re-snapshot from groups + individuals (union)
       await supabase
         .from("task_peer_reviewers" as any)
         .delete()
         .eq("task_id", editingTask.id);
+      await (supabase as any)
+        .from("task_peer_reviewer_groups")
+        .delete()
+        .eq("task_id", editingTask.id);
 
-      if (editFormData.peer_reviewer_ids.length > 0) {
-        const reviewers = editFormData.peer_reviewer_ids.map(uid => ({
+      const editGroupMemberIds = editFormData.peer_reviewer_group_ids
+        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+      const editAllReviewerIds = Array.from(new Set([...editGroupMemberIds, ...editFormData.peer_reviewer_ids]));
+
+      if (editAllReviewerIds.length > 0) {
+        const reviewers = editAllReviewerIds.map(uid => ({
           task_id: editingTask.id,
           user_id: uid,
         }));
@@ -1043,6 +1104,17 @@ const Tasks = () => {
           .from("task_peer_reviewers" as any)
           .insert(reviewers);
         if (revError) throw revError;
+      }
+
+      if (editFormData.peer_reviewer_group_ids.length > 0) {
+        const groupRefs = editFormData.peer_reviewer_group_ids.map(gid => ({
+          task_id: editingTask.id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       }
 
       toast({
@@ -1397,6 +1469,44 @@ const Tasks = () => {
                       )}
                     </div>
                   )}
+
+                  {/* Peer Reviewer Groups (Optional) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Peer Reviewer Groups (Optional)</Label>
+                      <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                        Manage groups <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select one or more groups. All current members will be snapshotted as reviewers for this task.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+                      {reviewerGroups.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No groups created yet. <Link to="/peer-reviewer-groups" target="_blank" className="text-primary hover:underline">Create one</Link>.</p>
+                      ) : (
+                        reviewerGroups.map(g => (
+                          <div key={`grp-${g.id}`} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`grp-${g.id}`}
+                              checked={formData.peer_reviewer_group_ids.includes(g.id)}
+                              onCheckedChange={(checked) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  peer_reviewer_group_ids: checked
+                                    ? [...prev.peer_reviewer_group_ids, g.id]
+                                    : prev.peer_reviewer_group_ids.filter(id => id !== g.id),
+                                }));
+                              }}
+                            />
+                            <Label htmlFor={`grp-${g.id}`} className="text-sm font-normal cursor-pointer">
+                              {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
 
                   {/* Peer Reviewers (Optional) */}
                   <div className="space-y-2">
@@ -2054,6 +2164,44 @@ const Tasks = () => {
                 )}
               </div>
             )}
+
+            {/* Peer Reviewer Groups (Optional) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Peer Reviewer Groups (Optional)</Label>
+                <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                  Manage groups <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Updating groups here re-snapshots reviewers for this task.
+              </p>
+              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+                {reviewerGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No groups available</p>
+                ) : (
+                  reviewerGroups.map(g => (
+                    <div key={`edit-grp-${g.id}`} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-grp-${g.id}`}
+                        checked={editFormData.peer_reviewer_group_ids.includes(g.id)}
+                        onCheckedChange={(checked) => {
+                          setEditFormData(prev => ({
+                            ...prev,
+                            peer_reviewer_group_ids: checked
+                              ? [...prev.peer_reviewer_group_ids, g.id]
+                              : prev.peer_reviewer_group_ids.filter(id => id !== g.id),
+                          }));
+                        }}
+                      />
+                      <Label htmlFor={`edit-grp-${g.id}`} className="text-sm font-normal cursor-pointer">
+                        {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
 
             {/* Peer Reviewers (Optional) */}
             <div className="space-y-2">

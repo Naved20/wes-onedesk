@@ -908,6 +908,62 @@ export type Database = {
         }
         Relationships: []
       }
+      peer_reviewer_group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peer_reviewer_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "peer_reviewer_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peer_reviewer_groups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       performance_reviews: {
         Row: {
           areas_of_improvement: string | null
@@ -1258,6 +1314,35 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employee_profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      task_peer_reviewer_groups: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_peer_reviewer_groups_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "peer_reviewer_groups"
+            referencedColumns: ["id"]
           },
         ]
       }
