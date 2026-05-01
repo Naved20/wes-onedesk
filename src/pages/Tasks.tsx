@@ -899,7 +899,7 @@ const Tasks = () => {
     }
   };
 
-  const openEditDialog = (task: Task) => {
+  const openEditDialog = async (task: Task) => {
     setEditingTask(task);
     
     // Fetch current assignments for this task
@@ -907,6 +907,19 @@ const Tasks = () => {
     const assignedUserIds = currentAssignments.map(a => a.user_id);
     
     const currentReviewers = peerReviewers[task.id] || [];
+
+    // Fetch which groups were assigned to this task
+    let groupIds: string[] = [];
+    try {
+      const { data } = await (supabase as any)
+        .from("task_peer_reviewer_groups")
+        .select("group_id")
+        .eq("task_id", task.id);
+      groupIds = (data || []).map((r: any) => r.group_id);
+    } catch (e) {
+      console.error("Error fetching task groups:", e);
+    }
+
     setEditFormData({
       title: task.title,
       description: task.description,
@@ -916,6 +929,7 @@ const Tasks = () => {
       assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
       assigned_user_ids: assignedUserIds,
       peer_reviewer_ids: currentReviewers.map(r => r.user_id),
+      peer_reviewer_group_ids: groupIds,
     });
     setEditOpen(true);
   };
