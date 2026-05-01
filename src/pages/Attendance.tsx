@@ -37,10 +37,21 @@ interface Holiday {
   name: string;
 }
 
+interface Leave {
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  leave_type: string;
+  status: string;
+  is_half_day: boolean;
+}
+
 export default function Attendance() {
   const { user, role } = useAuth();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceWithEmployee[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
@@ -76,6 +87,7 @@ export default function Attendance() {
       fetchAttendance(), 
       checkTodayAttendance(), 
       fetchHolidays(),
+      fetchLeaves(),
       ...(role === "admin" || role === "manager" ? [fetchAllEmployees()] : [])
     ]);
   };
@@ -195,6 +207,34 @@ export default function Attendance() {
       .order("date");
     
     setHolidays(data || []);
+  };
+
+  const fetchLeaves = async () => {
+    try {
+      // Fetch leaves for current and previous months
+      const monthStart = startOfMonth(new Date());
+      const twoMonthsAgo = new Date(monthStart);
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+      let query = supabase
+        .from("leaves")
+        .select("*")
+        .gte("start_date", format(twoMonthsAgo, "yyyy-MM-dd"))
+        .eq("status", "approved")
+        .order("start_date", { ascending: false });
+
+      // If employee, only fetch own leaves
+      if (role === "employee" && user) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setLeaves(data || []);
+    } catch (error) {
+      console.error("Error fetching leaves:", error);
+    }
   };
 
   // Get dates for calendar highlighting
@@ -1337,22 +1377,47 @@ export default function Attendance() {
                             // Check if it's a holiday
                             const isHoliday = holidays.some(h => h.date === dateStr);
 
+                            // Check if there's an approved leave for this date
+                            const leaveOnDate = leaves.find(leave => {
+                              if (leave.user_id !== selectedEmployeeId) return false;
+                              const leaveStart = new Date(leave.start_date);
+                              const leaveEnd = new Date(leave.end_date);
+                              return currentDate >= leaveStart && currentDate <= leaveEnd;
+                            });
+
                             // Determine display info
                             let displayInfo = '';
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
                             // Priority 1: If it's a Sunday (weekend)
-                            if (isSunday && !record) {
+                            if (isSunday && !record && !leaveOnDate) {
                               displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
                               statusTag = '';
                             }
                             // Priority 2: If it's a holiday
-                            else if (isHoliday && !record) {
+                            else if (isHoliday && !record && !leaveOnDate) {
                               displayColor = 'bg-pink-50 dark:bg-pink-950/20 border-pink-300 dark:border-pink-700';
                               statusTag = 'HO';
                             }
-                            // Priority 3: If there's an attendance record
+                            // Priority 3: If there's an approved leave
+                            else if (leaveOnDate && !record) {
+                              const leaveType = leaveOnDate.leave_type;
+                              if (leaveType === 'casual' || leaveType === 'emergency') {
+                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
+                                statusTag = 'CL';
+                              } else if (leaveType === 'sick') {
+                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
+                                statusTag = 'SL';
+                              } else if (leaveType === 'unplanned') {
+                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                                statusTag = 'UL';
+                              } else {
+                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
+                                statusTag = 'LE';
+                              }
+                            }
+                            // Priority 4: If there's an attendance record
                             else if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
