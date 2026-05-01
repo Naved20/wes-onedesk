@@ -25,6 +25,15 @@ interface AttendanceStatsProps {
   attendanceRecords?: Attendance[];
 }
 
+interface LeaveRecord {
+  id: string;
+  start_date: string;
+  end_date: string;
+  leave_type: string;
+  reason: string | null;
+  status: string;
+}
+
 interface Stats {
   working_days: number;
   present_days: number;
@@ -44,21 +53,44 @@ interface Stats {
 export function AttendanceStats({ userId, year, month, attendanceRecords = [] }: AttendanceStatsProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
 
   useEffect(() => {
     fetchStats();
+    fetchLeaves();
 
     // Auto-refresh when attendance or leaves change for this user
     const channel = supabase
       .channel(`attendance-stats-${userId}-${year}-${month}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance', filter: `user_id=eq.${userId}` }, () => fetchStats())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves', filter: `user_id=eq.${userId}` }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves', filter: `user_id=eq.${userId}` }, () => {
+        fetchStats();
+        fetchLeaves();
+      })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [userId, year, month]);
+
+  const fetchLeaves = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('leaves')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'approved')
+        .gte('start_date', `${year}-${String(month).padStart(2, '0')}-01`)
+        .lte('start_date', `${year}-${String(month).padStart(2, '0')}-31`)
+        .order('start_date', { ascending: false });
+
+      if (error) throw error;
+      setLeaves(data || []);
+    } catch (error) {
+      console.error("Error fetching leaves:", error);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -167,53 +199,203 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Coffee className="h-4 w-4 text-blue-500" />
-              <span className="text-xs text-muted-foreground">Casual Leaves</span>
+        {/* Casual Leaves - Clickable */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Coffee className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Casual Leaves</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {stats.casual_leaves}
+                </p>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Casual Leaves</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {leaves.filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency').length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No casual leaves this month</p>
+              ) : (
+                leaves
+                  .filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency')
+                  .map((leave) => (
+                    <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
+                      <div>
+                        <p className="font-medium">
+                          {format(new Date(leave.start_date), "MMM dd, yyyy")}
+                          {leave.start_date !== leave.end_date && ` - ${format(new Date(leave.end_date), "MMM dd, yyyy")}`}
+                        </p>
+                        {leave.reason && (
+                          <p className="text-sm text-muted-foreground">{leave.reason}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/30">
+                        {leave.leave_type === 'emergency' ? 'Emergency' : 'Casual'}
+                      </Badge>
+                    </div>
+                  ))
+              )}
             </div>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {stats.casual_leaves}
-            </p>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertCircle className="h-4 w-4 text-orange-500" />
-              <span className="text-xs text-muted-foreground">Sick Leaves</span>
+        {/* Sick Leaves - Clickable */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-orange-500" />
+                  <span className="text-xs text-muted-foreground">Sick Leaves</span>
+                </div>
+                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                  {stats.sick_leaves}
+                </p>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Sick Leaves</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {leaves.filter(l => l.leave_type === 'sick').length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No sick leaves this month</p>
+              ) : (
+                leaves
+                  .filter(l => l.leave_type === 'sick')
+                  .map((leave) => (
+                    <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                      <div>
+                        <p className="font-medium">
+                          {format(new Date(leave.start_date), "MMM dd, yyyy")}
+                          {leave.start_date !== leave.end_date && ` - ${format(new Date(leave.end_date), "MMM dd, yyyy")}`}
+                        </p>
+                        {leave.reason && (
+                          <p className="text-sm text-muted-foreground">{leave.reason}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="bg-orange-100 dark:bg-orange-900/30">
+                        Sick
+                      </Badge>
+                    </div>
+                  ))
+              )}
             </div>
-            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {stats.sick_leaves}
-            </p>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-yellow-500" />
-              <span className="text-xs text-muted-foreground">Late Check-ins</span>
+        {/* Late Check-ins - Clickable */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-yellow-500" />
+                  <span className="text-xs text-muted-foreground">Late Check-ins</span>
+                </div>
+                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {stats.late_days}
+                </p>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Late Check-ins</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {attendanceRecords
+                .filter(r => r.user_id === userId && r.is_late && 
+                  new Date(r.date).getMonth() === month - 1 &&
+                  new Date(r.date).getFullYear() === year)
+                .length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No late check-ins this month</p>
+              ) : (
+                attendanceRecords
+                  .filter(r => r.user_id === userId && r.is_late && 
+                    new Date(r.date).getMonth() === month - 1 &&
+                    new Date(r.date).getFullYear() === year)
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((record) => (
+                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                      <div>
+                        <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {record.check_in_time 
+                            ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
+                            : "No check-in"}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30">
+                        Late
+                      </Badge>
+                    </div>
+                  ))
+              )}
             </div>
-            <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-              {stats.late_days}
-            </p>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <XCircle className="h-4 w-4 text-red-500" />
-              <span className="text-xs text-muted-foreground">Absent</span>
+        {/* Absent - Clickable */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <XCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-xs text-muted-foreground">Absent</span>
+                </div>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {stats.absent_days}
+                </p>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Absent Days</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {attendanceRecords
+                .filter(r => r.user_id === userId && 
+                  (r.calculated_status === 'absent' || r.status === 'rejected') &&
+                  new Date(r.date).getMonth() === month - 1 &&
+                  new Date(r.date).getFullYear() === year)
+                .length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No absent days this month</p>
+              ) : (
+                attendanceRecords
+                  .filter(r => r.user_id === userId && 
+                    (r.calculated_status === 'absent' || r.status === 'rejected') &&
+                    new Date(r.date).getMonth() === month - 1 &&
+                    new Date(r.date).getFullYear() === year)
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((record) => (
+                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-red-50 dark:bg-red-950/20">
+                      <div>
+                        <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {record.check_in_time 
+                            ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
+                            : "No check-in"}
+                        </p>
+                      </div>
+                      <Badge variant="destructive">
+                        {record.status === 'rejected' ? 'Rejected' : 'Absent'}
+                      </Badge>
+                    </div>
+                  ))
+              )}
             </div>
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-              {stats.absent_days}
-            </p>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Pending/Rejected Info - Clickable to show details */}
