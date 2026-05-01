@@ -2155,7 +2155,7 @@ const Tasks = () => {
                 <div className="flex items-center gap-2">
                   <UserCheck className="h-5 w-5 text-blue-600" />
                   <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
-                    1️⃣ Task Assignment - Select Employees
+                    Task Assignment - Select Employees
                   </Label>
                 </div>
                 <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
@@ -2208,7 +2208,7 @@ const Tasks = () => {
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-purple-600" />
                   <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
-                    2️⃣ Peer Reviewer Groups (Optional)
+                    Peer Reviewer Groups (Optional)
                   </Label>
                 </div>
                 <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1 font-medium">
@@ -2258,7 +2258,7 @@ const Tasks = () => {
               <div className="flex items-center gap-2">
                 <Eye className="h-5 w-5 text-green-600" />
                 <Label className="text-base font-semibold text-green-900 dark:text-green-100">
-                  3️⃣ Individual Peer Reviewers (Optional)
+                  Individual Peer Reviewers (Optional)
                 </Label>
               </div>
               <p className="text-sm text-green-700 dark:text-green-300 font-medium">
