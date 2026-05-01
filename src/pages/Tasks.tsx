@@ -1081,14 +1081,22 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
-      // Update peer reviewers: delete then re-insert
+      // Update peer reviewers: delete then re-snapshot from groups + individuals (union)
       await supabase
         .from("task_peer_reviewers" as any)
         .delete()
         .eq("task_id", editingTask.id);
+      await (supabase as any)
+        .from("task_peer_reviewer_groups")
+        .delete()
+        .eq("task_id", editingTask.id);
 
-      if (editFormData.peer_reviewer_ids.length > 0) {
-        const reviewers = editFormData.peer_reviewer_ids.map(uid => ({
+      const editGroupMemberIds = editFormData.peer_reviewer_group_ids
+        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+      const editAllReviewerIds = Array.from(new Set([...editGroupMemberIds, ...editFormData.peer_reviewer_ids]));
+
+      if (editAllReviewerIds.length > 0) {
+        const reviewers = editAllReviewerIds.map(uid => ({
           task_id: editingTask.id,
           user_id: uid,
         }));
@@ -1096,6 +1104,17 @@ const Tasks = () => {
           .from("task_peer_reviewers" as any)
           .insert(reviewers);
         if (revError) throw revError;
+      }
+
+      if (editFormData.peer_reviewer_group_ids.length > 0) {
+        const groupRefs = editFormData.peer_reviewer_group_ids.map(gid => ({
+          task_id: editingTask.id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       }
 
       toast({
