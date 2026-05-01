@@ -1,6 +1,6 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useNavigate } from "react-router-dom";
-import { Lock, User, Bell, Shield, Palette, Globe, ChevronRight, UserCircle, LogOut, HelpCircle } from "lucide-react";
+import { Lock, User, Bell, Shield, Palette, Globe, ChevronRight, UserCircle, LogOut, HelpCircle, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +17,7 @@ interface SettingsMenuItem {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
@@ -88,6 +88,13 @@ export default function Settings() {
       description: "Submit and track your support requests",
       href: "/settings/support"
     },
+    ...((role === "admin" || role === "manager") ? [{
+      id: "peer-reviewer-groups",
+      label: "Peer Reviewer Groups",
+      icon: <Users className="h-5 w-5" />,
+      description: "Create and manage reusable groups of task reviewers",
+      href: "/peer-reviewer-groups"
+    } as SettingsMenuItem] : []),
     {
       id: "notifications",
       label: "Notifications",
