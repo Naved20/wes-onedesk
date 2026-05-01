@@ -1403,18 +1403,8 @@ export default function Attendance() {
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
-                            // Priority 1: If it's a Sunday (weekend)
-                            if (isSunday && !record && !leaveOnDate) {
-                              displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
-                              statusTag = '';
-                            }
-                            // Priority 2: If it's a holiday
-                            else if (isHoliday && !record && !leaveOnDate) {
-                              displayColor = 'bg-pink-50 dark:bg-pink-950/20 border-pink-300 dark:border-pink-700';
-                              statusTag = 'HO';
-                            }
-                            // Priority 3: If there's an approved leave
-                            else if (leaveOnDate && !record) {
+                            // Priority 1: If there's an approved leave (HIGHEST PRIORITY - overrides attendance)
+                            if (leaveOnDate) {
                               const leaveType = leaveOnDate.leave_type;
                               if (leaveType === 'casual' || leaveType === 'emergency') {
                                 displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
@@ -1430,7 +1420,7 @@ export default function Attendance() {
                                 statusTag = 'LE';
                               }
                             }
-                            // Priority 4: If there's an attendance record
+                            // Priority 2: If there's an attendance record (but no leave)
                             else if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
@@ -1465,6 +1455,16 @@ export default function Attendance() {
                               if (record.check_in_time) {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }
+                            }
+                            // Priority 3: If it's a Sunday (weekend)
+                            else if (isSunday) {
+                              displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
+                              statusTag = '';
+                            }
+                            // Priority 4: If it's a holiday
+                            else if (isHoliday) {
+                              displayColor = 'bg-pink-50 dark:bg-pink-950/20 border-pink-300 dark:border-pink-700';
+                              statusTag = 'HO';
                             }
 
                             return (
