@@ -280,7 +280,7 @@ export function AppraisalManager() {
       setReviewing(true);
 
       const updates = Array.from(selectedAppraisals).map(appraisalId => 
-        supabase
+        (supabase as any)
           .from("appraisals")
           .update({
             review_status: "reviewed",
