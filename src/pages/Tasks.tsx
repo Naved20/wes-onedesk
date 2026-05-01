@@ -607,6 +607,24 @@ const Tasks = () => {
     }
   };
 
+  const fetchReviewerGroups = async () => {
+    try {
+      const [{ data: groups }, { data: members }] = await Promise.all([
+        (supabase as any).from("peer_reviewer_groups").select("id, name").order("name"),
+        (supabase as any).from("peer_reviewer_group_members").select("group_id, user_id"),
+      ]);
+      const memberRows = (members || []) as Array<{ group_id: string; user_id: string }>;
+      const enriched = (groups || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        member_ids: memberRows.filter(m => m.group_id === g.id).map(m => m.user_id),
+      }));
+      setReviewerGroups(enriched);
+    } catch (e) {
+      console.error("Error fetching reviewer groups:", e);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Strip HTML tags for validation
