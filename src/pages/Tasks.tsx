@@ -204,9 +204,11 @@ const Tasks = () => {
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
+    peer_reviewer_group_ids: [] as string[],
   });
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
+  const [reviewerGroups, setReviewerGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
@@ -228,6 +230,7 @@ const Tasks = () => {
     assign_to: "all" as "all" | "specific",
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
+    peer_reviewer_group_ids: [] as string[],
   });
 
   // Drag and drop sensors
