@@ -12,8 +12,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { CalendarDays, Plus, Trash2, Edit2, CalendarIcon } from "lucide-react";
+import { CalendarDays, Plus, Trash2, Edit2, CalendarIcon, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Holiday {
@@ -22,10 +23,17 @@ interface Holiday {
   name: string;
   description: string | null;
   is_national: boolean | null;
+  institution_name: string | null;
+}
+
+interface Institution {
+  id: string;
+  institution_name: string;
 }
 
 export function HolidayManager() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
@@ -35,11 +43,33 @@ export function HolidayManager() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isNational, setIsNational] = useState(true);
+  const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchHolidays();
+    fetchInstitutions();
   }, []);
+
+  const fetchInstitutions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("manager_institutions")
+        .select("id, institution_name")
+        .order("institution_name");
+
+      if (error) throw error;
+      
+      // Remove duplicates
+      const uniqueInstitutions = Array.from(
+        new Map(data?.map(item => [item.institution_name, item])).values()
+      );
+      
+      setInstitutions(uniqueInstitutions || []);
+    } catch (error) {
+      console.error("Error fetching institutions:", error);
+    }
+  };
 
   const fetchHolidays = async () => {
     try {
@@ -62,6 +92,7 @@ export function HolidayManager() {
     setName("");
     setDescription("");
     setIsNational(true);
+    setSelectedInstitution("all");
     setEditingHoliday(null);
   };
 
@@ -72,6 +103,7 @@ export function HolidayManager() {
       setName(holiday.name);
       setDescription(holiday.description || "");
       setIsNational(holiday.is_national ?? true);
+      setSelectedInstitution(holiday.institution_name || "all");
     } else {
       resetForm();
     }
@@ -95,6 +127,7 @@ export function HolidayManager() {
         name: name.trim(),
         description: description.trim() || null,
         is_national: isNational,
+        institution_name: selectedInstitution === "all" ? null : selectedInstitution,
       };
 
       if (editingHoliday) {
@@ -225,6 +258,37 @@ export function HolidayManager() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="institution">Institution</Label>
+                <Select
+                  value={selectedInstitution}
+                  onValueChange={setSelectedInstitution}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select institution" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        All Institutions
+                      </div>
+                    </SelectItem>
+                    {institutions.map((inst) => (
+                      <SelectItem key={inst.id} value={inst.institution_name}>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          {inst.institution_name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select "All Institutions" for holidays applicable to everyone
+                </p>
+              </div>
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="is-national">National Holiday</Label>
                 <Switch
@@ -278,6 +342,7 @@ export function HolidayManager() {
                         <TableRow>
                           <TableHead>Date</TableHead>
                           <TableHead>Holiday</TableHead>
+                          <TableHead>Institution</TableHead>
                           <TableHead>Type</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -297,6 +362,12 @@ export function HolidayManager() {
                                   </p>
                                 )}
                               </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="gap-1">
+                                <Building2 className="h-3 w-3" />
+                                {holiday.institution_name || "All"}
+                              </Badge>
                             </TableCell>
                             <TableCell>
                               <Badge variant={holiday.is_national ? "default" : "secondary"}>
