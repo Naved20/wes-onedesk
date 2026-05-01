@@ -724,9 +724,13 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
-      // Insert peer reviewers (optional)
-      if (formData.peer_reviewer_ids.length > 0) {
-        const reviewers = formData.peer_reviewer_ids.map(uid => ({
+      // Snapshot peer reviewers from selected groups + individuals (union, dedup)
+      const groupMemberIds = formData.peer_reviewer_group_ids
+        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+      const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
+
+      if (allReviewerIds.length > 0) {
+        const reviewers = allReviewerIds.map(uid => ({
           task_id: (taskData as any).id,
           user_id: uid,
         }));
@@ -734,6 +738,18 @@ const Tasks = () => {
           .from("task_peer_reviewers" as any)
           .insert(reviewers);
         if (revError) throw revError;
+      }
+
+      // Record which groups were assigned (for UI display & edit pre-select)
+      if (formData.peer_reviewer_group_ids.length > 0) {
+        const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
+          task_id: (taskData as any).id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       }
 
       toast({
