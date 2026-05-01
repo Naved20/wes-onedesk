@@ -14,6 +14,7 @@ UNIQUE (date, institution_name);
 -- Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_holidays_institution ON public.holidays(institution_name);
 
+
 -- Update existing holidays to have NULL institution_name (means applicable to all institutions)
 -- This maintains backward compatibility
 UPDATE public.holidays
