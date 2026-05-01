@@ -255,6 +255,7 @@ const Tasks = () => {
     fetchTasks(true); // Initial load
     if (role === "admin") {
       fetchEmployees();
+      fetchReviewerGroups();
     }
   }, [role]);
 
@@ -722,7 +723,7 @@ const Tasks = () => {
         description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [] });
+      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [], peer_reviewer_group_ids: [] });
       setOpen(false);
       fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
