@@ -1324,10 +1324,23 @@ export default function Attendance() {
                                recordDate.getFullYear() === employeeDialogMonth.getFullYear();
                       });
 
-                    if (monthRecords.length === 0) {
+                    // Filter leaves for this month and employee
+                    const monthLeaves = leaves.filter(leave => {
+                      if (leave.user_id !== selectedEmployeeId) return false;
+                      const leaveStart = new Date(leave.start_date);
+                      const leaveEnd = new Date(leave.end_date);
+                      const monthStart = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), 1);
+                      const monthEnd = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth() + 1, 0);
+                      
+                      // Check if leave overlaps with this month
+                      return (leaveStart <= monthEnd && leaveEnd >= monthStart);
+                    });
+
+                    // Show calendar if there are either attendance records OR leaves
+                    if (monthRecords.length === 0 && monthLeaves.length === 0) {
                       return (
                         <p className="text-center text-muted-foreground py-8">
-                          No attendance records for this month
+                          No attendance records or leaves for this month
                         </p>
                       );
                     }
