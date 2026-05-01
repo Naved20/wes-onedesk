@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -1427,9 +1427,17 @@ const Tasks = () => {
                   </div>
 
                   {formData.assign_to === "specific" && (
-                    <div className="space-y-2">
-                      <Label>Select Employees (Multiple)</Label>
-                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                    <div className="space-y-2 bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="h-5 w-5 text-blue-600" />
+                        <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                          1️⃣ Task Assignment - Select Employees
+                        </Label>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                        👉 These employees will receive and complete this task
+                      </p>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                         {employees.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No employees found</p>
                         ) : (
@@ -1463,25 +1471,33 @@ const Tasks = () => {
                         )}
                       </div>
                       {formData.assigned_user_ids.length > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          {formData.assigned_user_ids.length} employee(s) selected
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          ✅ {formData.assigned_user_ids.length} employee(s) selected
                         </p>
                       )}
                     </div>
                   )}
 
                   {/* Peer Reviewer Groups (Optional) */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                     <div className="flex items-center justify-between">
-                      <Label>Peer Reviewer Groups (Optional)</Label>
-                      <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-purple-600" />
+                        <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                          2️⃣ Peer Reviewer Groups (Optional)
+                        </Label>
+                      </div>
+                      <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1 font-medium">
                         Manage groups <ExternalLink className="h-3 w-3" />
                       </Link>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Select one or more groups. All current members will be snapshotted as reviewers for this task.
+                    <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">
+                      👥 Select pre-made groups - all members will become reviewers
                     </p>
-                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+                    <p className="text-xs text-purple-600 dark:text-purple-400">
+                      Updating groups here re-snapshots reviewers for this task.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                       {reviewerGroups.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No groups created yet. <Link to="/peer-reviewer-groups" target="_blank" className="text-primary hover:underline">Create one</Link>.</p>
                       ) : (
@@ -1506,15 +1522,28 @@ const Tasks = () => {
                         ))
                       )}
                     </div>
+                    {formData.peer_reviewer_group_ids.length > 0 && (
+                      <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                        ✅ {formData.peer_reviewer_group_ids.length} group(s) selected
+                      </p>
+                    )}
                   </div>
 
                   {/* Peer Reviewers (Optional) */}
-                  <div className="space-y-2">
-                    <Label>Peer Reviewers (Optional)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Select employees who can review and add remarks on others' responses for this task.
+                  <div className="space-y-2 bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border-2 border-green-200 dark:border-green-800">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-5 w-5 text-green-600" />
+                      <Label className="text-base font-semibold text-green-900 dark:text-green-100">
+                        3️⃣ Individual Peer Reviewers (Optional)
+                      </Label>
+                    </div>
+                    <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                      👤 Add individual reviewers (in addition to groups above)
                     </p>
-                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      These reviewers can view and comment on task responses from assigned employees.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                       {employees.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No employees found</p>
                       ) : (
@@ -1545,8 +1574,8 @@ const Tasks = () => {
                       )}
                     </div>
                     {formData.peer_reviewer_ids.length > 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        {formData.peer_reviewer_ids.length} peer reviewer(s) selected
+                      <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                        ✅ {formData.peer_reviewer_ids.length} peer reviewer(s) selected
                       </p>
                     )}
                   </div>
@@ -2122,9 +2151,17 @@ const Tasks = () => {
             </div>
 
             {editFormData.assign_to === "specific" && (
-              <div className="space-y-2">
-                <Label>Select Employees (Multiple)</Label>
-                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+              <div className="space-y-2 bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-blue-600" />
+                  <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                    1️⃣ Task Assignment - Select Employees
+                  </Label>
+                </div>
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  👉 These employees will receive and complete this task
+                </p>
+                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                   {employees.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No employees found</p>
                   ) : (
@@ -2158,25 +2195,33 @@ const Tasks = () => {
                   )}
                 </div>
                 {editFormData.assigned_user_ids.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    {editFormData.assigned_user_ids.length} employee(s) selected
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    ✅ {editFormData.assigned_user_ids.length} employee(s) selected
                   </p>
                 )}
               </div>
             )}
 
             {/* Peer Reviewer Groups (Optional) */}
-            <div className="space-y-2">
+            <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
               <div className="flex items-center justify-between">
-                <Label>Peer Reviewer Groups (Optional)</Label>
-                <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-purple-600" />
+                  <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                    2️⃣ Peer Reviewer Groups (Optional)
+                  </Label>
+                </div>
+                <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1 font-medium">
                   Manage groups <ExternalLink className="h-3 w-3" />
                 </Link>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">
+                👥 Select pre-made groups - all members will become reviewers
+              </p>
+              <p className="text-xs text-purple-600 dark:text-purple-400">
                 Updating groups here re-snapshots reviewers for this task.
               </p>
-              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+              <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                 {reviewerGroups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No groups available</p>
                 ) : (
@@ -2201,15 +2246,28 @@ const Tasks = () => {
                   ))
                 )}
               </div>
+              {editFormData.peer_reviewer_group_ids.length > 0 && (
+                <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                  ✅ {editFormData.peer_reviewer_group_ids.length} group(s) selected
+                </p>
+              )}
             </div>
 
             {/* Peer Reviewers (Optional) */}
-            <div className="space-y-2">
-              <Label>Peer Reviewers (Optional)</Label>
-              <p className="text-xs text-muted-foreground">
-                Select employees who can review and add remarks on others' responses for this task.
+            <div className="space-y-2 bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border-2 border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2">
+                <Eye className="h-5 w-5 text-green-600" />
+                <Label className="text-base font-semibold text-green-900 dark:text-green-100">
+                  3️⃣ Individual Peer Reviewers (Optional)
+                </Label>
+              </div>
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                👤 Add individual reviewers (in addition to groups above)
               </p>
-              <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3">
+              <p className="text-xs text-green-600 dark:text-green-400">
+                These reviewers can view and comment on task responses from assigned employees.
+              </p>
+              <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-3 bg-white dark:bg-gray-900">
                 {employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No employees found</p>
                 ) : (
@@ -2240,8 +2298,8 @@ const Tasks = () => {
                 )}
               </div>
               {editFormData.peer_reviewer_ids.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {editFormData.peer_reviewer_ids.length} peer reviewer(s) selected
+                <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                  ✅ {editFormData.peer_reviewer_ids.length} peer reviewer(s) selected
                 </p>
               )}
             </div>
