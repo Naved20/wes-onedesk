@@ -1470,6 +1470,44 @@ const Tasks = () => {
                     </div>
                   )}
 
+                  {/* Peer Reviewer Groups (Optional) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Peer Reviewer Groups (Optional)</Label>
+                      <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+                        Manage groups <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select one or more groups. All current members will be snapshotted as reviewers for this task.
+                    </p>
+                    <div className="border rounded-lg p-4 max-h-48 overflow-y-auto space-y-3">
+                      {reviewerGroups.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No groups created yet. <Link to="/peer-reviewer-groups" target="_blank" className="text-primary hover:underline">Create one</Link>.</p>
+                      ) : (
+                        reviewerGroups.map(g => (
+                          <div key={`grp-${g.id}`} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`grp-${g.id}`}
+                              checked={formData.peer_reviewer_group_ids.includes(g.id)}
+                              onCheckedChange={(checked) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  peer_reviewer_group_ids: checked
+                                    ? [...prev.peer_reviewer_group_ids, g.id]
+                                    : prev.peer_reviewer_group_ids.filter(id => id !== g.id),
+                                }));
+                              }}
+                            />
+                            <Label htmlFor={`grp-${g.id}`} className="text-sm font-normal cursor-pointer">
+                              {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
                   {/* Peer Reviewers (Optional) */}
                   <div className="space-y-2">
                     <Label>Peer Reviewers (Optional)</Label>
