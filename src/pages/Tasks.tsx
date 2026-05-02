@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -135,6 +135,7 @@ interface Task {
   title: string;
   description: string;
   category: string | null;
+  reward_amount: number | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -195,12 +196,16 @@ const Tasks = () => {
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
   
+  const [totalEarnings, setTotalEarnings] = useState<number>(0);
+  const [loadingEarnings, setLoadingEarnings] = useState(false);
+  
   const TASKS_PER_PAGE = 4;
   
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     category: "",
+    reward_amount: "",
     due_date: "",
     file: null as File | null,
     assign_to: "all" as "all" | "specific",
@@ -232,6 +237,7 @@ const Tasks = () => {
     title: "",
     description: "",
     category: "",
+    reward_amount: "",
     due_date: "",
     file: null as File | null,
     keepExistingFile: true,
@@ -267,7 +273,39 @@ const Tasks = () => {
       fetchEmployees();
       fetchReviewerGroups();
     }
-  }, [role]);
+    // Fetch total earnings for employees
+    if (role === "employee" && user?.id) {
+      fetchTotalEarnings();
+    }
+  }, [role, user?.id]);
+
+  const fetchTotalEarnings = async () => {
+    if (!user?.id) return;
+    
+    setLoadingEarnings(true);
+    try {
+      const { data, error } = await supabase
+        .from("task_earnings" as any)
+        .select("amount, status")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error fetching earnings:", error);
+        return;
+      }
+
+      // Calculate total approved and paid earnings
+      const total = (data || [])
+        .filter((earning: any) => earning.status === "approved" || earning.status === "paid")
+        .reduce((sum: number, earning: any) => sum + (parseFloat(earning.amount) || 0), 0);
+
+      setTotalEarnings(total);
+    } catch (error) {
+      console.error("Error fetching total earnings:", error);
+    } finally {
+      setLoadingEarnings(false);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -678,6 +716,7 @@ const Tasks = () => {
           title: formData.title,
           description: formData.description,
           category: formData.category || null,
+          reward_amount: formData.reward_amount ? parseFloat(formData.reward_amount) : null,
           due_date: formData.due_date || null,
           file_url: fileUrl,
           file_name: fileName,
@@ -787,6 +826,7 @@ const Tasks = () => {
         title: "", 
         description: "",
         category: "",
+        reward_amount: "",
         due_date: "", 
         file: null, 
         assign_to: "all", 
@@ -908,20 +948,56 @@ const Tasks = () => {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
+      // Insert remark
+      const { data: remarkData, error: remarkError } = await supabase
         .from("task_remarks" as any)
         .insert({
           response_id: selectedResponse.id,
           remarked_by: user?.id,
           remark_text: remarkFormData.remark_text,
           rating: remarkFormData.rating,
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (remarkError) throw remarkError;
+
+      // Check if task has reward and create earning
+      const task = tasks.find(t => {
+        const taskResponses = responses[t.id] || [];
+        return taskResponses.some(r => r.id === selectedResponse.id);
+      });
+
+      if (task && task.reward_amount && task.reward_amount > 0 && remarkData) {
+        // Create earning record
+        const { error: earningError } = await supabase
+          .from("task_earnings" as any)
+          .insert({
+            task_id: task.id,
+            response_id: selectedResponse.id,
+            user_id: selectedResponse.user_id,
+            amount: task.reward_amount,
+            remark_id: (remarkData as any).id,
+            remarked_by: user?.id,
+            status: "approved",
+          });
+
+        if (earningError) {
+          console.error("Error creating earning:", earningError);
+          // Don't throw error, just log it - remark was still added successfully
+        } else {
+          // Refresh earnings if current user is the one who earned
+          if (selectedResponse.user_id === user?.id) {
+            fetchTotalEarnings();
+          }
+        }
+      }
 
       toast({
         title: "Success",
-        description: "Remark added successfully",
+        description: task?.reward_amount 
+          ? `Remark added and ₹${task.reward_amount} earning created!` 
+          : "Remark added successfully",
       });
 
       setRemarkFormData({ remark_text: "", rating: 5 });
@@ -1008,6 +1084,7 @@ const Tasks = () => {
       title: task.title,
       description: task.description,
       category: task.category || "",
+      reward_amount: task.reward_amount ? task.reward_amount.toString() : "",
       due_date: task.due_date ? task.due_date.split('T')[0] : "",
       file: null,
       keepExistingFile: true,
@@ -1093,6 +1170,7 @@ const Tasks = () => {
           title: editFormData.title,
           description: editFormData.description,
           category: editFormData.category || null,
+          reward_amount: editFormData.reward_amount ? parseFloat(editFormData.reward_amount) : null,
           due_date: editFormData.due_date || null,
           file_url: fileUrl,
           file_name: fileName,
@@ -1503,6 +1581,21 @@ const Tasks = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="reward_amount">Reward Amount (₹) - Optional</Label>
+                    <Input
+                      id="reward_amount"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Enter reward amount in rupees"
+                      value={formData.reward_amount}
+                      onChange={(e) => setFormData({ ...formData, reward_amount: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      💰 Employees will earn this amount when their task response is reviewed and approved
+                    </p>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="description">Description</Label>
                     <div className="border rounded-md">
                       <ReactQuillWrapper
@@ -1901,6 +1994,47 @@ const Tasks = () => {
           </div>
         </div>
 
+        {/* Total Earnings Card - Only for Employees */}
+        {role === "employee" && (
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300">Total Earnings</p>
+                    {loadingEarnings ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="h-8 w-32 bg-green-200 dark:bg-green-800 animate-pulse rounded"></div>
+                      </div>
+                    ) : (
+                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                        ₹{totalEarnings.toFixed(2)}
+                      </p>
+                    )}
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      From completed and reviewed tasks
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchTotalEarnings}
+                  disabled={loadingEarnings}
+                  className="border-green-300 hover:bg-green-100 dark:border-green-700 dark:hover:bg-green-900/30"
+                >
+                  {loadingEarnings ? "Refreshing..." : "Refresh"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Search and Filter Section */}
         <Card>
           <CardContent className="pt-6">
@@ -2038,6 +2172,11 @@ const Tasks = () => {
                             {task.category && (
                               <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
                                 {task.category}
+                              </Badge>
+                            )}
+                            {task.reward_amount && task.reward_amount > 0 && (
+                              <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                                💰 ₹{task.reward_amount}
                               </Badge>
                             )}
                             {task.due_date && (
@@ -2561,6 +2700,21 @@ const Tasks = () => {
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-reward_amount">Reward Amount (₹) - Optional</Label>
+              <Input
+                id="edit-reward_amount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Enter reward amount in rupees"
+                value={editFormData.reward_amount}
+                onChange={(e) => setEditFormData({ ...editFormData, reward_amount: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                💰 Employees will earn this amount when their task response is reviewed and approved
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
