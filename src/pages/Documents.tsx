@@ -12,8 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { FileText, Plus, Trash2, Edit, Search } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
 
 // Custom styles for Quill editor
 const editorStyle = `
@@ -243,22 +242,11 @@ export default function Documents() {
                   <div className="space-y-2">
                     <Label htmlFor="description">Description</Label>
                     <div className="border rounded-md">
-                      <ReactQuill
+                      <ReactQuillWrapper
                         theme="snow"
                         value={formData.description}
                         onChange={(value) => setFormData({ ...formData, description: value })}
-                        modules={{
-                          toolbar: [
-                            [{ header: [1, 2, 3, false] }],
-                            ["bold", "italic", "underline", "strike"],
-                            [{ list: "ordered" }, { list: "bullet" }],
-                            [{ color: [] }, { background: [] }],
-                            ["link"],
-                            ["clean"],
-                          ],
-                        }}
                         className="bg-white dark:bg-gray-950"
-                        style={{ minHeight: "150px" }}
                       />
                     </div>
                   </div>

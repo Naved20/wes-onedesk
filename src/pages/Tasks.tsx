@@ -18,8 +18,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
 import {
   DndContext,
   closestCenter,
@@ -205,6 +204,8 @@ const Tasks = () => {
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
+    review_assignment_type: "group" as "group" | "individual" | "mixed",
+    individual_reviewer_assignments: [] as Array<{ user_id: string; reviewer_id: string }>,
   });
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
@@ -231,6 +232,8 @@ const Tasks = () => {
     assigned_user_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
+    review_assignment_type: "group" as "group" | "individual" | "mixed",
+    individual_reviewer_assignments: [] as Array<{ user_id: string; reviewer_id: string }>,
   });
 
   // Drag and drop sensors
@@ -691,6 +694,7 @@ const Tasks = () => {
           file_name: fileName,
           created_by: user.id,
           is_active: true,
+          review_assignment_type: formData.review_assignment_type,
         })
         .select()
         .single();
@@ -724,32 +728,65 @@ const Tasks = () => {
         if (assignError) throw assignError;
       }
 
-      // Snapshot peer reviewers from selected groups + individuals (union, dedup)
-      const groupMemberIds = formData.peer_reviewer_group_ids
-        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
-      const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
+      // Handle peer reviewer assignments based on type
+      if (formData.review_assignment_type === "group" || formData.review_assignment_type === "mixed") {
+        // Snapshot peer reviewers from selected groups + individuals (union, dedup)
+        const groupMemberIds = formData.peer_reviewer_group_ids
+          .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+        const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
 
-      if (allReviewerIds.length > 0) {
-        const reviewers = allReviewerIds.map(uid => ({
-          task_id: (taskData as any).id,
-          user_id: uid,
-        }));
-        const { error: revError } = await supabase
-          .from("task_peer_reviewers" as any)
-          .insert(reviewers);
-        if (revError) throw revError;
+        if (allReviewerIds.length > 0) {
+          const reviewers = allReviewerIds.map(uid => ({
+            task_id: (taskData as any).id,
+            user_id: uid,
+          }));
+          const { error: revError } = await supabase
+            .from("task_peer_reviewers" as any)
+            .insert(reviewers);
+          if (revError) throw revError;
+        }
+
+        // Record which groups were assigned (for UI display & edit pre-select)
+        if (formData.peer_reviewer_group_ids.length > 0) {
+          const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
+            task_id: (taskData as any).id,
+            group_id: gid,
+          }));
+          const { error: grpError } = await (supabase as any)
+            .from("task_peer_reviewer_groups")
+            .insert(groupRefs);
+          if (grpError) throw grpError;
+        }
       }
 
-      // Record which groups were assigned (for UI display & edit pre-select)
-      if (formData.peer_reviewer_group_ids.length > 0) {
-        const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
-          task_id: (taskData as any).id,
-          group_id: gid,
-        }));
-        const { error: grpError } = await (supabase as any)
-          .from("task_peer_reviewer_groups")
-          .insert(groupRefs);
-        if (grpError) throw grpError;
+      if (formData.review_assignment_type === "individual" || formData.review_assignment_type === "mixed") {
+        // Handle individual reviewer assignments for this specific task
+        if (formData.individual_reviewer_assignments.length > 0) {
+          // Add individual reviewers to task_peer_reviewers (deduplicate)
+          const reviewerIds = Array.from(new Set(formData.individual_reviewer_assignments.map(a => a.reviewer_id)));
+          const reviewers = reviewerIds.map(uid => ({
+            task_id: (taskData as any).id,
+            user_id: uid,
+          }));
+          
+          const { error: revError } = await supabase
+            .from("task_peer_reviewers" as any)
+            .insert(reviewers);
+          if (revError) throw revError;
+
+          // Store the user-to-reviewer mapping for this task
+          const mappings = formData.individual_reviewer_assignments.map(assignment => ({
+            task_id: (taskData as any).id,
+            user_id: assignment.user_id,
+            reviewer_id: assignment.reviewer_id,
+            assigned_by: user.id,
+          }));
+
+          const { error: mapError } = await supabase
+            .from("individual_peer_reviewers" as any)
+            .insert(mappings);
+          if (mapError) throw mapError;
+        }
       }
 
       toast({
@@ -757,7 +794,18 @@ const Tasks = () => {
         description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
       });
 
-      setFormData({ title: "", description: "", due_date: "", file: null, assign_to: "all", assigned_user_ids: [], peer_reviewer_ids: [], peer_reviewer_group_ids: [] });
+      setFormData({ 
+        title: "", 
+        description: "", 
+        due_date: "", 
+        file: null, 
+        assign_to: "all", 
+        assigned_user_ids: [], 
+        peer_reviewer_ids: [], 
+        peer_reviewer_group_ids: [],
+        review_assignment_type: "group",
+        individual_reviewer_assignments: [],
+      });
       setOpen(false);
       fetchTasks(true); // Reset and reload from beginning
     } catch (error) {
@@ -1367,14 +1415,15 @@ const Tasks = () => {
                       Create Task
                     </Button>
                   </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
+              <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
                   <DialogTitle>Create New Task</DialogTitle>
                   <DialogDescription>
                     Create a new task and assign it to all employees or a specific employee
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="flex-1 overflow-y-auto pr-2">
+                  <form onSubmit={handleSubmit} className="space-y-4" id="create-task-form">
                   <div className="space-y-2">
                     <Label htmlFor="title">Title</Label>
                     <Input
@@ -1388,22 +1437,10 @@ const Tasks = () => {
                   <div className="space-y-2">
                     <Label htmlFor="description">Description</Label>
                     <div className="border rounded-md">
-                      <ReactQuill
+                      <ReactQuillWrapper
                         theme="snow"
                         value={formData.description}
                         onChange={(value) => setFormData({ ...formData, description: value })}
-                        modules={{
-                          toolbar: [
-                            [{ header: [1, 2, 3, false] }],
-                            ["bold", "italic", "underline", "strike"],
-                            [{ list: "ordered" }, { list: "bullet" }],
-                            [{ color: [] }, { background: [] }],
-                            ["link"],
-                            ["clean"],
-                          ],
-                        }}
-                        className="bg-white dark:bg-gray-950"
-                        style={{ minHeight: "150px" }}
                       />
                     </div>
                   </div>
@@ -1478,13 +1515,188 @@ const Tasks = () => {
                     </div>
                   )}
 
-                  {/* Peer Reviewer Groups (Optional) */}
-                  <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                  {/* Review Assignment Type Selection */}
+                  <div className="space-y-4 bg-orange-50 dark:bg-orange-950/20 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="h-5 w-5 text-orange-600" />
+                      <Label className="text-base font-semibold text-orange-900 dark:text-orange-100">
+                        2️⃣ Peer Review Assignment Type
+                      </Label>
+                    </div>
+                    <p className="text-sm text-orange-700 dark:text-orange-300 font-medium">
+                      Choose how peer reviewers should be assigned for this task
+                    </p>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="review-type-group"
+                          name="review_assignment_type"
+                          value="group"
+                          checked={formData.review_assignment_type === "group"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                          className="text-orange-600"
+                        />
+                        <Label htmlFor="review-type-group" className="text-sm cursor-pointer">
+                          <strong>Group-based:</strong> Use reviewer groups and individual selections (existing system)
+                        </Label>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="review-type-individual"
+                          name="review_assignment_type"
+                          value="individual"
+                          checked={formData.review_assignment_type === "individual"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                          className="text-orange-600"
+                        />
+                        <Label htmlFor="review-type-individual" className="text-sm cursor-pointer">
+                          <strong>Individual 1:1:</strong> Manually assign specific reviewer for each user
+                        </Label>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="review-type-mixed"
+                          name="review_assignment_type"
+                          value="mixed"
+                          checked={formData.review_assignment_type === "mixed"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                          className="text-orange-600"
+                        />
+                        <Label htmlFor="review-type-mixed" className="text-sm cursor-pointer">
+                          <strong>Mixed:</strong> Use both group-based and individual assignments
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Individual 1:1 Reviewer Assignment - Show when individual or mixed is selected */}
+                  {(formData.review_assignment_type === "individual" || formData.review_assignment_type === "mixed") && (
+                    <div className="space-y-4 bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="h-5 w-5 text-blue-600" />
+                        <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                          3️⃣ Assign Individual Reviewers (1:1 Mapping)
+                        </Label>
+                      </div>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                        👥 For each assigned user, select their specific peer reviewer
+                      </p>
+                      
+                      {formData.assign_to === "all" ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                          {employees.map((emp) => (
+                            <div key={`reviewer-map-${emp.user_id}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                                <p className="text-xs text-muted-foreground">{emp.email}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">→</span>
+                                <Select
+                                  value={formData.individual_reviewer_assignments.find(a => a.user_id === emp.user_id)?.reviewer_id || "no-reviewer"}
+                                  onValueChange={(reviewerId) => {
+                                    setFormData(prev => {
+                                      const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== emp.user_id);
+                                      if (reviewerId && reviewerId !== "no-reviewer") {
+                                        return {
+                                          ...prev,
+                                          individual_reviewer_assignments: [...existing, { user_id: emp.user_id, reviewer_id: reviewerId }]
+                                        };
+                                      }
+                                      return { ...prev, individual_reviewer_assignments: existing };
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Select reviewer" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                                    {employees.filter(e => e.user_id !== emp.user_id).map(reviewer => (
+                                      <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                        {reviewer.first_name} {reviewer.last_name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : formData.assigned_user_ids.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                          {formData.assigned_user_ids.map((userId) => {
+                            const emp = employees.find(e => e.user_id === userId);
+                            if (!emp) return null;
+                            return (
+                              <div key={`reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                                  <p className="text-xs text-muted-foreground">{emp.email}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">→</span>
+                                  <Select
+                                    value={formData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
+                                    onValueChange={(reviewerId) => {
+                                      setFormData(prev => {
+                                        const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
+                                        if (reviewerId && reviewerId !== "no-reviewer") {
+                                          return {
+                                            ...prev,
+                                            individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
+                                          };
+                                        }
+                                        return { ...prev, individual_reviewer_assignments: existing };
+                                      });
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-[200px]">
+                                      <SelectValue placeholder="Select reviewer" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                                      {employees.filter(e => e.user_id !== userId).map(reviewer => (
+                                        <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                          {reviewer.first_name} {reviewer.last_name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Please select employees in step 1 first
+                        </p>
+                      )}
+                      
+                      {formData.individual_reviewer_assignments.length > 0 && (
+                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                          ✅ {formData.individual_reviewer_assignments.length} reviewer(s) assigned
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Peer Reviewer Groups (Optional) - Only show for group or mixed */}
+                  {(formData.review_assignment_type === "group" || formData.review_assignment_type === "mixed") && (
+                    <>
+                    <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Users className="h-5 w-5 text-purple-600" />
                         <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
-                          2️⃣ Peer Reviewer Groups (Optional)
+                          3️⃣ Peer Reviewer Groups (Optional)
                         </Label>
                       </div>
                       <Link to="/peer-reviewer-groups" target="_blank" className="text-xs text-purple-600 hover:underline inline-flex items-center gap-1 font-medium">
@@ -1529,12 +1741,12 @@ const Tasks = () => {
                     )}
                   </div>
 
-                  {/* Peer Reviewers (Optional) */}
+                  {/* Individual Peer Reviewers (Optional) - Only show for group or mixed */}
                   <div className="space-y-2 bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border-2 border-green-200 dark:border-green-800">
                     <div className="flex items-center gap-2">
                       <Eye className="h-5 w-5 text-green-600" />
                       <Label className="text-base font-semibold text-green-900 dark:text-green-100">
-                        3️⃣ Individual Peer Reviewers (Optional)
+                        4️⃣ Additional Individual Peer Reviewers (Optional)
                       </Label>
                     </div>
                     <p className="text-sm text-green-700 dark:text-green-300 font-medium">
@@ -1579,6 +1791,8 @@ const Tasks = () => {
                       </p>
                     )}
                   </div>
+                  </>
+                  )}
                   
                   <div className="space-y-2">
                     <Label htmlFor="due_date">Due Date (Optional)</Label>
@@ -1602,15 +1816,16 @@ const Tasks = () => {
                       </p>
                     )}
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={submitting}>
-                      {submitting ? "Creating..." : "Create Task"}
-                    </Button>
-                  </div>
-                </form>
+                  </form>
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" form="create-task-form" disabled={submitting}>
+                    {submitting ? "Creating..." : "Create Task"}
+                  </Button>
+                </div>
               </DialogContent>
             </Dialog>
               </>
@@ -2112,22 +2327,10 @@ const Tasks = () => {
             <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
               <div className="border rounded-md">
-                <ReactQuill
+                <ReactQuillWrapper
                   theme="snow"
                   value={editFormData.description}
                   onChange={(value) => setEditFormData({ ...editFormData, description: value })}
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, false] }],
-                      ["bold", "italic", "underline", "strike"],
-                      [{ list: "ordered" }, { list: "bullet" }],
-                      [{ color: [] }, { background: [] }],
-                      ["link"],
-                      ["clean"],
-                    ],
-                  }}
-                  className="bg-white dark:bg-gray-950"
-                  style={{ minHeight: "150px" }}
                 />
               </div>
             </div>

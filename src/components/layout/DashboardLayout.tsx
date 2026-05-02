@@ -21,6 +21,7 @@ import {
   Cloud,
   CheckSquare,
   ScanFace,
+  UserCheck,
 } from "lucide-react";
 
 interface NavItem {
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { label: "Performance", href: "/performance", icon: <Star className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Announcements", href: "/announcements", icon: <Megaphone className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Tasks", href: "/tasks", icon: <CheckSquare className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
+  { label: "Peer Reviewer Groups", href: "/peer-reviewer-groups", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Google Drive", href: "/google-drive", icon: <Cloud className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Shift Management", href: "/shifts", icon: <Clock className="h-5 w-5" />, roles: ["admin"] },
   { label: "Shift Assignments", href: "/shift-assignments", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },

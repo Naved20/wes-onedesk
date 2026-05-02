@@ -13,8 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2, Edit } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
 
 // Custom styles for Quill editor
 const editorStyle = `
@@ -414,22 +413,11 @@ export default function Announcements() {
                   <div className="space-y-2">
                     <Label htmlFor="content">Description</Label>
                     <div className="border rounded-md">
-                      <ReactQuill
+                      <ReactQuillWrapper
                         theme="snow"
                         value={formData.content}
                         onChange={(value) => setFormData({ ...formData, content: value })}
-                        modules={{
-                          toolbar: [
-                            [{ header: [1, 2, 3, false] }],
-                            ["bold", "italic", "underline", "strike"],
-                            [{ list: "ordered" }, { list: "bullet" }],
-                            [{ color: [] }, { background: [] }],
-                            ["link"],
-                            ["clean"],
-                          ],
-                        }}
                         className="bg-white dark:bg-gray-950"
-                        style={{ minHeight: "150px" }}
                       />
                     </div>
                   </div>
@@ -657,22 +645,11 @@ export default function Announcements() {
             <div className="space-y-2">
               <Label htmlFor="edit-content">Description</Label>
               <div className="border rounded-md">
-                <ReactQuill
+                <ReactQuillWrapper
                   theme="snow"
                   value={editFormData.content}
                   onChange={(value) => setEditFormData({ ...editFormData, content: value })}
-                  modules={{
-                    toolbar: [
-                      [{ header: [1, 2, 3, false] }],
-                      ["bold", "italic", "underline", "strike"],
-                      [{ list: "ordered" }, { list: "bullet" }],
-                      [{ color: [] }, { background: [] }],
-                      ["link"],
-                      ["clean"],
-                    ],
-                  }}
                   className="bg-white dark:bg-gray-950"
-                  style={{ minHeight: "150px" }}
                 />
               </div>
             </div>
