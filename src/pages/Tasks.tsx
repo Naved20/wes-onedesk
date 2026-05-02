@@ -13,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
 import {
   DndContext,
@@ -133,6 +134,7 @@ interface Task {
   id: string;
   title: string;
   description: string;
+  category: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -198,6 +200,7 @@ const Tasks = () => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    category: "",
     due_date: "",
     file: null as File | null,
     assign_to: "all" as "all" | "specific",
@@ -222,9 +225,13 @@ const Tasks = () => {
     rating: 5,
   });
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
   const [editFormData, setEditFormData] = useState({
     title: "",
     description: "",
+    category: "",
     due_date: "",
     file: null as File | null,
     keepExistingFile: true,
@@ -261,25 +268,6 @@ const Tasks = () => {
       fetchReviewerGroups();
     }
   }, [role]);
-
-  // Infinite scroll observer
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = document.documentElement.clientHeight;
-      
-      // When user scrolls to 80% of the page (8th task out of 12)
-      const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-      
-      if (scrollPercentage > 0.66 && !loadingMore && hasMore) {
-        fetchTasks(false);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [loadingMore, hasMore, page]);
 
   const fetchEmployees = async () => {
     try {
@@ -689,6 +677,7 @@ const Tasks = () => {
         .insert({
           title: formData.title,
           description: formData.description,
+          category: formData.category || null,
           due_date: formData.due_date || null,
           file_url: fileUrl,
           file_name: fileName,
@@ -796,7 +785,8 @@ const Tasks = () => {
 
       setFormData({ 
         title: "", 
-        description: "", 
+        description: "",
+        category: "",
         due_date: "", 
         file: null, 
         assign_to: "all", 
@@ -1002,9 +992,22 @@ const Tasks = () => {
       console.error("Error fetching task groups:", e);
     }
 
+    // Fetch individual reviewer assignments
+    let individualAssignments: Array<{ user_id: string; reviewer_id: string }> = [];
+    try {
+      const { data } = await supabase
+        .from("individual_peer_reviewers" as any)
+        .select("user_id, reviewer_id")
+        .eq("task_id", task.id);
+      individualAssignments = (data || []).map((r: any) => ({ user_id: r.user_id, reviewer_id: r.reviewer_id }));
+    } catch (e) {
+      console.error("Error fetching individual reviewers:", e);
+    }
+
     setEditFormData({
       title: task.title,
       description: task.description,
+      category: task.category || "",
       due_date: task.due_date ? task.due_date.split('T')[0] : "",
       file: null,
       keepExistingFile: true,
@@ -1012,6 +1015,8 @@ const Tasks = () => {
       assigned_user_ids: assignedUserIds,
       peer_reviewer_ids: currentReviewers.map(r => r.user_id),
       peer_reviewer_group_ids: groupIds,
+      review_assignment_type: (task as any).review_assignment_type || "group",
+      individual_reviewer_assignments: individualAssignments,
     });
     setEditOpen(true);
   };
@@ -1087,9 +1092,11 @@ const Tasks = () => {
         .update({
           title: editFormData.title,
           description: editFormData.description,
+          category: editFormData.category || null,
           due_date: editFormData.due_date || null,
           file_url: fileUrl,
           file_name: fileName,
+          review_assignment_type: editFormData.review_assignment_type,
         })
         .eq("id", editingTask.id);
 
@@ -1138,31 +1145,68 @@ const Tasks = () => {
         .from("task_peer_reviewer_groups")
         .delete()
         .eq("task_id", editingTask.id);
+      await supabase
+        .from("individual_peer_reviewers" as any)
+        .delete()
+        .eq("task_id", editingTask.id);
 
-      const editGroupMemberIds = editFormData.peer_reviewer_group_ids
-        .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
-      const editAllReviewerIds = Array.from(new Set([...editGroupMemberIds, ...editFormData.peer_reviewer_ids]));
+      // Handle peer reviewer assignments based on type
+      if (editFormData.review_assignment_type === "group" || editFormData.review_assignment_type === "mixed") {
+        const editGroupMemberIds = editFormData.peer_reviewer_group_ids
+          .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+        const editAllReviewerIds = Array.from(new Set([...editGroupMemberIds, ...editFormData.peer_reviewer_ids]));
 
-      if (editAllReviewerIds.length > 0) {
-        const reviewers = editAllReviewerIds.map(uid => ({
-          task_id: editingTask.id,
-          user_id: uid,
-        }));
-        const { error: revError } = await supabase
-          .from("task_peer_reviewers" as any)
-          .insert(reviewers);
-        if (revError) throw revError;
+        if (editAllReviewerIds.length > 0) {
+          const reviewers = editAllReviewerIds.map(uid => ({
+            task_id: editingTask.id,
+            user_id: uid,
+          }));
+          const { error: revError } = await supabase
+            .from("task_peer_reviewers" as any)
+            .insert(reviewers);
+          if (revError) throw revError;
+        }
+
+        if (editFormData.peer_reviewer_group_ids.length > 0) {
+          const groupRefs = editFormData.peer_reviewer_group_ids.map(gid => ({
+            task_id: editingTask.id,
+            group_id: gid,
+          }));
+          const { error: grpError } = await (supabase as any)
+            .from("task_peer_reviewer_groups")
+            .insert(groupRefs);
+          if (grpError) throw grpError;
+        }
       }
 
-      if (editFormData.peer_reviewer_group_ids.length > 0) {
-        const groupRefs = editFormData.peer_reviewer_group_ids.map(gid => ({
-          task_id: editingTask.id,
-          group_id: gid,
-        }));
-        const { error: grpError } = await (supabase as any)
-          .from("task_peer_reviewer_groups")
-          .insert(groupRefs);
-        if (grpError) throw grpError;
+      if (editFormData.review_assignment_type === "individual" || editFormData.review_assignment_type === "mixed") {
+        // Handle individual reviewer assignments
+        if (editFormData.individual_reviewer_assignments.length > 0) {
+          // Add individual reviewers to task_peer_reviewers (deduplicate)
+          const reviewerIds = Array.from(new Set(editFormData.individual_reviewer_assignments.map(a => a.reviewer_id)));
+          const reviewers = reviewerIds.map(uid => ({
+            task_id: editingTask.id,
+            user_id: uid,
+          }));
+          
+          const { error: revError } = await supabase
+            .from("task_peer_reviewers" as any)
+            .insert(reviewers);
+          if (revError) throw revError;
+
+          // Store the user-to-reviewer mapping
+          const mappings = editFormData.individual_reviewer_assignments.map(assignment => ({
+            task_id: editingTask.id,
+            user_id: assignment.user_id,
+            reviewer_id: assignment.reviewer_id,
+            assigned_by: user?.id,
+          }));
+
+          const { error: mapError } = await supabase
+            .from("individual_peer_reviewers" as any)
+            .insert(mappings);
+          if (mapError) throw mapError;
+        }
       }
 
       toast({
@@ -1433,6 +1477,30 @@ const Tasks = () => {
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select 
+                      value={formData.category} 
+                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                        <SelectItem value="Hindi">Hindi</SelectItem>
+                        <SelectItem value="English">English</SelectItem>
+                        <SelectItem value="Mathematics">Mathematics</SelectItem>
+                        <SelectItem value="Science">Science</SelectItem>
+                        <SelectItem value="Social Studies">Social Studies</SelectItem>
+                        <SelectItem value="Computer Science">Computer Science</SelectItem>
+                        <SelectItem value="Arts & Crafts">Arts & Crafts</SelectItem>
+                        <SelectItem value="Physical Education">Physical Education</SelectItem>
+                        <SelectItem value="General">General</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="description">Description</Label>
@@ -1833,6 +1901,57 @@ const Tasks = () => {
           </div>
         </div>
 
+        {/* Search and Filter Section */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tasks by title or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="sm:w-[250px]">
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger>
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                    <SelectItem value="Hindi">Hindi</SelectItem>
+                    <SelectItem value="English">English</SelectItem>
+                    <SelectItem value="Mathematics">Mathematics</SelectItem>
+                    <SelectItem value="Science">Science</SelectItem>
+                    <SelectItem value="Social Studies">Social Studies</SelectItem>
+                    <SelectItem value="Computer Science">Computer Science</SelectItem>
+                    <SelectItem value="Arts & Crafts">Arts & Crafts</SelectItem>
+                    <SelectItem value="Physical Education">Physical Education</SelectItem>
+                    <SelectItem value="General">General</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(searchQuery || selectedCategory !== "all") && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedCategory("all");
+                  }}
+                  className="sm:w-auto"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {loading ? (
           <div className="space-y-4">
             {[...Array(4)].map((_, index) => (
@@ -1849,74 +1968,143 @@ const Tasks = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {tasks.map((task) => {
+          <>
+            {(() => {
+              // Filter tasks based on search query and category
+              const filteredTasks = tasks.filter((task) => {
+                // Search filter
+                const matchesSearch = searchQuery.trim() === "" || 
+                  task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  task.description.toLowerCase().includes(searchQuery.toLowerCase());
+                
+                // Category filter
+                const matchesCategory = selectedCategory === "all" || 
+                  task.category === selectedCategory;
+                
+                return matchesSearch && matchesCategory;
+              });
+
+              // Show message if no results after filtering
+              if (filteredTasks.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                      <Search className="h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground text-center font-medium">
+                        No tasks found matching your filters
+                      </p>
+                      <p className="text-sm text-muted-foreground text-center mt-2">
+                        Try adjusting your search or category filter
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedCategory("all");
+                        }}
+                        className="mt-4"
+                      >
+                        Clear Filters
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return (
+                <>
+                  {/* Results count */}
+                  {(searchQuery || selectedCategory !== "all") && (
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-sm text-muted-foreground">
+                        Showing {filteredTasks.length} of {tasks.length} tasks
+                      </p>
+                    </div>
+                  )}
+                  
+                  <Accordion type="multiple" className="space-y-4">
+                    {filteredTasks.map((task) => {
               const taskResponses = responses[task.id] || [];
               const userResponse = taskResponses.find(r => r.user_id === user?.id);
               
               return (
-                <Card key={task.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-xl">{task.title}</CardTitle>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {task.due_date && (
-                            <Badge variant="outline">
-                              Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
-                            </Badge>
+                <AccordionItem key={task.id} value={task.id} className="border rounded-lg bg-card">
+                  <Card className="border-0">
+                    <AccordionTrigger className="hover:no-underline px-6 py-4">
+                      <div className="flex items-start justify-between w-full pr-4">
+                        <div className="flex-1 text-left">
+                          <CardTitle className="text-xl">{task.title}</CardTitle>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {task.category && (
+                              <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
+                                {task.category}
+                              </Badge>
+                            )}
+                            {task.due_date && (
+                              <Badge variant="outline">
+                                Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
+                              </Badge>
+                            )}
+                            {isPeerReviewerOf(task.id) && (
+                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                                 Peer Reviewer
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {format(new Date(task.created_at), "MMM dd, yyyy")}
+                          </span>
+                          {canEditTask && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditDialog(task);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
                           )}
-                          {isPeerReviewerOf(task.id) && (
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                               Peer Reviewer
-                            </Badge>
+                          {canDeleteTask && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this task? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(task.id, task.file_url)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {format(new Date(task.created_at), "MMM dd, yyyy")}
-                        </span>
-                        {canEditTask && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8"
-                            onClick={() => openEditDialog(task)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {canDeleteTask && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete this task? This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(task.id, task.file_url)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <CardContent className="space-y-4 pt-0">
                     <div 
                       className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4"
                       dangerouslySetInnerHTML={{ __html: task.description }}
@@ -2160,25 +2348,50 @@ const Tasks = () => {
                       )}
                     </div>
                   </CardContent>
-                </Card>
+                    </AccordionContent>
+                  </Card>
+                </AccordionItem>
               );
             })}
-          </div>
+          </Accordion>
+                </>
+              );
+            })()}
+          </>
         )}
 
-        {/* Loading more indicator */}
-        {loadingMore && (
-          <div className="space-y-4">
-            {[...Array(2)].map((_, index) => (
-              <TaskSkeleton key={`loading-${index}`} />
-            ))}
+        {/* Load More Button */}
+        {!loading && hasMore && (
+          <div className="flex justify-center py-8">
+            <Button 
+              onClick={() => fetchTasks(false)} 
+              disabled={loadingMore}
+              size="lg"
+              variant="outline"
+              className="min-w-[200px]"
+            >
+              {loadingMore ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                  Loading...
+                </>
+              ) : (
+                <>
+                  Load More Tasks
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
           </div>
         )}
 
         {/* No more tasks indicator */}
-        {!loading && !loadingMore && !hasMore && tasks.length > 0 && (
-          <div className="text-center py-4 text-muted-foreground">
-            <p>No more tasks to load</p>
+        {!loading && !hasMore && tasks.length > 0 && (
+          <div className="text-center py-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted text-muted-foreground">
+              <CheckSquare className="h-4 w-4" />
+              <span className="text-sm font-medium">All tasks loaded</span>
+            </div>
           </div>
         )}
       </div>
@@ -2306,14 +2519,15 @@ const Tasks = () => {
 
       {/* Edit Task Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Task</DialogTitle>
             <DialogDescription>
               Update task details and assignments
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEdit} className="space-y-4">
+          <div className="flex-1 overflow-y-auto pr-2">
+            <form onSubmit={handleEdit} className="space-y-4" id="edit-task-form">
             <div className="space-y-2">
               <Label htmlFor="edit-title">Title</Label>
               <Input
@@ -2323,6 +2537,30 @@ const Tasks = () => {
                 onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category">Category</Label>
+              <Select 
+                value={editFormData.category} 
+                onValueChange={(value) => setEditFormData({ ...editFormData, category: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                  <SelectItem value="Hindi">Hindi</SelectItem>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Mathematics">Mathematics</SelectItem>
+                  <SelectItem value="Science">Science</SelectItem>
+                  <SelectItem value="Social Studies">Social Studies</SelectItem>
+                  <SelectItem value="Computer Science">Computer Science</SelectItem>
+                  <SelectItem value="Arts & Crafts">Arts & Crafts</SelectItem>
+                  <SelectItem value="Physical Education">Physical Education</SelectItem>
+                  <SelectItem value="General">General</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-description">Description</Label>
@@ -2405,7 +2643,182 @@ const Tasks = () => {
               </div>
             )}
 
-            {/* Peer Reviewer Groups (Optional) */}
+            {/* Review Assignment Type Selection */}
+            <div className="space-y-4 bg-orange-50 dark:bg-orange-950/20 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800">
+              <div className="flex items-center gap-2">
+                <UserCheck className="h-5 w-5 text-orange-600" />
+                <Label className="text-base font-semibold text-orange-900 dark:text-orange-100">
+                  Peer Review Assignment Type
+                </Label>
+              </div>
+              <p className="text-sm text-orange-700 dark:text-orange-300 font-medium">
+                Choose how peer reviewers should be assigned for this task
+              </p>
+              
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="edit-review-type-group"
+                    name="edit_review_assignment_type"
+                    value="group"
+                    checked={editFormData.review_assignment_type === "group"}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                    className="text-orange-600"
+                  />
+                  <Label htmlFor="edit-review-type-group" className="text-sm cursor-pointer">
+                    <strong>Group-based:</strong> Use reviewer groups and individual selections
+                  </Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="edit-review-type-individual"
+                    name="edit_review_assignment_type"
+                    value="individual"
+                    checked={editFormData.review_assignment_type === "individual"}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                    className="text-orange-600"
+                  />
+                  <Label htmlFor="edit-review-type-individual" className="text-sm cursor-pointer">
+                    <strong>Individual 1:1:</strong> Manually assign specific reviewer for each user
+                  </Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id="edit-review-type-mixed"
+                    name="edit_review_assignment_type"
+                    value="mixed"
+                    checked={editFormData.review_assignment_type === "mixed"}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, review_assignment_type: e.target.value as any }))}
+                    className="text-orange-600"
+                  />
+                  <Label htmlFor="edit-review-type-mixed" className="text-sm cursor-pointer">
+                    <strong>Mixed:</strong> Use both group-based and individual assignments
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Individual 1:1 Reviewer Assignment - Show when individual or mixed is selected */}
+            {(editFormData.review_assignment_type === "individual" || editFormData.review_assignment_type === "mixed") && (
+              <div className="space-y-4 bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-blue-600" />
+                  <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                    Assign Individual Reviewers (1:1 Mapping)
+                  </Label>
+                </div>
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  👥 For each assigned user, select their specific peer reviewer
+                </p>
+                
+                {editFormData.assign_to === "all" ? (
+                  <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                    {employees.map((emp) => (
+                      <div key={`edit-reviewer-map-${emp.user_id}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{emp.email}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">→</span>
+                          <Select
+                            value={editFormData.individual_reviewer_assignments.find(a => a.user_id === emp.user_id)?.reviewer_id || "no-reviewer"}
+                            onValueChange={(reviewerId) => {
+                              setEditFormData(prev => {
+                                const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== emp.user_id);
+                                if (reviewerId && reviewerId !== "no-reviewer") {
+                                  return {
+                                    ...prev,
+                                    individual_reviewer_assignments: [...existing, { user_id: emp.user_id, reviewer_id: reviewerId }]
+                                  };
+                                }
+                                return { ...prev, individual_reviewer_assignments: existing };
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Select reviewer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                              {employees.filter(e => e.user_id !== emp.user_id).map(reviewer => (
+                                <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                  {reviewer.first_name} {reviewer.last_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : editFormData.assigned_user_ids.length > 0 ? (
+                  <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                    {editFormData.assigned_user_ids.map((userId) => {
+                      const emp = employees.find(e => e.user_id === userId);
+                      if (!emp) return null;
+                      return (
+                        <div key={`edit-reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                            <p className="text-xs text-muted-foreground">{emp.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">→</span>
+                            <Select
+                              value={editFormData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
+                              onValueChange={(reviewerId) => {
+                                setEditFormData(prev => {
+                                  const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
+                                  if (reviewerId && reviewerId !== "no-reviewer") {
+                                    return {
+                                      ...prev,
+                                      individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
+                                    };
+                                  }
+                                  return { ...prev, individual_reviewer_assignments: existing };
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-[200px]">
+                                <SelectValue placeholder="Select reviewer" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                                {employees.filter(e => e.user_id !== userId).map(reviewer => (
+                                  <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                    {reviewer.first_name} {reviewer.last_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Please select employees first
+                  </p>
+                )}
+                
+                {editFormData.individual_reviewer_assignments.length > 0 && (
+                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                    ✅ {editFormData.individual_reviewer_assignments.length} reviewer(s) assigned
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Peer Reviewer Groups (Optional) - Only show for group or mixed */}
+            {(editFormData.review_assignment_type === "group" || editFormData.review_assignment_type === "mixed") && (
+              <>
             <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -2456,12 +2869,12 @@ const Tasks = () => {
               )}
             </div>
 
-            {/* Peer Reviewers (Optional) */}
+            {/* Additional Individual Peer Reviewers (Optional) - Only show for group or mixed */}
             <div className="space-y-2 bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border-2 border-green-200 dark:border-green-800">
               <div className="flex items-center gap-2">
                 <Eye className="h-5 w-5 text-green-600" />
                 <Label className="text-base font-semibold text-green-900 dark:text-green-100">
-                  Individual Peer Reviewers (Optional)
+                  Additional Individual Peer Reviewers (Optional)
                 </Label>
               </div>
               <p className="text-sm text-green-700 dark:text-green-300 font-medium">
@@ -2506,6 +2919,8 @@ const Tasks = () => {
                 </p>
               )}
             </div>
+            </>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="edit-due_date">Due Date (Optional)</Label>
@@ -2549,15 +2964,16 @@ const Tasks = () => {
               )}
             </div>
             
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Updating..." : "Update Task"}
-              </Button>
-            </div>
-          </form>
+            </form>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
+            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-task-form" disabled={submitting}>
+              {submitting ? "Updating..." : "Update Task"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
