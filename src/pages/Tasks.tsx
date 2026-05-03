@@ -224,6 +224,7 @@ const Tasks = () => {
     link: "",
     file: null as File | null,
   });
+  const [responseMode, setResponseMode] = useState<"link" | "file">("link");
 
   const [remarkFormData, setRemarkFormData] = useState({
     remark_text: "",
