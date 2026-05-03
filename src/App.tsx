@@ -29,6 +29,7 @@ import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
 import GoogleDrive from "./pages/GoogleDrive";
 import Tasks from "./pages/Tasks";
 import PeerReviewerGroups from "./pages/PeerReviewerGroups";
+import QuickLinksAdmin from "./pages/QuickLinksAdmin";
 import FaceAttendance from "./pages/FaceAttendance";
 import FaceHub from "./pages/FaceHub";
 import FaceIdManagement from "./pages/FaceIdManagement";
