@@ -16,7 +16,6 @@ import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { AttendanceCheckIn } from "@/components/attendance/AttendanceCheckIn";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
 import { AttendanceApprovalDialog } from "@/components/attendance/AttendanceApprovalDialog";
 import { HolidayManager } from "@/components/attendance/HolidayManager";
@@ -613,18 +612,6 @@ export default function Attendance() {
           <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
           <p className="text-muted-foreground">Track and manage attendance records</p>
         </div>
-
-        {/* Employee Check-in Section */}
-        {role === "employee" && user && (
-          <AttendanceCheckIn
-            userId={user.id}
-            todayCheckedIn={todayCheckedIn}
-            onCheckInComplete={() => {
-              setTodayCheckedIn(true);
-              fetchAttendance();
-            }}
-          />
-        )}
 
         {/* Attendance Stats - Show for employee viewing their own stats */}
         {user && role === "employee" && (

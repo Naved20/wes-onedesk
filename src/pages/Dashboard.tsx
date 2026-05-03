@@ -276,14 +276,6 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground">Quick check-in with camera</p>
                   </button>
                   <button
-                    onClick={() => navigate("/attendance")}
-                    className="p-4 rounded-lg border bg-card hover:bg-muted transition-colors text-left"
-                  >
-                    <Clock className="h-8 w-8 text-primary mb-2" />
-                    <h3 className="font-medium">Mark Attendance</h3>
-                    <p className="text-sm text-muted-foreground">Check in for today</p>
-                  </button>
-                  <button
                     onClick={() => navigate("/leaves")}
                     className="p-4 rounded-lg border bg-card hover:bg-muted transition-colors text-left"
                   >
