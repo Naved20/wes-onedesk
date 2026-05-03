@@ -29,6 +29,7 @@ import EmployeeShiftAssignment from "./pages/EmployeeShiftAssignment";
 import GoogleDrive from "./pages/GoogleDrive";
 import Tasks from "./pages/Tasks";
 import PeerReviewerGroups from "./pages/PeerReviewerGroups";
+import QuickLinksAdmin from "./pages/QuickLinksAdmin";
 import FaceAttendance from "./pages/FaceAttendance";
 import FaceHub from "./pages/FaceHub";
 import FaceIdManagement from "./pages/FaceIdManagement";
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="/google-drive" element={<ProtectedRoute><GoogleDrive /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
             <Route path="/peer-reviewer-groups" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><PeerReviewerGroups /></ProtectedRoute>} />
+            <Route path="/quick-links" element={<ProtectedRoute allowedRoles={["admin"]}><QuickLinksAdmin /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/settings/account" element={<ProtectedRoute><AccountInfo /></ProtectedRoute>} />
             <Route path="/settings/password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />

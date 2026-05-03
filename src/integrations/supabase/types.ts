@@ -1053,6 +1053,45 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       salaries: {
         Row: {
           absent_days: number | null
@@ -1518,6 +1557,10 @@ export type Database = {
       }
       task_responses: {
         Row: {
+          additional_file_name: string | null
+          additional_file_url: string | null
+          article_file_name: string | null
+          article_file_url: string | null
           created_at: string | null
           file_name: string | null
           file_url: string | null
@@ -1529,6 +1572,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          additional_file_name?: string | null
+          additional_file_url?: string | null
+          article_file_name?: string | null
+          article_file_url?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -1540,6 +1587,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          additional_file_name?: string | null
+          additional_file_url?: string | null
+          article_file_name?: string | null
+          article_file_url?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
