@@ -1518,6 +1518,10 @@ export type Database = {
       }
       task_responses: {
         Row: {
+          additional_file_name: string | null
+          additional_file_url: string | null
+          article_file_name: string | null
+          article_file_url: string | null
           created_at: string | null
           file_name: string | null
           file_url: string | null
@@ -1529,6 +1533,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          additional_file_name?: string | null
+          additional_file_url?: string | null
+          article_file_name?: string | null
+          article_file_url?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -1540,6 +1548,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          additional_file_name?: string | null
+          additional_file_url?: string | null
+          article_file_name?: string | null
+          article_file_url?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
