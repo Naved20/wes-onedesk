@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2, Scan } from "lucide-react";
 import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
+import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 
 interface HistoryRow {
@@ -29,6 +31,8 @@ export default function FaceHub() {
   const [lastResult, setLastResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [lastDistance, setLastDistance] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [checkInData, setCheckInData] = useState<{ name: string; time: string } | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem("faceAttendanceAuth") !== "true") {
@@ -50,13 +54,32 @@ export default function FaceHub() {
   const initCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "user" },
+        video: { width: 1280, height: 1280, facingMode: "user" },
       });
       streamRef.current = stream;
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (e) {
       toast({ title: "Camera error", description: "Cannot access camera", variant: "destructive" });
     }
+  };
+
+  const playSuccessSound = () => {
+    // Create a simple success beep using Web Audio API
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = 800;
+    oscillator.type = "sine";
+
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
   };
 
   const fetchHistory = async () => {
@@ -106,6 +129,23 @@ export default function FaceHub() {
 
       setLastDistance(typeof data.distance === "number" ? data.distance : null);
       setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
+      
+      // If successful, play sound and show popup
+      if (data.ok) {
+        playSuccessSound();
+        setCheckInData({
+          name: data.employee_name || "Employee",
+          time: format(new Date(), "hh:mm a")
+        });
+        setShowSuccessDialog(true);
+        
+        // Auto-close after 3 seconds
+        setTimeout(() => {
+          setShowSuccessDialog(false);
+          setCheckInData(null);
+        }, 3000);
+      }
+      
       fetchHistory();
     } catch (e: any) {
       setLastResult({ ok: false, msg: e.message ?? "Scan failed" });
@@ -122,7 +162,7 @@ export default function FaceHub() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <img src={wesLogo} alt="WES" className="h-12 w-12 rounded-full object-cover" />
@@ -137,7 +177,7 @@ export default function FaceHub() {
         </div>
 
         <Tabs defaultValue="checkin">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="checkin">
               <Camera className="h-4 w-4 mr-2" /> Check-in
             </TabsTrigger>
@@ -155,8 +195,16 @@ export default function FaceHub() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative w-full max-w-2xl mx-auto rounded-lg overflow-hidden bg-black aspect-video">
+                <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[5/8] border-4 border-primary/30 shadow-2xl">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                  {scanning && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                      <div className="text-center space-y-4">
+                        <Scan className="h-20 w-20 mx-auto text-white animate-pulse drop-shadow-lg" />
+                        <p className="text-white text-xl font-semibold drop-shadow-lg">Scanning face...</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {lastResult && (
                   <div
@@ -171,14 +219,14 @@ export default function FaceHub() {
                     </span>
                   </div>
                 )}
-                <Button onClick={handleScan} disabled={!modelsReady || scanning} size="lg" className="w-full">
+                <Button onClick={handleScan} disabled={!modelsReady || scanning} size="lg" className="w-full h-14 text-lg">
                   {scanning ? (
                     <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Scanning...
+                      <Loader2 className="h-6 w-6 mr-2 animate-spin" /> Scanning...
                     </>
                   ) : (
                     <>
-                      <Camera className="h-5 w-5 mr-2" /> Scan Face & Check-in
+                      <Camera className="h-6 w-6 mr-2" /> Scan Face & Check-in
                     </>
                   )}
                 </Button>
@@ -217,6 +265,31 @@ export default function FaceHub() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-green-100 p-3">
+              <CheckCircle2 className="h-12 w-12 text-green-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-green-600">Check-In Successful!</h3>
+              {checkInData && (
+                <>
+                  <p className="text-lg font-semibold">{checkInData.name}</p>
+                  <p className="text-muted-foreground">
+                    Checked in at <span className="font-semibold">{checkInData.time}</span>
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="success-progress-bar h-full bg-green-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
