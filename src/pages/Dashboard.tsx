@@ -251,6 +251,8 @@ export default function Dashboard() {
           </div>
         )}
 
+        <QuickLinks />
+
         {/* Quick Actions */}
         <Card>
           <CardHeader>
