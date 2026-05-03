@@ -224,6 +224,7 @@ const Tasks = () => {
     link: "",
     file: null as File | null,
   });
+  const [responseMode, setResponseMode] = useState<"link" | "file">("link");
 
   const [remarkFormData, setRemarkFormData] = useState({
     remark_text: "",
@@ -2395,23 +2396,34 @@ const Tasks = () => {
                       {role === "employee" && (
                         <>
                           {!userResponse ? (
-                            <div className="text-center py-6">
+                            <div className="text-center py-6 flex flex-col sm:flex-row gap-2 justify-center">
                               <Button
                                 onClick={() => {
-                                  // Double check user hasn't already responded
                                   if (userResponse) {
-                                    toast({
-                                      title: "Already Submitted",
-                                      description: "You have already submitted a response to this task",
-                                    });
+                                    toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
                                     return;
                                   }
                                   setSelectedTask(task);
+                                  setResponseMode("link");
+                                  setResponseDialogOpen(true);
+                                }}
+                              >
+                                🔗 Link Upload
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  if (userResponse) {
+                                    toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
+                                    return;
+                                  }
+                                  setSelectedTask(task);
+                                  setResponseMode("file");
                                   setResponseDialogOpen(true);
                                 }}
                               >
                                 <Send className="h-4 w-4 mr-2" />
-                                Submit Response
+                                Article / Vocabulary / Notes Upload
                               </Button>
                             </div>
                           ) : (
@@ -2539,55 +2551,66 @@ const Tasks = () => {
       <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Submit Response</DialogTitle>
+            <DialogTitle>{responseMode === "link" ? "Submit Link" : "Upload Article / Vocabulary / Notes"}</DialogTitle>
             <DialogDescription>
-              Submit your response to this task with optional file attachment
+              {responseMode === "link"
+                ? "Paste a link (Google Drive, Docs, GitHub, etc.) for your task submission"
+                : "Upload an article, vocabulary list, or handwritten notes file"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleResponseSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="response_text">Your Response</Label>
+              <Label htmlFor="response_text">Your Response / Notes</Label>
               <Textarea
                 id="response_text"
-                placeholder="Enter your response"
+                placeholder="Enter a short description"
                 value={responseFormData.response_text}
                 onChange={(e) => setResponseFormData({ ...responseFormData, response_text: e.target.value })}
-                rows={5}
+                rows={4}
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="response_link">Link (Optional)</Label>
-              <Input
-                id="response_link"
-                type="url"
-                placeholder="https://example.com"
-                value={responseFormData.link}
-                onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Add a link related to your response (e.g., Google Drive, GitHub, etc.)
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="response_file">Attachment (Optional)</Label>
-              <Input
-                id="response_file"
-                type="file"
-                onChange={(e) => setResponseFormData({ ...responseFormData, file: e.target.files?.[0] || null })}
-              />
-              {responseFormData.file && (
-                <p className="text-sm text-muted-foreground">
-                  Selected: {responseFormData.file.name}
+            {responseMode === "link" ? (
+              <div className="space-y-2">
+                <Label htmlFor="response_link">Link *</Label>
+                <Input
+                  id="response_link"
+                  type="url"
+                  placeholder="https://example.com"
+                  value={responseFormData.link}
+                  onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Google Drive, Docs, GitHub, YouTube etc.
                 </p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="response_file">Attachment *</Label>
+                <Input
+                  id="response_file"
+                  type="file"
+                  accept="image/*,application/pdf,.doc,.docx,.txt"
+                  onChange={(e) => setResponseFormData({ ...responseFormData, file: e.target.files?.[0] || null })}
+                  required
+                />
+                {responseFormData.file && (
+                  <p className="text-sm text-muted-foreground">
+                    Selected: {responseFormData.file.name}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Upload article, vocabulary, or handwritten notes (PDF, image, doc)
+                </p>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? "Submitting..." : "Submit Response"}
+                {submitting ? "Submitting..." : "Submit"}
               </Button>
             </div>
           </form>
