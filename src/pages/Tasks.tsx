@@ -2396,23 +2396,34 @@ const Tasks = () => {
                       {role === "employee" && (
                         <>
                           {!userResponse ? (
-                            <div className="text-center py-6">
+                            <div className="text-center py-6 flex flex-col sm:flex-row gap-2 justify-center">
                               <Button
                                 onClick={() => {
-                                  // Double check user hasn't already responded
                                   if (userResponse) {
-                                    toast({
-                                      title: "Already Submitted",
-                                      description: "You have already submitted a response to this task",
-                                    });
+                                    toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
                                     return;
                                   }
                                   setSelectedTask(task);
+                                  setResponseMode("link");
+                                  setResponseDialogOpen(true);
+                                }}
+                              >
+                                🔗 Link Upload
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => {
+                                  if (userResponse) {
+                                    toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
+                                    return;
+                                  }
+                                  setSelectedTask(task);
+                                  setResponseMode("file");
                                   setResponseDialogOpen(true);
                                 }}
                               >
                                 <Send className="h-4 w-4 mr-2" />
-                                Submit Response
+                                Article / Vocabulary / Notes Upload
                               </Button>
                             </div>
                           ) : (
