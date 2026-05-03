@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalaryStatusWidget } from "@/components/dashboard/SalaryStatusWidget";
+import { QuickLinks } from "@/components/dashboard/QuickLinks";
 import { Users, Clock, Calendar, DollarSign, Bell, FileText, Building, Camera } from "lucide-react";
 
 interface DashboardStats {
