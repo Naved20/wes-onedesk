@@ -222,6 +222,8 @@ const Tasks = () => {
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
     link: "",
+    article_file: null as File | null,
+    additional_file: null as File | null,
     file: null as File | null,
   });
   const [responseMode, setResponseMode] = useState<"link" | "file">("link");
@@ -866,8 +868,12 @@ const Tasks = () => {
     try {
       let fileUrl = null;
       let fileName = null;
+      let articleFileUrl = null;
+      let articleFileName = null;
+      let additionalFileUrl = null;
+      let additionalFileName = null;
 
-      // Upload to Supabase Storage if file exists
+      // Upload main file to Supabase Storage if exists
       if (responseFormData.file) {
         const fileExt = responseFormData.file.name.split('.').pop();
         const filePath = `${crypto.randomUUID()}.${fileExt}`;
@@ -886,6 +892,44 @@ const Tasks = () => {
         fileName = responseFormData.file.name;
       }
 
+      // Upload article file to Supabase Storage if exists
+      if (responseFormData.article_file) {
+        const fileExt = responseFormData.article_file.name.split('.').pop();
+        const filePath = `articles/${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('task-responses')
+          .upload(filePath, responseFormData.article_file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('task-responses')
+          .getPublicUrl(filePath);
+
+        articleFileUrl = publicUrl;
+        articleFileName = responseFormData.article_file.name;
+      }
+
+      // Upload additional file to Supabase Storage if exists
+      if (responseFormData.additional_file) {
+        const fileExt = responseFormData.additional_file.name.split('.').pop();
+        const filePath = `additional/${crypto.randomUUID()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('task-responses')
+          .upload(filePath, responseFormData.additional_file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('task-responses')
+          .getPublicUrl(filePath);
+
+        additionalFileUrl = publicUrl;
+        additionalFileName = responseFormData.additional_file.name;
+      }
+
       const { error } = await supabase
         .from("task_responses" as any)
         .insert({
@@ -895,6 +939,10 @@ const Tasks = () => {
           link: responseFormData.link.trim() || null,
           file_url: fileUrl,
           file_name: fileName,
+          article_file_url: articleFileUrl,
+          article_file_name: articleFileName,
+          additional_file_url: additionalFileUrl,
+          additional_file_name: additionalFileName,
         });
 
       if (error) throw error;
@@ -904,7 +952,7 @@ const Tasks = () => {
         description: "Response submitted successfully",
       });
 
-      setResponseFormData({ response_text: "", link: "", file: null });
+      setResponseFormData({ response_text: "", link: "", file: null, article_file: null, additional_file: null });
       setResponseDialogOpen(false);
       setSelectedTask(null);
       
@@ -2396,34 +2444,20 @@ const Tasks = () => {
                       {role === "employee" && (
                         <>
                           {!userResponse ? (
-                            <div className="text-center py-6 flex flex-col sm:flex-row gap-2 justify-center">
+                            <div className="text-center py-6">
                               <Button
+                                size="lg"
                                 onClick={() => {
                                   if (userResponse) {
                                     toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
                                     return;
                                   }
                                   setSelectedTask(task);
-                                  setResponseMode("link");
                                   setResponseDialogOpen(true);
                                 }}
                               >
-                                🔗 Link Upload
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                onClick={() => {
-                                  if (userResponse) {
-                                    toast({ title: "Already Submitted", description: "You have already submitted a response to this task" });
-                                    return;
-                                  }
-                                  setSelectedTask(task);
-                                  setResponseMode("file");
-                                  setResponseDialogOpen(true);
-                                }}
-                              >
-                                <Send className="h-4 w-4 mr-2" />
-                                Article / Vocabulary / Notes Upload
+                                <Send className="h-5 w-5 mr-2" />
+                                Submit Response
                               </Button>
                             </div>
                           ) : (
@@ -2549,68 +2583,116 @@ const Tasks = () => {
 
       {/* Response Dialog */}
       <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{responseMode === "link" ? "Submit Link" : "Upload Article / Vocabulary / Notes"}</DialogTitle>
+            <DialogTitle>Submit Task Response</DialogTitle>
             <DialogDescription>
-              {responseMode === "link"
-                ? "Paste a link (Google Drive, Docs, GitHub, etc.) for your task submission"
-                : "Upload an article, vocabulary list, or handwritten notes file"}
+              Submit your task with a link and/or upload article/vocabulary/handwritten notes
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleResponseSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="response_text">Your Response / Notes</Label>
+              <Label htmlFor="response_text">Your Response / Notes *</Label>
               <Textarea
                 id="response_text"
-                placeholder="Enter a short description"
+                placeholder="Enter a short description of your submission"
                 value={responseFormData.response_text}
                 onChange={(e) => setResponseFormData({ ...responseFormData, response_text: e.target.value })}
                 rows={4}
                 required
               />
             </div>
-            {responseMode === "link" ? (
-              <div className="space-y-2">
-                <Label htmlFor="response_link">Link *</Label>
-                <Input
-                  id="response_link"
-                  type="url"
-                  placeholder="https://example.com"
-                  value={responseFormData.link}
-                  onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Google Drive, Docs, GitHub, YouTube etc.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="response_file">Attachment *</Label>
-                <Input
-                  id="response_file"
-                  type="file"
-                  accept="image/*,application/pdf,.doc,.docx,.txt"
-                  onChange={(e) => setResponseFormData({ ...responseFormData, file: e.target.files?.[0] || null })}
-                  required
-                />
-                {responseFormData.file && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {responseFormData.file.name}
+
+            {/* Link Upload Field */}
+            <div className="space-y-2">
+              <Label htmlFor="response_link" className="flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Link Upload (Optional)
+              </Label>
+              <Input
+                id="response_link"
+                type="url"
+                placeholder="https://example.com (Google Drive, Docs, GitHub, YouTube etc.)"
+                value={responseFormData.link}
+                onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste a link to your Google Drive, Docs, GitHub, YouTube, or any other online resource
+              </p>
+            </div>
+
+            {/* Article / Vocabulary / Handwritten Notes Upload Field */}
+            <div className="space-y-2">
+              <Label htmlFor="article_file" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Article / Vocabulary / Handwritten Notes (Optional)
+              </Label>
+              <Input
+                id="article_file"
+                type="file"
+                accept="image/*,application/pdf,.doc,.docx,.txt"
+                onChange={(e) => setResponseFormData({ ...responseFormData, article_file: e.target.files?.[0] || null })}
+              />
+              {responseFormData.article_file && (
+                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                  <File className="h-4 w-4 text-primary" />
+                  <p className="text-sm text-muted-foreground flex-1">
+                    {responseFormData.article_file.name}
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Upload article, vocabulary, or handwritten notes (PDF, image, doc)
-                </p>
-              </div>
-            )}
-            <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setResponseFormData({ ...responseFormData, article_file: null })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Upload article, vocabulary list, or handwritten notes (PDF, image, doc, txt)
+              </p>
+            </div>
+
+            {/* Additional File Upload Field */}
+            <div className="space-y-2">
+              <Label htmlFor="additional_file" className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                Additional File Upload (Optional)
+              </Label>
+              <Input
+                id="additional_file"
+                type="file"
+                accept="image/*,application/pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx"
+                onChange={(e) => setResponseFormData({ ...responseFormData, additional_file: e.target.files?.[0] || null })}
+              />
+              {responseFormData.additional_file && (
+                <div className="flex items-center gap-2 p-2 bg-muted rounded">
+                  <File className="h-4 w-4 text-primary" />
+                  <p className="text-sm text-muted-foreground flex-1">
+                    {responseFormData.additional_file.name}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setResponseFormData({ ...responseFormData, additional_file: null })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Upload any additional supporting files (PDF, image, doc, ppt, xls, txt)
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? "Submitting..." : "Submit"}
+                {submitting ? "Submitting..." : "Submit Response"}
               </Button>
             </div>
           </form>
