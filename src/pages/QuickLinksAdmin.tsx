@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
+import { getGroupedRoutes } from "@/lib/routeUtils";
 
 interface QuickLink {
   id: string;
@@ -29,6 +31,9 @@ export default function QuickLinksAdmin() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<QuickLink | null>(null);
   const [form, setForm] = useState({ label: "", url: "", description: "", sort_order: 0, is_active: true });
+
+  // Get available routes dynamically
+  const groupedRoutes = getGroupedRoutes();
 
   const load = async () => {
     setLoading(true);
@@ -144,9 +149,39 @@ export default function QuickLinksAdmin() {
                 <Label>Label *</Label>
                 <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
               </div>
-              <div>
+              <div className="space-y-2">
                 <Label>URL * (https://... or /path)</Label>
-                <Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                <div className="flex gap-2">
+                  <Select
+                    value={form.url.startsWith('/') ? form.url : ''}
+                    onValueChange={(value) => setForm({ ...form, url: value })}
+                  >
+                    <SelectTrigger className="w-[240px]">
+                      <SelectValue placeholder="Select path..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(groupedRoutes).map(([category, routes]) => (
+                        <SelectGroup key={category}>
+                          <SelectLabel>{category}</SelectLabel>
+                          {routes.map((route) => (
+                            <SelectItem key={route.value} value={route.value}>
+                              {route.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input 
+                    className="flex-1"
+                    placeholder="Or enter custom URL/path"
+                    value={form.url} 
+                    onChange={(e) => setForm({ ...form, url: e.target.value })} 
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select a path from dropdown or enter a custom URL/path
+                </p>
               </div>
               <div>
                 <Label>Description</Label>
