@@ -571,35 +571,18 @@ export default function Attendance() {
       record.date === targetDateStr
     );
     
-    // Count present based on calculated_status (not approval status)
-    const presentCount = todayRecords.filter(record => {
-      const calcStatus = record.calculated_status?.toLowerCase();
-      return calcStatus === "present" || calcStatus === "late";
-    }).length;
-    
-    // Count half day based on calculated_status
-    const halfDayCount = todayRecords.filter(record => {
-      const calcStatus = record.calculated_status?.toLowerCase();
-      return calcStatus === "half_day" || record.is_half_day;
-    }).length;
-    
-    // Count paid leave based on calculated_status
-    const paidLeaveCount = todayRecords.filter(record => {
-      const calcStatus = record.calculated_status?.toLowerCase();
-      return calcStatus === "paid_leave";
-    }).length;
-    
-    // Count leave based on calculated_status
-    const leaveCount = todayRecords.filter(record => {
-      const calcStatus = record.calculated_status?.toLowerCase();
-      return calcStatus === "leave";
-    }).length;
-    
-    // Count absent based on calculated_status
-    const absentCount = isHoliday ? 0 : todayRecords.filter(record => {
-      const calcStatus = record.calculated_status?.toLowerCase();
-      return calcStatus === "absent";
-    }).length;
+    // Use the SAME logic as the row badges (getAttendanceDisplayStatus) so
+    // counters always match what's visible in the table.
+    const displayStatuses = todayRecords.map(record =>
+      getAttendanceDisplayStatus(record.status, record.calculated_status, record.is_late)
+    );
+
+    const presentCount = displayStatuses.filter(s => s === "present").length;
+    const halfDayCount = displayStatuses.filter(s => s === "half_day").length
+      + todayRecords.filter(r => r.is_half_day && getAttendanceDisplayStatus(r.status, r.calculated_status, r.is_late) !== "half_day").length;
+    const paidLeaveCount = displayStatuses.filter(s => s === "paid_leave").length;
+    const leaveCount = displayStatuses.filter(s => s === "leave").length;
+    const absentCount = isHoliday ? 0 : displayStatuses.filter(s => s === "absent").length;
     
     return {
       total: totalEmployees,
