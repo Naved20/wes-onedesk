@@ -65,6 +65,7 @@ const App = () => (
             <Route path="/google-drive" element={<ProtectedRoute><GoogleDrive /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
             <Route path="/peer-reviewer-groups" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><PeerReviewerGroups /></ProtectedRoute>} />
+            <Route path="/quick-links" element={<ProtectedRoute allowedRoles={["admin"]}><QuickLinksAdmin /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/settings/account" element={<ProtectedRoute><AccountInfo /></ProtectedRoute>} />
             <Route path="/settings/password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
