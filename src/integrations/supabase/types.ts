@@ -698,6 +698,7 @@ export type Database = {
           date: string
           description: string | null
           id: string
+          institution_name: string | null
           is_national: boolean | null
           name: string
         }
@@ -706,6 +707,7 @@ export type Database = {
           date: string
           description?: string | null
           id?: string
+          institution_name?: string | null
           is_national?: boolean | null
           name: string
         }
@@ -714,10 +716,55 @@ export type Database = {
           date?: string
           description?: string | null
           id?: string
+          institution_name?: string | null
           is_national?: boolean | null
           name?: string
         }
         Relationships: []
+      }
+      individual_peer_reviewers: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          reviewer_id: string
+          task_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          reviewer_id: string
+          task_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          reviewer_id?: string
+          task_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "individual_peer_reviewers_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       leave_balances: {
         Row: {
@@ -1317,6 +1364,70 @@ export type Database = {
           },
         ]
       }
+      task_earnings: {
+        Row: {
+          amount: number
+          created_at: string | null
+          earned_at: string | null
+          id: string
+          remark_id: string | null
+          remarked_by: string | null
+          response_id: string
+          status: string | null
+          task_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          earned_at?: string | null
+          id?: string
+          remark_id?: string | null
+          remarked_by?: string | null
+          response_id: string
+          status?: string | null
+          task_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          earned_at?: string | null
+          id?: string
+          remark_id?: string | null
+          remarked_by?: string | null
+          response_id?: string
+          status?: string | null
+          task_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_earnings_remark_id_fkey"
+            columns: ["remark_id"]
+            isOneToOne: false
+            referencedRelation: "task_remarks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_earnings_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "task_responses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_earnings_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_peer_reviewer_groups: {
         Row: {
           created_at: string
@@ -1449,73 +1560,9 @@ export type Database = {
           },
         ]
       }
-      individual_peer_reviewers: {
-        Row: {
-          id: string
-          task_id: string
-          user_id: string
-          reviewer_id: string
-          assigned_by: string | null
-          assigned_at: string
-          notes: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          task_id: string
-          user_id: string
-          reviewer_id: string
-          assigned_by?: string | null
-          assigned_at?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          task_id?: string
-          user_id?: string
-          reviewer_id?: string
-          assigned_by?: string | null
-          assigned_at?: string
-          notes?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "individual_peer_reviewers_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "individual_peer_reviewers_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "employee_profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "individual_peer_reviewers_reviewer_id_fkey"
-            columns: ["reviewer_id"]
-            isOneToOne: false
-            referencedRelation: "employee_profiles"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "individual_peer_reviewers_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "employee_profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
       tasks: {
         Row: {
+          category: string | null
           created_at: string | null
           created_by: string
           description: string
@@ -1526,10 +1573,12 @@ export type Database = {
           id: string
           is_active: boolean | null
           review_assignment_type: string | null
+          reward_amount: number | null
           title: string
           updated_at: string | null
         }
         Insert: {
+          category?: string | null
           created_at?: string | null
           created_by: string
           description: string
@@ -1540,10 +1589,12 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           review_assignment_type?: string | null
+          reward_amount?: number | null
           title: string
           updated_at?: string | null
         }
         Update: {
+          category?: string | null
           created_at?: string | null
           created_by?: string
           description?: string
@@ -1554,6 +1605,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           review_assignment_type?: string | null
+          reward_amount?: number | null
           title?: string
           updated_at?: string | null
         }
@@ -1615,6 +1667,14 @@ export type Database = {
       }
       calculate_working_days: {
         Args: { p_end_date: string; p_start_date: string }
+        Returns: number
+      }
+      calculate_working_days_for_institution: {
+        Args: {
+          p_end_date: string
+          p_institution_name?: string
+          p_start_date: string
+        }
         Returns: number
       }
       check_leave_eligibility: {
