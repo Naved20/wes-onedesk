@@ -2731,9 +2731,14 @@ const Tasks = () => {
               <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Submitting..." : "Submit Response"}
-              </Button>
+              {(() => {
+                const isEditingResponse = !!(selectedTask && (responses[selectedTask.id] || []).some(r => r.user_id === user?.id));
+                return (
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? (isEditingResponse ? "Updating..." : "Submitting...") : (isEditingResponse ? "Update Response" : "Submit Response")}
+                  </Button>
+                );
+              })()}
             </div>
           </form>
         </DialogContent>
