@@ -930,26 +930,40 @@ const Tasks = () => {
         additionalFileName = responseFormData.additional_file.name;
       }
 
-      const { error } = await supabase
-        .from("task_responses" as any)
-        .insert({
-          task_id: selectedTask.id,
-          user_id: user?.id,
-          response_text: responseFormData.response_text,
-          link: responseFormData.link.trim() || null,
-          file_url: fileUrl,
-          file_name: fileName,
-          article_file_url: articleFileUrl,
-          article_file_name: articleFileName,
-          additional_file_url: additionalFileUrl,
-          additional_file_name: additionalFileName,
-        });
+      // Find existing response for this user/task to decide insert vs update
+      const existing = (responses[selectedTask.id] || []).find(r => r.user_id === user?.id);
 
-      if (error) throw error;
+      // Build payload — when editing, only overwrite files if a new one was chosen,
+      // otherwise keep the previously uploaded URLs/names.
+      const payload: any = {
+        task_id: selectedTask.id,
+        user_id: user?.id,
+        response_text: responseFormData.response_text,
+        link: responseFormData.link.trim() || null,
+        file_url: responseFormData.file ? fileUrl : (existing?.file_url ?? fileUrl),
+        file_name: responseFormData.file ? fileName : (existing?.file_name ?? fileName),
+        article_file_url: responseFormData.article_file ? articleFileUrl : ((existing as any)?.article_file_url ?? articleFileUrl),
+        article_file_name: responseFormData.article_file ? articleFileName : ((existing as any)?.article_file_name ?? articleFileName),
+        additional_file_url: responseFormData.additional_file ? additionalFileUrl : ((existing as any)?.additional_file_url ?? additionalFileUrl),
+        additional_file_name: responseFormData.additional_file ? additionalFileName : ((existing as any)?.additional_file_name ?? additionalFileName),
+      };
+
+      if (existing) {
+        const { error } = await (supabase as any)
+          .from("task_responses")
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("task_responses" as any)
+          .insert(payload);
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
-        description: "Response submitted successfully",
+        description: existing ? "Response updated successfully" : "Response submitted successfully",
       });
 
       setResponseFormData({ response_text: "", link: "", file: null, article_file: null, additional_file: null });
@@ -2462,10 +2476,29 @@ const Tasks = () => {
                             </div>
                           ) : (
                             <div className="space-y-4">
-                              <h3 className="font-semibold flex items-center gap-2">
-                                <MessageSquare className="h-4 w-4" />
-                                Your Response
-                              </h3>
+                              <div className="flex items-center justify-between">
+                                <h3 className="font-semibold flex items-center gap-2">
+                                  <MessageSquare className="h-4 w-4" />
+                                  Your Response
+                                </h3>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedTask(task);
+                                    setResponseFormData({
+                                      response_text: userResponse.response_text || "",
+                                      link: userResponse.link || "",
+                                      file: null,
+                                      article_file: null,
+                                      additional_file: null,
+                                    });
+                                    setResponseDialogOpen(true);
+                                  }}
+                                >
+                                  Edit Response
+                                </Button>
+                              </div>
                               <Card className="border-primary">
                                 <CardContent className="pt-4 space-y-3">
                                   <div>
@@ -2584,12 +2617,19 @@ const Tasks = () => {
       {/* Response Dialog */}
       <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          {(() => {
+            const isEditingResponse = !!(selectedTask && (responses[selectedTask.id] || []).some(r => r.user_id === user?.id));
+            return (
           <DialogHeader>
-            <DialogTitle>Submit Task Response</DialogTitle>
+            <DialogTitle>{isEditingResponse ? "Edit Task Response" : "Submit Task Response"}</DialogTitle>
             <DialogDescription>
-              Submit your task with a link and/or upload article/vocabulary/handwritten notes
+              {isEditingResponse
+                ? "Update your response. Existing files are kept unless you upload new ones."
+                : "Submit your task with a link and/or upload article/vocabulary/handwritten notes"}
             </DialogDescription>
           </DialogHeader>
+            );
+          })()}
           <form onSubmit={handleResponseSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="response_text">Your Response / Notes *</Label>
@@ -2691,9 +2731,14 @@ const Tasks = () => {
               <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Submitting..." : "Submit Response"}
-              </Button>
+              {(() => {
+                const isEditingResponse = !!(selectedTask && (responses[selectedTask.id] || []).some(r => r.user_id === user?.id));
+                return (
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? (isEditingResponse ? "Updating..." : "Submitting...") : (isEditingResponse ? "Update Response" : "Submit Response")}
+                  </Button>
+                );
+              })()}
             </div>
           </form>
         </DialogContent>
