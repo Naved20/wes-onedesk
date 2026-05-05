@@ -2476,10 +2476,29 @@ const Tasks = () => {
                             </div>
                           ) : (
                             <div className="space-y-4">
-                              <h3 className="font-semibold flex items-center gap-2">
-                                <MessageSquare className="h-4 w-4" />
-                                Your Response
-                              </h3>
+                              <div className="flex items-center justify-between">
+                                <h3 className="font-semibold flex items-center gap-2">
+                                  <MessageSquare className="h-4 w-4" />
+                                  Your Response
+                                </h3>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedTask(task);
+                                    setResponseFormData({
+                                      response_text: userResponse.response_text || "",
+                                      link: userResponse.link || "",
+                                      file: null,
+                                      article_file: null,
+                                      additional_file: null,
+                                    });
+                                    setResponseDialogOpen(true);
+                                  }}
+                                >
+                                  Edit Response
+                                </Button>
+                              </div>
                               <Card className="border-primary">
                                 <CardContent className="pt-4 space-y-3">
                                   <div>
