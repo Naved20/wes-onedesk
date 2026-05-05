@@ -930,26 +930,40 @@ const Tasks = () => {
         additionalFileName = responseFormData.additional_file.name;
       }
 
-      const { error } = await supabase
-        .from("task_responses" as any)
-        .insert({
-          task_id: selectedTask.id,
-          user_id: user?.id,
-          response_text: responseFormData.response_text,
-          link: responseFormData.link.trim() || null,
-          file_url: fileUrl,
-          file_name: fileName,
-          article_file_url: articleFileUrl,
-          article_file_name: articleFileName,
-          additional_file_url: additionalFileUrl,
-          additional_file_name: additionalFileName,
-        });
+      // Find existing response for this user/task to decide insert vs update
+      const existing = (responses[selectedTask.id] || []).find(r => r.user_id === user?.id);
 
-      if (error) throw error;
+      // Build payload — when editing, only overwrite files if a new one was chosen,
+      // otherwise keep the previously uploaded URLs/names.
+      const payload: any = {
+        task_id: selectedTask.id,
+        user_id: user?.id,
+        response_text: responseFormData.response_text,
+        link: responseFormData.link.trim() || null,
+        file_url: responseFormData.file ? fileUrl : (existing?.file_url ?? fileUrl),
+        file_name: responseFormData.file ? fileName : (existing?.file_name ?? fileName),
+        article_file_url: responseFormData.article_file ? articleFileUrl : ((existing as any)?.article_file_url ?? articleFileUrl),
+        article_file_name: responseFormData.article_file ? articleFileName : ((existing as any)?.article_file_name ?? articleFileName),
+        additional_file_url: responseFormData.additional_file ? additionalFileUrl : ((existing as any)?.additional_file_url ?? additionalFileUrl),
+        additional_file_name: responseFormData.additional_file ? additionalFileName : ((existing as any)?.additional_file_name ?? additionalFileName),
+      };
+
+      if (existing) {
+        const { error } = await (supabase as any)
+          .from("task_responses")
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("task_responses" as any)
+          .insert(payload);
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
-        description: "Response submitted successfully",
+        description: existing ? "Response updated successfully" : "Response submitted successfully",
       });
 
       setResponseFormData({ response_text: "", link: "", file: null, article_file: null, additional_file: null });
