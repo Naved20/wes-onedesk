@@ -2617,12 +2617,19 @@ const Tasks = () => {
       {/* Response Dialog */}
       <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          {(() => {
+            const isEditingResponse = !!(selectedTask && (responses[selectedTask.id] || []).some(r => r.user_id === user?.id));
+            return (
           <DialogHeader>
-            <DialogTitle>Submit Task Response</DialogTitle>
+            <DialogTitle>{isEditingResponse ? "Edit Task Response" : "Submit Task Response"}</DialogTitle>
             <DialogDescription>
-              Submit your task with a link and/or upload article/vocabulary/handwritten notes
+              {isEditingResponse
+                ? "Update your response. Existing files are kept unless you upload new ones."
+                : "Submit your task with a link and/or upload article/vocabulary/handwritten notes"}
             </DialogDescription>
           </DialogHeader>
+            );
+          })()}
           <form onSubmit={handleResponseSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="response_text">Your Response / Notes *</Label>
