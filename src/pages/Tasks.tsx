@@ -134,6 +134,7 @@ interface Task {
   id: string;
   title: string;
   description: string;
+  type: string | null;
   category: string | null;
   reward_amount: number | null;
   created_by: string;
@@ -204,6 +205,7 @@ const Tasks = () => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
+    type: "",
     category: "",
     reward_amount: "",
     due_date: "",
@@ -235,10 +237,14 @@ const Tasks = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedType, setSelectedType] = useState<string>("all");
+  const [sortField, setSortField] = useState<string>("created_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const [editFormData, setEditFormData] = useState({
     title: "",
     description: "",
+    type: "",
     category: "",
     reward_amount: "",
     due_date: "",
@@ -718,6 +724,7 @@ const Tasks = () => {
         .insert({
           title: formData.title,
           description: formData.description,
+          type: formData.type || null,
           category: formData.category || null,
           reward_amount: formData.reward_amount ? parseFloat(formData.reward_amount) : null,
           due_date: formData.due_date || null,
@@ -828,6 +835,7 @@ const Tasks = () => {
       setFormData({ 
         title: "", 
         description: "",
+        type: "",
         category: "",
         reward_amount: "",
         due_date: "", 
@@ -1146,6 +1154,7 @@ const Tasks = () => {
     setEditFormData({
       title: task.title,
       description: task.description,
+      type: task.type || "",
       category: task.category || "",
       reward_amount: task.reward_amount ? task.reward_amount.toString() : "",
       due_date: task.due_date ? task.due_date.split('T')[0] : "",
@@ -1232,6 +1241,7 @@ const Tasks = () => {
         .update({
           title: editFormData.title,
           description: editFormData.description,
+          type: editFormData.type || null,
           category: editFormData.category || null,
           reward_amount: editFormData.reward_amount ? parseFloat(editFormData.reward_amount) : null,
           due_date: editFormData.due_date || null,
@@ -1618,6 +1628,23 @@ const Tasks = () => {
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Type *</Label>
+                    <Select 
+                      value={formData.type} 
+                      onValueChange={(value) => setFormData({ ...formData, type: value })}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="English Reading, listening & speaking Task">English Reading, listening & speaking Task</SelectItem>
+                        <SelectItem value="Lesson Plan & Delivery">Lesson Plan & Delivery</SelectItem>
+                        <SelectItem value="Soft & Digital Skills">Soft & Digital Skills</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
@@ -2101,46 +2128,83 @@ const Tasks = () => {
         {/* Search and Filter Section */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tasks by title or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tasks by title or description..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Select value={selectedType} onValueChange={setSelectedType}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Filter by Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="English Reading, listening & speaking Task">English Reading</SelectItem>
+                      <SelectItem value="Lesson Plan & Delivery">Lesson Plan</SelectItem>
+                      <SelectItem value="Soft & Digital Skills">Soft & Digital</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-[200px]">
+                      <Filter className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Filter by Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                      <SelectItem value="Hindi">Hindi</SelectItem>
+                      <SelectItem value="English">English</SelectItem>
+                      <SelectItem value="Mathematics">Mathematics</SelectItem>
+                      <SelectItem value="Science">Science</SelectItem>
+                      <SelectItem value="Social Studies">Social Studies</SelectItem>
+                      <SelectItem value="Computer Science">Computer Science</SelectItem>
+                      <SelectItem value="Arts & Crafts">Arts & Crafts</SelectItem>
+                      <SelectItem value="Physical Education">Physical Education</SelectItem>
+                      <SelectItem value="General">General</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={sortField} onValueChange={(value) => {
+                    setSortField(value);
+                    setSortDirection("desc");
+                  }}>
+                    <SelectTrigger className="w-[180px]">
+                      <ArrowUpDown className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created_at">Created Date</SelectItem>
+                      <SelectItem value="title">Title</SelectItem>
+                      <SelectItem value="due_date">Due Date</SelectItem>
+                      <SelectItem value="reward_amount">Reward</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+                    title={sortDirection === "asc" ? "Ascending" : "Descending"}
+                  >
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </Button>
+                </div>
               </div>
-              <div className="sm:w-[250px]">
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger>
-                    <Filter className="mr-2 h-4 w-4" />
-                    <SelectValue placeholder="Filter by category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="Soft Skills">Soft Skills</SelectItem>
-                    <SelectItem value="Hindi">Hindi</SelectItem>
-                    <SelectItem value="English">English</SelectItem>
-                    <SelectItem value="Mathematics">Mathematics</SelectItem>
-                    <SelectItem value="Science">Science</SelectItem>
-                    <SelectItem value="Social Studies">Social Studies</SelectItem>
-                    <SelectItem value="Computer Science">Computer Science</SelectItem>
-                    <SelectItem value="Arts & Crafts">Arts & Crafts</SelectItem>
-                    <SelectItem value="Physical Education">Physical Education</SelectItem>
-                    <SelectItem value="General">General</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {(searchQuery || selectedCategory !== "all") && (
+              {(searchQuery || selectedCategory !== "all" || selectedType !== "all") && (
                 <Button
                   variant="ghost"
                   onClick={() => {
                     setSearchQuery("");
                     setSelectedCategory("all");
+                    setSelectedType("all");
                   }}
-                  className="sm:w-auto"
+                  className="w-fit"
                 >
                   Clear Filters
                 </Button>
@@ -2167,18 +2231,54 @@ const Tasks = () => {
         ) : (
           <>
             {(() => {
-              // Filter tasks based on search query and category
-              const filteredTasks = tasks.filter((task) => {
+              // Filter tasks based on search query, type, and category
+              let filteredTasks = tasks.filter((task) => {
                 // Search filter
                 const matchesSearch = searchQuery.trim() === "" || 
                   task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                   task.description.toLowerCase().includes(searchQuery.toLowerCase());
                 
+                // Type filter
+                const matchesType = selectedType === "all" || 
+                  task.type === selectedType;
+                
                 // Category filter
                 const matchesCategory = selectedCategory === "all" || 
                   task.category === selectedCategory;
                 
-                return matchesSearch && matchesCategory;
+                return matchesSearch && matchesType && matchesCategory;
+              });
+
+              // Sort tasks
+              filteredTasks = [...filteredTasks].sort((a, b) => {
+                let aValue: any;
+                let bValue: any;
+
+                switch (sortField) {
+                  case "title":
+                    aValue = a.title.toLowerCase();
+                    bValue = b.title.toLowerCase();
+                    break;
+                  case "due_date":
+                    aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
+                    bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
+                    break;
+                  case "reward_amount":
+                    aValue = a.reward_amount || 0;
+                    bValue = b.reward_amount || 0;
+                    break;
+                  case "created_at":
+                  default:
+                    aValue = new Date(a.created_at).getTime();
+                    bValue = new Date(b.created_at).getTime();
+                    break;
+                }
+
+                if (sortDirection === "asc") {
+                  return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+                } else {
+                  return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+                }
               });
 
               // Show message if no results after filtering
@@ -2191,13 +2291,14 @@ const Tasks = () => {
                         No tasks found matching your filters
                       </p>
                       <p className="text-sm text-muted-foreground text-center mt-2">
-                        Try adjusting your search or category filter
+                        Try adjusting your search, type, or category filter
                       </p>
                       <Button
                         variant="outline"
                         onClick={() => {
                           setSearchQuery("");
                           setSelectedCategory("all");
+                          setSelectedType("all");
                         }}
                         className="mt-4"
                       >
@@ -2211,7 +2312,7 @@ const Tasks = () => {
               return (
                 <>
                   {/* Results count */}
-                  {(searchQuery || selectedCategory !== "all") && (
+                  {(searchQuery || selectedCategory !== "all" || selectedType !== "all") && (
                     <div className="flex items-center justify-between mb-4">
                       <p className="text-sm text-muted-foreground">
                         Showing {filteredTasks.length} of {tasks.length} tasks
@@ -2232,6 +2333,11 @@ const Tasks = () => {
                         <div className="flex-1 text-left">
                           <CardTitle className="text-xl">{task.title}</CardTitle>
                           <div className="flex flex-wrap gap-2 mt-2">
+                            {task.type && (
+                              <Badge variant="default" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                                {task.type}
+                              </Badge>
+                            )}
                             {task.category && (
                               <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
                                 {task.category}
@@ -2826,6 +2932,23 @@ const Tasks = () => {
                 onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-type">Type *</Label>
+              <Select 
+                value={editFormData.type} 
+                onValueChange={(value) => setEditFormData({ ...editFormData, type: value })}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="English Reading, listening & speaking Task">English Reading, listening & speaking Task</SelectItem>
+                  <SelectItem value="Lesson Plan & Delivery">Lesson Plan & Delivery</SelectItem>
+                  <SelectItem value="Soft & Digital Skills">Soft & Digital Skills</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-category">Category</Label>
