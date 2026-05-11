@@ -2359,99 +2359,152 @@ const Tasks = () => {
                     </div>
                   )}
                   
-                  <Accordion type="multiple" className="space-y-4">
+                  <div className="border rounded-lg bg-card overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        {[
+                          { key: "title", label: "Task Name" },
+                          { key: "created_at", label: "Created" },
+                          { key: "type", label: "Type" },
+                          { key: "category", label: "Category" },
+                          { key: "reward_amount", label: "Reward" },
+                          { key: "due_date", label: "Deadline" },
+                          { key: "status", label: "Status" },
+                          { key: "completion", label: "Completion" },
+                        ].map(col => (
+                          <TableHead key={col.key}>
+                            <button
+                              type="button"
+                              onClick={() => handleSort(col.key)}
+                              className="flex items-center gap-1 font-medium text-primary hover:underline"
+                            >
+                              {col.label}
+                              <ArrowUpDown className={`h-3 w-3 ${sortField === col.key ? "opacity-100" : "opacity-50"}`} />
+                              {sortField === col.key && (
+                                <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                              )}
+                            </button>
+                          </TableHead>
+                        ))}
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                     {filteredTasks.map((task) => {
               const taskResponses = responses[task.id] || [];
               const userResponse = taskResponses.find(r => r.user_id === user?.id);
-              
+              const isExpanded = expandedTaskIds.has(task.id);
+              const assignedCount = assignments[task.id]?.length || 0;
+              const respondedCount = taskResponses.length;
+              const completionPct = assignedCount ? Math.round((respondedCount / assignedCount) * 100) : 0;
+
               return (
-                <AccordionItem key={task.id} value={task.id} className="border rounded-lg bg-card">
-                  <Card className="border-0">
-                    <AccordionTrigger className="hover:no-underline px-6 py-4">
-                      <div className="flex items-start justify-between w-full pr-4">
-                        <div className="flex-1 text-left">
-                          <CardTitle className="text-xl">{task.title}</CardTitle>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {task.type && (
-                              <Badge variant="default" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                                {task.type}
-                              </Badge>
-                            )}
-                            {task.category && (
-                              <Badge variant="default" className="bg-primary/10 text-primary hover:bg-primary/20">
-                                {task.category}
-                              </Badge>
-                            )}
-                            {task.reward_amount && task.reward_amount > 0 && (
-                              <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
-                                💰 ₹{task.reward_amount}
-                              </Badge>
-                            )}
-                            {task.due_date && (
-                              <Badge variant="outline">
-                                Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
-                              </Badge>
-                            )}
-                            {isPeerReviewerOf(task.id) && (
-                              <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
-                                 Peer Reviewer
-                              </Badge>
-                            )}
-                          </div>
+                <Fragment key={task.id}>
+                  <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(task.id)}>
+                    <TableCell className="w-10">
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </TableCell>
+                    <TableCell className="font-medium max-w-[280px]">
+                      <div className="truncate">{task.title}</div>
+                      {isPeerReviewerOf(task.id) && (
+                        <Badge variant="secondary" className="mt-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 text-xs">
+                          Peer Reviewer
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {format(new Date(task.created_at), "MMM dd, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      {task.type ? (
+                        <Badge variant="default" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                          {task.type}
+                        </Badge>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {task.category ? (
+                        <Badge variant="default" className="bg-primary/10 text-primary">
+                          {task.category}
+                        </Badge>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {task.reward_amount && task.reward_amount > 0 ? (
+                        <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                          ₹{task.reward_amount}
+                        </Badge>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {task.due_date ? format(new Date(task.due_date), "MMM dd, yyyy") : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={task.is_active ? "default" : "secondary"} className={task.is_active ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" : ""}>
+                        {task.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 min-w-[110px]">
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary" style={{ width: `${completionPct}%` }} />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">
-                            {format(new Date(task.created_at), "MMM dd, yyyy")}
-                          </span>
-                          {canEditTask && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditDialog(task);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDeleteTask && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this task? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(task.id, task.file_url)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {respondedCount}/{assignedCount || 0}
+                        </span>
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <CardContent className="space-y-4 pt-0">
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        {canEditTask && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openEditDialog(task)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canDeleteTask && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this task? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(task.id, task.file_url)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && (
+                  <TableRow className="bg-muted/20 hover:bg-muted/20">
+                    <TableCell colSpan={10} className="p-6">
+                      <div className="space-y-4">
                     <div 
                       className="text-muted-foreground prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:list-decimal [&>ol]:ml-4"
                       dangerouslySetInnerHTML={{ __html: task.description }}
