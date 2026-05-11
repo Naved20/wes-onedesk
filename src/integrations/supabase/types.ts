@@ -1626,6 +1626,7 @@ export type Database = {
           review_assignment_type: string | null
           reward_amount: number | null
           title: string
+          type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1642,6 +1643,7 @@ export type Database = {
           review_assignment_type?: string | null
           reward_amount?: number | null
           title: string
+          type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1658,6 +1660,7 @@ export type Database = {
           review_assignment_type?: string | null
           reward_amount?: number | null
           title?: string
+          type?: string | null
           updated_at?: string | null
         }
         Relationships: []
