@@ -2763,6 +2763,7 @@ const Tasks = () => {
                         </>
                       )}
                     </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                   )}
