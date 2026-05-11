@@ -2279,6 +2279,14 @@ const Tasks = () => {
                     aValue = a.title.toLowerCase();
                     bValue = b.title.toLowerCase();
                     break;
+                  case "type":
+                    aValue = (a.type || "").toLowerCase();
+                    bValue = (b.type || "").toLowerCase();
+                    break;
+                  case "category":
+                    aValue = (a.category || "").toLowerCase();
+                    bValue = (b.category || "").toLowerCase();
+                    break;
                   case "due_date":
                     aValue = a.due_date ? new Date(a.due_date).getTime() : 0;
                     bValue = b.due_date ? new Date(b.due_date).getTime() : 0;
@@ -2287,6 +2295,17 @@ const Tasks = () => {
                     aValue = a.reward_amount || 0;
                     bValue = b.reward_amount || 0;
                     break;
+                  case "status":
+                    aValue = a.is_active ? 1 : 0;
+                    bValue = b.is_active ? 1 : 0;
+                    break;
+                  case "completion": {
+                    const ca = (assignments[a.id]?.length || 0);
+                    const cb = (assignments[b.id]?.length || 0);
+                    aValue = ca ? ((responses[a.id]?.length || 0) / ca) : 0;
+                    bValue = cb ? ((responses[b.id]?.length || 0) / cb) : 0;
+                    break;
+                  }
                   case "created_at":
                   default:
                     aValue = new Date(a.created_at).getTime();
