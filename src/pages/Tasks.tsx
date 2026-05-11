@@ -2429,15 +2429,15 @@ const Tasks = () => {
                     <TableHeader>
                       <TableRow>
                         {[
-                          { key: "title", label: "Task Name" },
-                          { key: "created_at", label: "Created" },
-                          { key: "type", label: "Type" },
-                          { key: "category", label: "Category" },
-                          { key: "reward_amount", label: "Reward" },
-                          { key: "due_date", label: "Deadline" },
-                          { key: "status", label: "Status" },
-                          { key: "completion", label: "Completion" },
-                        ].map(col => (
+                          { key: "title", label: "Task Name", show: true },
+                          { key: "created_at", label: "Created", show: true },
+                          { key: "type", label: "Type", show: true },
+                          { key: "category", label: "Category", show: true },
+                          { key: "reward_amount", label: "Reward", show: true },
+                          { key: "due_date", label: "Deadline", show: true },
+                          { key: "status", label: role === "employee" ? "Your Status" : "Status", show: true },
+                          { key: "completion", label: "Completion", show: role === "admin" || role === "manager" },
+                        ].filter(col => col.show).map(col => (
                           <TableHead key={col.key}>
                             <button
                               type="button"
@@ -2503,20 +2503,28 @@ const Tasks = () => {
                       {task.due_date ? format(new Date(task.due_date), "MMM dd, yyyy") : <span className="text-muted-foreground text-xs">—</span>}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={task.is_active ? "default" : "secondary"} className={task.is_active ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" : ""}>
-                        {task.is_active ? "Active" : "Inactive"}
-                      </Badge>
+                      {role === "employee" ? (
+                        <Badge variant={userResponse ? "default" : "secondary"} className={userResponse ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : ""}>
+                          {userResponse ? "✓ Completed" : "Pending"}
+                        </Badge>
+                      ) : (
+                        <Badge variant={task.is_active ? "default" : "secondary"} className={task.is_active ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" : ""}>
+                          {task.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      )}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 min-w-[110px]">
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-primary" style={{ width: `${completionPct}%` }} />
+                    {(role === "admin" || role === "manager") && (
+                      <TableCell>
+                        <div className="flex items-center gap-2 min-w-[110px]">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${completionPct}%` }} />
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {respondedCount}/{assignedCount || 0}
+                          </span>
                         </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {respondedCount}/{assignedCount || 0}
-                        </span>
-                      </div>
-                    </TableCell>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                         <Dialog>
@@ -2610,7 +2618,27 @@ const Tasks = () => {
                                     </Button>
                                   ) : (
                                     <div>
-                                      <h3 className="font-semibold mb-2">Your Response</h3>
+                                      <div className="flex items-center justify-between mb-2">
+                                        <h3 className="font-semibold">Your Response</h3>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => {
+                                            setSelectedTask(task);
+                                            setResponseFormData({
+                                              response_text: userResponse.response_text || "",
+                                              link: userResponse.link || "",
+                                              file: null,
+                                              article_file: null,
+                                              additional_file: null,
+                                            });
+                                            setResponseDialogOpen(true);
+                                          }}
+                                        >
+                                          <Edit className="mr-2 h-3 w-3" />
+                                          Edit Response
+                                        </Button>
+                                      </div>
                                       <Card className="border-primary">
                                         <CardContent className="pt-4 space-y-3">
                                           <p className="text-sm whitespace-pre-wrap">{userResponse.response_text}</p>

@@ -22,7 +22,7 @@ export default function Salaries() {
         </div>
 
         {user && isEmployee ? (
-          <EmployeeSalaryView userId={user.id} />
+          <EmployeeSalaryView userId={user.id} isAdmin={false} />
         ) : user && (isAdmin || isManager) ? (
           <SalaryManagement 
             userId={user.id} 

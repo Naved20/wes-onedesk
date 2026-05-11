@@ -2,11 +2,382 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
-import { DollarSign, Calendar, Clock, Calculator, CheckCircle, Lock, AlertCircle, TrendingUp, TrendingDown, User } from "lucide-react";
+import { DollarSign, Calendar, Clock, Calculator, CheckCircle, Lock, AlertCircle, TrendingUp, TrendingDown, User, Coins } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+// Potential Earning Dialog Component
+function PotentialEarningDialog({ isAdmin = false }: { isAdmin?: boolean }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [earningStructure, setEarningStructure] = useState<Array<{
+    id?: string;
+    taskType: string;
+    rate: number;
+    tasksPerMonth: number;
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+    monthlyEarning: number;
+    howToEarn: string;
+    displayOrder: number;
+  }>>([]);
+
+  const fetchEarningStructure = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("earning_structure" as any)
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+
+      if (error) throw error;
+
+      const mapped = (data || []).map((item: any) => ({
+        id: item.id,
+        taskType: item.task_type,
+        rate: Number(item.rate),
+        tasksPerMonth: item.tasks_per_month,
+        frequency: item.frequency as "DAILY" | "WEEKLY" | "MONTHLY",
+        monthlyEarning: Number(item.rate) * item.tasks_per_month,
+        howToEarn: item.how_to_earn || "",
+        displayOrder: item.display_order,
+      }));
+
+      setEarningStructure(mapped);
+    } catch (error) {
+      console.error("Error fetching earning structure:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load earning structure",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEarningStructure();
+  }, []);
+
+  const updateEarning = (index: number, field: string, value: any) => {
+    const updated = [...earningStructure];
+    updated[index] = { ...updated[index], [field]: value };
+    
+    // Recalculate monthly earning
+    if (field === 'rate' || field === 'tasksPerMonth') {
+      updated[index].monthlyEarning = updated[index].rate * updated[index].tasksPerMonth;
+    }
+    
+    setEarningStructure(updated);
+  };
+
+  const addNewRow = () => {
+    const newRow = {
+      taskType: "New Task Type",
+      rate: 0,
+      tasksPerMonth: 0,
+      frequency: "DAILY" as const,
+      monthlyEarning: 0,
+      howToEarn: "",
+      displayOrder: earningStructure.length + 1,
+    };
+    setEarningStructure([...earningStructure, newRow]);
+  };
+
+  const removeRow = async (index: number) => {
+    const item = earningStructure[index];
+    
+    // If item has ID, soft delete from database
+    if (item.id) {
+      try {
+        const { error } = await supabase
+          .from("earning_structure" as any)
+          .update({ is_active: false })
+          .eq("id", item.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Task type removed successfully",
+        });
+      } catch (error) {
+        console.error("Error removing task type:", error);
+        toast({
+          title: "Error",
+          description: "Failed to remove task type",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Remove from state
+    const updated = earningStructure.filter((_, i) => i !== index);
+    setEarningStructure(updated);
+  };
+
+  const handleSave = async () => {
+    try {
+      // Update or insert each row
+      for (let i = 0; i < earningStructure.length; i++) {
+        const item = earningStructure[i];
+        const dbData = {
+          task_type: item.taskType,
+          rate: item.rate,
+          tasks_per_month: item.tasksPerMonth,
+          frequency: item.frequency,
+          how_to_earn: item.howToEarn,
+          display_order: i + 1,
+          is_active: true,
+        };
+
+        if (item.id) {
+          // Update existing
+          const { error } = await supabase
+            .from("earning_structure" as any)
+            .update(dbData)
+            .eq("id", item.id);
+
+          if (error) throw error;
+        } else {
+          // Insert new
+          const { error } = await supabase
+            .from("earning_structure" as any)
+            .insert(dbData);
+
+          if (error) throw error;
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Earning structure updated successfully",
+      });
+      setIsEditing(false);
+      fetchEarningStructure(); // Refresh data
+    } catch (error) {
+      console.error("Error saving earning structure:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save earning structure",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const totalPotential = earningStructure.reduce((sum, item) => sum + item.monthlyEarning, 0);
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <TrendingUp className="h-4 w-4" />
+          Potential Earning
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center gap-2 text-2xl">
+                <Coins className="h-6 w-6 text-primary" />
+                Reward Structure & Monthly Potential
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Configure how much students can earn for each task type
+              </p>
+            </div>
+            {isAdmin && (
+              <div className="flex gap-2">
+                {isEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsEditing(false);
+                      fetchEarningStructure(); // Reset changes
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  variant={isEditing ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+                  className="gap-2"
+                >
+                  {isEditing ? (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      Save Changes
+                    </>
+                  ) : (
+                    <>
+                      <Calculator className="h-4 w-4" />
+                      Edit Structure
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Table */}
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold">Task Type</TableHead>
+                    <TableHead className="text-center font-semibold">Tasks/Month</TableHead>
+                    <TableHead className="text-center font-semibold">Frequency</TableHead>
+                    <TableHead className="text-center font-semibold">Rate (₹)</TableHead>
+                    <TableHead className="text-center font-semibold">Monthly (₹)</TableHead>
+                    <TableHead className="font-semibold">How to Earn</TableHead>
+                    {isEditing && <TableHead className="text-center font-semibold">Actions</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {earningStructure.map((item, index) => (
+                    <TableRow key={item.id || index}>
+                      <TableCell className="font-medium">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={item.taskType}
+                            onChange={(e) => updateEarning(index, 'taskType', e.target.value)}
+                            className="w-full px-2 py-1 border rounded"
+                          />
+                        ) : (
+                          item.taskType
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={item.tasksPerMonth}
+                            onChange={(e) => updateEarning(index, 'tasksPerMonth', Number(e.target.value))}
+                            className="w-16 px-2 py-1 text-center border rounded"
+                          />
+                        ) : (
+                          item.tasksPerMonth
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {isEditing ? (
+                          <select
+                            value={item.frequency}
+                            onChange={(e) => updateEarning(index, 'frequency', e.target.value)}
+                            className="px-2 py-1 border rounded text-xs"
+                          >
+                            <option value="DAILY">DAILY</option>
+                            <option value="WEEKLY">WEEKLY</option>
+                            <option value="MONTHLY">MONTHLY</option>
+                          </select>
+                        ) : (
+                          <Badge variant={item.frequency === "DAILY" ? "default" : "secondary"} className="text-xs">
+                            {item.frequency}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center text-green-600 font-semibold">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            value={item.rate}
+                            onChange={(e) => updateEarning(index, 'rate', Number(e.target.value))}
+                            className="w-20 px-2 py-1 text-center border rounded"
+                          />
+                        ) : (
+                          `₹${item.rate}`
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center text-blue-600 font-bold">
+                        ₹{item.monthlyEarning}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={item.howToEarn}
+                            onChange={(e) => updateEarning(index, 'howToEarn', e.target.value)}
+                            className="w-full px-2 py-1 border rounded text-sm"
+                          />
+                        ) : (
+                          item.howToEarn
+                        )}
+                      </TableCell>
+                      {isEditing && (
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRow(index)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <AlertCircle className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {isEditing && (
+              <Button
+                variant="outline"
+                onClick={addNewRow}
+                className="w-full gap-2 border-dashed"
+              >
+                <TrendingUp className="h-4 w-4" />
+                Add New Task Type
+              </Button>
+            )}
+
+            {/* Total */}
+            <div className="flex items-center justify-center gap-4 p-6 bg-primary/5 rounded-lg border-2 border-primary/20">
+              <span className="text-xl font-semibold">Total Potential Monthly:</span>
+              <span className="text-3xl font-bold text-primary">₹{totalPotential.toLocaleString()}</span>
+            </div>
+
+            {/* Note */}
+            <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Note:</strong> This table reflects the standardized reward rates. Individual student earnings are calculated based on these rates when tasks are marked as completed.
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface SalaryRecord {
   id: string;
@@ -37,6 +408,7 @@ interface SalaryRecord {
 
 interface EmployeeSalaryViewProps {
   userId: string;
+  isAdmin?: boolean;
 }
 
 const months = [
@@ -54,7 +426,7 @@ const months = [
   { value: 12, label: "December" },
 ];
 
-export function EmployeeSalaryView({ userId }: EmployeeSalaryViewProps) {
+export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryViewProps) {
   const [salary, setSalary] = useState<SalaryRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -124,32 +496,37 @@ export function EmployeeSalaryView({ userId }: EmployeeSalaryViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Month/Year Selector */}
-      <div className="flex gap-4 flex-wrap">
-        <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Month" />
-          </SelectTrigger>
-          <SelectContent>
-            {months.map((m) => (
-              <SelectItem key={m.value} value={String(m.value)}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-          <SelectTrigger className="w-28">
-            <SelectValue placeholder="Year" />
-          </SelectTrigger>
-          <SelectContent>
-            {[2024, 2025, 2026].map((y) => (
-              <SelectItem key={y} value={String(y)}>
-                {y}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Month/Year Selector and Potential Earning Button */}
+      <div className="flex gap-4 flex-wrap items-center justify-between">
+        <div className="flex gap-4 flex-wrap">
+          <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Month" />
+            </SelectTrigger>
+            <SelectContent>
+              {months.map((m) => (
+                <SelectItem key={m.value} value={String(m.value)}>
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+            <SelectTrigger className="w-28">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {[2024, 2025, 2026].map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Potential Earning Button */}
+        <PotentialEarningDialog isAdmin={isAdmin} />
       </div>
 
       {!salary ? (
