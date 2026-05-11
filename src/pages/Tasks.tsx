@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -278,6 +278,10 @@ const Tasks = () => {
     individual_reviewer_assignments: [] as Array<{ user_id: string; reviewer_id: string }>,
   });
 
+  // Ref for infinite scroll
+  const loaderRef = useRef<HTMLDivElement>(null);
+
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -307,6 +311,34 @@ const Tasks = () => {
       fetchTotalEarnings();
     }
   }, [role, user?.id]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const target = entries[0];
+        if (target.isIntersecting && !loadingMore && hasMore && !loading) {
+          fetchTasks(false); // Load more tasks
+        }
+      },
+      {
+        root: null,
+        rootMargin: "100px", // Start loading 100px before reaching the bottom
+        threshold: 0.1,
+      }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => {
+      if (loaderRef.current) {
+        observer.unobserve(loaderRef.current);
+      }
+    };
+  }, [loadingMore, hasMore, loading]);
+
 
   const fetchTotalEarnings = async () => {
     if (!user?.id) return;
@@ -1127,7 +1159,40 @@ const Tasks = () => {
         description: "Task deleted successfully",
       });
 
-      fetchTasks(true); // Reset and reload
+      // Just remove the deleted task from state, don't reload all tasks
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+      
+      // Also clean up related data
+      setResponses(prev => {
+        const newResponses = { ...prev };
+        delete newResponses[taskId];
+        return newResponses;
+      });
+      
+      setRemarks(prev => {
+        const newRemarks = { ...prev };
+        // Remove remarks for responses of this task
+        Object.keys(newRemarks).forEach(responseId => {
+          const response = Object.values(responses).flat().find(r => r.id === responseId);
+          if (response?.task_id === taskId) {
+            delete newRemarks[responseId];
+          }
+        });
+        return newRemarks;
+      });
+      
+      setAssignments(prev => {
+        const newAssignments = { ...prev };
+        delete newAssignments[taskId];
+        return newAssignments;
+      });
+      
+      setPeerReviewers(prev => {
+        const newReviewers = { ...prev };
+        delete newReviewers[taskId];
+        return newReviewers;
+      });
+      
     } catch (error) {
       console.error("Error deleting task:", error);
       toast({
@@ -2363,7 +2428,6 @@ const Tasks = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-10"></TableHead>
                         {[
                           { key: "title", label: "Task Name" },
                           { key: "created_at", label: "Created" },
@@ -2402,10 +2466,7 @@ const Tasks = () => {
 
               return (
                 <Fragment key={task.id}>
-                  <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(task.id)}>
-                    <TableCell className="w-10">
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </TableCell>
+                  <TableRow className="hover:bg-muted/50">
                     <TableCell className="font-medium max-w-[280px]">
                       <div className="truncate">{task.title}</div>
                       {isPeerReviewerOf(task.id) && (
@@ -2458,6 +2519,173 @@ const Tasks = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8">
+                              <Eye className="h-3 w-3 mr-1" />
+                              View More
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle className="text-2xl">{task.title}</DialogTitle>
+                              <DialogDescription>
+                                Created on {format(new Date(task.created_at), "MMM dd, yyyy")}
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-6">
+                              {/* Badges */}
+                              <div className="flex flex-wrap gap-2">
+                                {task.type && (
+                                  <Badge variant="default" className="bg-blue-100 text-blue-800">
+                                    {task.type}
+                                  </Badge>
+                                )}
+                                {task.category && (
+                                  <Badge variant="default" className="bg-primary/10 text-primary">
+                                    {task.category}
+                                  </Badge>
+                                )}
+                                {task.reward_amount && task.reward_amount > 0 && (
+                                  <Badge variant="default" className="bg-green-100 text-green-800">
+                                    💰 ₹{task.reward_amount}
+                                  </Badge>
+                                )}
+                                {task.due_date && (
+                                  <Badge variant="outline">
+                                    Due: {format(new Date(task.due_date), "MMM dd, yyyy")}
+                                  </Badge>
+                                )}
+                                {isPeerReviewerOf(task.id) && (
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                                    👁️ Peer Reviewer
+                                  </Badge>
+                                )}
+                              </div>
+
+                              {/* Description */}
+                              <div>
+                                <h3 className="font-semibold mb-2">Description</h3>
+                                <div 
+                                  className="prose prose-sm dark:prose-invert max-w-none"
+                                  dangerouslySetInnerHTML={{ __html: task.description }}
+                                />
+                              </div>
+
+                              {/* Attachment */}
+                              {task.file_url && task.file_name && (
+                                <div>
+                                  <h3 className="font-semibold mb-2">Attachment</h3>
+                                  {renderFilePreview(task.file_url, task.file_name)}
+                                </div>
+                              )}
+
+                              {/* Assigned To (Admin only) */}
+                              {role === "admin" && assignments[task.id] && assignments[task.id].length > 0 && (
+                                <div>
+                                  <h3 className="font-semibold mb-2">Assigned To ({assignments[task.id].length} employees)</h3>
+                                  <div className="flex flex-wrap gap-2">
+                                    {assignments[task.id].map((emp) => (
+                                      <Badge key={emp.user_id} variant="secondary">
+                                        {emp.first_name} {emp.last_name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Employee Response Section */}
+                              {role === "employee" && (
+                                <div>
+                                  {!userResponse ? (
+                                    <Button
+                                      onClick={() => {
+                                        setSelectedTask(task);
+                                        setResponseDialogOpen(true);
+                                      }}
+                                      className="w-full"
+                                    >
+                                      <Send className="mr-2 h-4 w-4" />
+                                      Submit Response
+                                    </Button>
+                                  ) : (
+                                    <div>
+                                      <h3 className="font-semibold mb-2">Your Response</h3>
+                                      <Card className="border-primary">
+                                        <CardContent className="pt-4 space-y-3">
+                                          <p className="text-sm whitespace-pre-wrap">{userResponse.response_text}</p>
+                                          {userResponse.link && (
+                                            <a 
+                                              href={userResponse.link} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="text-sm text-primary hover:underline flex items-center gap-1"
+                                            >
+                                              🔗 {userResponse.link}
+                                            </a>
+                                          )}
+                                          {userResponse.file_url && userResponse.file_name && (
+                                            <div className="pt-2 border-t">
+                                              {renderFilePreview(userResponse.file_url, userResponse.file_name)}
+                                            </div>
+                                          )}
+                                        </CardContent>
+                                      </Card>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Admin/Reviewer: Show Responses */}
+                              {(role === "admin" || role === "manager" || isPeerReviewerOf(task.id)) && taskResponses.length > 0 && (
+                                <div>
+                                  <h3 className="font-semibold mb-2">Responses ({taskResponses.length})</h3>
+                                  <div className="space-y-3">
+                                    {taskResponses.map((response) => (
+                                      <Card key={response.id}>
+                                        <CardContent className="pt-4 space-y-2">
+                                          <div className="flex items-start justify-between">
+                                            <div>
+                                              <p className="font-medium text-sm">
+                                                {response.employee_profiles?.first_name} {response.employee_profiles?.last_name}
+                                              </p>
+                                              <p className="text-xs text-muted-foreground">
+                                                {format(new Date(response.created_at), "MMM dd, yyyy HH:mm")}
+                                              </p>
+                                            </div>
+                                            {canRemarkOnResponse(task.id, response.user_id) && (
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                  setSelectedResponse(response);
+                                                  setRemarkDialogOpen(true);
+                                                }}
+                                              >
+                                                Add Remark
+                                              </Button>
+                                            )}
+                                          </div>
+                                          <p className="text-sm">{response.response_text}</p>
+                                          {response.link && (
+                                            <a 
+                                              href={response.link} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="text-sm text-primary hover:underline"
+                                            >
+                                              🔗 {response.link}
+                                            </a>
+                                          )}
+                                        </CardContent>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                         {canEditTask && (
                           <Button
                             variant="ghost"
@@ -2780,28 +3008,15 @@ const Tasks = () => {
           </>
         )}
 
-        {/* Load More Button */}
+        {/* Infinite Scroll Loader */}
         {!loading && hasMore && (
-          <div className="flex justify-center py-8">
-            <Button 
-              onClick={() => fetchTasks(false)} 
-              disabled={loadingMore}
-              size="lg"
-              variant="outline"
-              className="min-w-[200px]"
-            >
-              {loadingMore ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-                  Loading...
-                </>
-              ) : (
-                <>
-                  Load More Tasks
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </>
-              )}
-            </Button>
+          <div ref={loaderRef} className="flex justify-center py-8">
+            {loadingMore && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+                <span className="text-sm">Loading more tasks...</span>
+              </div>
+            )}
           </div>
         )}
 
