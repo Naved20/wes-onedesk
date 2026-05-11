@@ -22,3 +22,6 @@ SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_name = 'task_responses'
 AND column_name IN ('article_file_url', 'article_file_name', 'additional_file_url', 'additional_file_name');
+
+
+
