@@ -2763,13 +2763,16 @@ const Tasks = () => {
                         </>
                       )}
                     </div>
-                  </CardContent>
-                    </AccordionContent>
-                  </Card>
-                </AccordionItem>
+                    </TableCell>
+                  </TableRow>
+                  )}
+                </Fragment>
               );
             })}
-          </Accordion>
+                    </TableBody>
+                  </Table>
+                  </div>
+
                 </>
               );
             })()}
