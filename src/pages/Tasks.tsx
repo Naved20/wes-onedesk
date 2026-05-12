@@ -3489,7 +3489,7 @@ const Tasks = () => {
               <Label htmlFor="edit-assign_to">Assign To</Label>
               <Select 
                 value={editFormData.assign_to} 
-                onValueChange={(value: "all" | "specific") => 
+                onValueChange={(value: "all" | "specific" | "groups") => 
                   setEditFormData({ ...editFormData, assign_to: value, assigned_user_ids: value === "all" ? [] : editFormData.assigned_user_ids })
                 }
               >
@@ -3499,6 +3499,7 @@ const Tasks = () => {
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
                   <SelectItem value="specific">Specific Employee</SelectItem>
+                  <SelectItem value="groups">Assignment Groups</SelectItem>
                 </SelectContent>
               </Select>
             </div>
