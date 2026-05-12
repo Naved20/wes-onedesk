@@ -212,8 +212,9 @@ const Tasks = () => {
     reward_amount: "",
     due_date: "",
     file: null as File | null,
-    assign_to: "all" as "all" | "specific",
+    assign_to: "all" as "all" | "specific" | "groups",
     assigned_user_ids: [] as string[],
+    assignment_group_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
     review_assignment_type: "group" as "group" | "individual" | "mixed",
@@ -222,6 +223,7 @@ const Tasks = () => {
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
   const [reviewerGroups, setReviewerGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
+  const [assignmentGroups, setAssignmentGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
@@ -270,8 +272,9 @@ const Tasks = () => {
     due_date: "",
     file: null as File | null,
     keepExistingFile: true,
-    assign_to: "all" as "all" | "specific",
+    assign_to: "all" as "all" | "specific" | "groups",
     assigned_user_ids: [] as string[],
+    assignment_group_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
     review_assignment_type: "group" as "group" | "individual" | "mixed",
@@ -305,6 +308,7 @@ const Tasks = () => {
     if (role === "admin") {
       fetchEmployees();
       fetchReviewerGroups();
+      fetchAssignmentGroups();
     }
     // Fetch total earnings for employees
     if (role === "employee" && user?.id) {
@@ -715,6 +719,24 @@ const Tasks = () => {
     }
   };
 
+  const fetchAssignmentGroups = async () => {
+    try {
+      const [{ data: groups }, { data: members }] = await Promise.all([
+        (supabase as any).from("assignment_groups").select("id, name").eq("is_active", true).order("name"),
+        (supabase as any).from("assignment_group_members").select("group_id, user_id"),
+      ]);
+      const memberRows = (members || []) as Array<{ group_id: string; user_id: string }>;
+      const enriched = (groups || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        member_ids: memberRows.filter(m => m.group_id === g.id).map(m => m.user_id),
+      }));
+      setAssignmentGroups(enriched);
+    } catch (e) {
+      console.error("Error fetching assignment groups:", e);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Strip HTML tags for validation
@@ -732,6 +754,15 @@ const Tasks = () => {
       toast({
         title: "Error",
         description: "Please select at least one employee",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.assign_to === "groups" && formData.assignment_group_ids.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one assignment group",
         variant: "destructive",
       });
       return;
@@ -804,6 +835,32 @@ const Tasks = () => {
           .insert(assignments);
 
         if (assignError) throw assignError;
+      } else if (formData.assign_to === "groups") {
+        // Assign to all members of selected groups (union, dedup)
+        const groupMemberIds = formData.assignment_group_ids
+          .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+        const uniqueMemberIds = Array.from(new Set(groupMemberIds));
+
+        if (uniqueMemberIds.length > 0) {
+          const assignments = uniqueMemberIds.map(uid => ({
+            task_id: (taskData as any).id,
+            user_id: uid,
+          }));
+          const { error: assignError } = await supabase
+            .from("task_assignments" as any)
+            .insert(assignments);
+          if (assignError) throw assignError;
+        }
+
+        // Record which groups were assigned
+        const groupRefs = formData.assignment_group_ids.map(gid => ({
+          task_id: (taskData as any).id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_assignment_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       } else {
         // Assign to selected employees
         const assignments = formData.assigned_user_ids.map(userId => ({
@@ -894,6 +951,7 @@ const Tasks = () => {
         file: null, 
         assign_to: "all", 
         assigned_user_ids: [], 
+        assignment_group_ids: [],
         peer_reviewer_ids: [], 
         peer_reviewer_group_ids: [],
         review_assignment_type: "group",
@@ -1224,6 +1282,18 @@ const Tasks = () => {
       console.error("Error fetching task groups:", e);
     }
 
+    // Fetch which assignment groups were assigned to this task
+    let assignedGroupIds: string[] = [];
+    try {
+      const { data } = await (supabase as any)
+        .from("task_assignment_groups")
+        .select("group_id")
+        .eq("task_id", task.id);
+      assignedGroupIds = (data || []).map((r: any) => r.group_id);
+    } catch (e) {
+      console.error("Error fetching task assignment groups:", e);
+    }
+
     // Fetch individual reviewer assignments
     let individualAssignments: Array<{ user_id: string; reviewer_id: string }> = [];
     try {
@@ -1245,8 +1315,9 @@ const Tasks = () => {
       due_date: task.due_date ? task.due_date.split('T')[0] : "",
       file: null,
       keepExistingFile: true,
-      assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
+      assign_to: assignedGroupIds.length > 0 ? "groups" : (assignedUserIds.length === employees.length ? "all" : "specific"),
       assigned_user_ids: assignedUserIds,
+      assignment_group_ids: assignedGroupIds,
       peer_reviewer_ids: currentReviewers.map(r => r.user_id),
       peer_reviewer_group_ids: groupIds,
       review_assignment_type: (task as any).review_assignment_type || "group",
@@ -1347,6 +1418,12 @@ const Tasks = () => {
 
       if (deleteError) throw deleteError;
 
+      // Delete existing assignment group references
+      await (supabase as any)
+        .from("task_assignment_groups")
+        .delete()
+        .eq("task_id", editingTask.id);
+
       // Then, create new assignments
       if (editFormData.assign_to === "all") {
         const assignments = employees.map(emp => ({
@@ -1359,6 +1436,30 @@ const Tasks = () => {
           .insert(assignments);
 
         if (assignError) throw assignError;
+      } else if (editFormData.assign_to === "groups") {
+        const groupMemberIds = editFormData.assignment_group_ids
+          .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+        const uniqueMemberIds = Array.from(new Set(groupMemberIds));
+
+        if (uniqueMemberIds.length > 0) {
+          const assignments = uniqueMemberIds.map(uid => ({
+            task_id: editingTask.id,
+            user_id: uid,
+          }));
+          const { error: assignError } = await supabase
+            .from("task_assignments" as any)
+            .insert(assignments);
+          if (assignError) throw assignError;
+        }
+
+        const groupRefs = editFormData.assignment_group_ids.map(gid => ({
+          task_id: editingTask.id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_assignment_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       } else {
         const assignments = editFormData.assigned_user_ids.map(userId => ({
           task_id: editingTask.id,
@@ -1785,7 +1886,7 @@ const Tasks = () => {
                     <Label htmlFor="assign_to">Assign To</Label>
                     <Select 
                       value={formData.assign_to} 
-                      onValueChange={(value: "all" | "specific") => 
+                      onValueChange={(value: "all" | "specific" | "groups") => 
                         setFormData({ ...formData, assign_to: value, assigned_user_ids: value === "all" ? [] : formData.assigned_user_ids })
                       }
                     >
@@ -1795,6 +1896,7 @@ const Tasks = () => {
                       <SelectContent>
                         <SelectItem value="all">All Employees</SelectItem>
                         <SelectItem value="specific">Specific Employee</SelectItem>
+                        <SelectItem value="groups">Assignment Groups</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1846,6 +1948,50 @@ const Tasks = () => {
                       {formData.assigned_user_ids.length > 0 && (
                         <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
                           ✅ {formData.assigned_user_ids.length} employee(s) selected
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {formData.assign_to === "groups" && (
+                    <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="h-5 w-5 text-purple-600" />
+                        <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                          1️⃣ Select Assignment Groups
+                        </Label>
+                      </div>
+                      <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">
+                        👉 All members of selected groups will receive this task
+                      </p>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-white dark:bg-gray-900">
+                        {assignmentGroups.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No assignment groups available. Create one in Assignment Groups page.</p>
+                        ) : (
+                          assignmentGroups.map((g) => (
+                            <div key={g.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`assign-grp-${g.id}`}
+                                checked={formData.assignment_group_ids.includes(g.id)}
+                                onCheckedChange={(checked) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    assignment_group_ids: checked
+                                      ? [...prev.assignment_group_ids, g.id]
+                                      : prev.assignment_group_ids.filter(id => id !== g.id),
+                                  }));
+                                }}
+                              />
+                              <Label htmlFor={`assign-grp-${g.id}`} className="text-sm font-normal cursor-pointer flex-1">
+                                {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                              </Label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {formData.assignment_group_ids.length > 0 && (
+                        <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                          ✅ {formData.assignment_group_ids.length} group(s) selected · {Array.from(new Set(formData.assignment_group_ids.flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []))).length} unique member(s)
                         </p>
                       )}
                     </div>
@@ -3343,7 +3489,7 @@ const Tasks = () => {
               <Label htmlFor="edit-assign_to">Assign To</Label>
               <Select 
                 value={editFormData.assign_to} 
-                onValueChange={(value: "all" | "specific") => 
+                onValueChange={(value: "all" | "specific" | "groups") => 
                   setEditFormData({ ...editFormData, assign_to: value, assigned_user_ids: value === "all" ? [] : editFormData.assigned_user_ids })
                 }
               >
@@ -3353,6 +3499,7 @@ const Tasks = () => {
                 <SelectContent>
                   <SelectItem value="all">All Employees</SelectItem>
                   <SelectItem value="specific">Specific Employee</SelectItem>
+                  <SelectItem value="groups">Assignment Groups</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -3404,6 +3551,50 @@ const Tasks = () => {
                 {editFormData.assigned_user_ids.length > 0 && (
                   <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
                     ✅ {editFormData.assigned_user_ids.length} employee(s) selected
+                  </p>
+                )}
+              </div>
+            )}
+
+            {editFormData.assign_to === "groups" && (
+              <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-purple-600" />
+                  <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                    Select Assignment Groups
+                  </Label>
+                </div>
+                <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">
+                  👉 All members of selected groups will be assigned this task
+                </p>
+                <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-white dark:bg-gray-900">
+                  {assignmentGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No assignment groups available</p>
+                  ) : (
+                    assignmentGroups.map((g) => (
+                      <div key={g.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-assign-grp-${g.id}`}
+                          checked={editFormData.assignment_group_ids.includes(g.id)}
+                          onCheckedChange={(checked) => {
+                            setEditFormData(prev => ({
+                              ...prev,
+                              assignment_group_ids: checked
+                                ? [...prev.assignment_group_ids, g.id]
+                                : prev.assignment_group_ids.filter(id => id !== g.id),
+                            }));
+                          }}
+                        />
+                        <Label htmlFor={`edit-assign-grp-${g.id}`} className="text-sm font-normal cursor-pointer flex-1">
+                          {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                        </Label>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {editFormData.assignment_group_ids.length > 0 && (
+                  <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                    ✅ {editFormData.assignment_group_ids.length} group(s) selected · {Array.from(new Set(editFormData.assignment_group_ids.flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []))).length} unique member(s)
                   </p>
                 )}
               </div>
