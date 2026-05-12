@@ -916,6 +916,7 @@ const Tasks = () => {
         file: null, 
         assign_to: "all", 
         assigned_user_ids: [], 
+        assignment_group_ids: [],
         peer_reviewer_ids: [], 
         peer_reviewer_group_ids: [],
         review_assignment_type: "group",
