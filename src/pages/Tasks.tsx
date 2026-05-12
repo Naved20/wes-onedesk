@@ -272,8 +272,9 @@ const Tasks = () => {
     due_date: "",
     file: null as File | null,
     keepExistingFile: true,
-    assign_to: "all" as "all" | "specific",
+    assign_to: "all" as "all" | "specific" | "groups",
     assigned_user_ids: [] as string[],
+    assignment_group_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
     review_assignment_type: "group" as "group" | "individual" | "mixed",
@@ -307,6 +308,7 @@ const Tasks = () => {
     if (role === "admin") {
       fetchEmployees();
       fetchReviewerGroups();
+      fetchAssignmentGroups();
     }
     // Fetch total earnings for employees
     if (role === "employee" && user?.id) {
@@ -714,6 +716,24 @@ const Tasks = () => {
       setReviewerGroups(enriched);
     } catch (e) {
       console.error("Error fetching reviewer groups:", e);
+    }
+  };
+
+  const fetchAssignmentGroups = async () => {
+    try {
+      const [{ data: groups }, { data: members }] = await Promise.all([
+        (supabase as any).from("assignment_groups").select("id, name").eq("is_active", true).order("name"),
+        (supabase as any).from("assignment_group_members").select("group_id, user_id"),
+      ]);
+      const memberRows = (members || []) as Array<{ group_id: string; user_id: string }>;
+      const enriched = (groups || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        member_ids: memberRows.filter(m => m.group_id === g.id).map(m => m.user_id),
+      }));
+      setAssignmentGroups(enriched);
+    } catch (e) {
+      console.error("Error fetching assignment groups:", e);
     }
   };
 
