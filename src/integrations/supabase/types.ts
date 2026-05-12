@@ -115,6 +115,68 @@ export type Database = {
           },
         ]
       }
+      assignment_group_members: {
+        Row: {
+          added_at: string | null
+          added_by: string | null
+          group_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          added_by?: string | null
+          group_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string | null
+          added_by?: string | null
+          group_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "assignment_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_groups: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           admin_override: boolean | null
@@ -347,6 +409,48 @@ export type Database = {
         }
         Relationships: []
       }
+      earning_structure: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          frequency: string
+          how_to_earn: string | null
+          id: string
+          is_active: boolean | null
+          monthly_earning: number | null
+          rate: number
+          task_type: string
+          tasks_per_month: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          frequency: string
+          how_to_earn?: string | null
+          id?: string
+          is_active?: boolean | null
+          monthly_earning?: number | null
+          rate?: number
+          task_type: string
+          tasks_per_month?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          frequency?: string
+          how_to_earn?: string | null
+          id?: string
+          is_active?: boolean | null
+          monthly_earning?: number | null
+          rate?: number
+          task_type?: string
+          tasks_per_month?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       employee_profiles: {
         Row: {
           aadhar_number: string | null
@@ -412,6 +516,7 @@ export type Database = {
           religion: string | null
           role_code: string | null
           samagra_id: string | null
+          seniority: string | null
           skills: string[] | null
           social_category: string | null
           training_record: string | null
@@ -487,6 +592,7 @@ export type Database = {
           religion?: string | null
           role_code?: string | null
           samagra_id?: string | null
+          seniority?: string | null
           skills?: string[] | null
           social_category?: string | null
           training_record?: string | null
@@ -562,6 +668,7 @@ export type Database = {
           religion?: string | null
           role_code?: string | null
           samagra_id?: string | null
+          seniority?: string | null
           skills?: string[] | null
           social_category?: string | null
           training_record?: string | null
@@ -628,6 +735,72 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      face_attendance_sessions: {
+        Row: {
+          browser_name: string | null
+          created_at: string | null
+          device_info: Json | null
+          device_type: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_activity: string
+          latitude: number | null
+          location_accuracy: number | null
+          location_address: string | null
+          login_time: string
+          logout_reason: string | null
+          logout_time: string | null
+          longitude: number | null
+          os_name: string | null
+          session_token: string
+          updated_at: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          browser_name?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity?: string
+          latitude?: number | null
+          location_accuracy?: number | null
+          location_address?: string | null
+          login_time?: string
+          logout_reason?: string | null
+          logout_time?: string | null
+          longitude?: number | null
+          os_name?: string | null
+          session_token: string
+          updated_at?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          browser_name?: string | null
+          created_at?: string | null
+          device_info?: Json | null
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity?: string
+          latitude?: number | null
+          location_accuracy?: number | null
+          location_address?: string | null
+          login_time?: string
+          logout_reason?: string | null
+          logout_time?: string | null
+          longitude?: number | null
+          os_name?: string | null
+          session_token?: string
+          updated_at?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       face_checkin_history: {
         Row: {
@@ -1741,6 +1914,7 @@ export type Database = {
         }
         Returns: Json
       }
+      cleanup_old_face_sessions: { Args: never; Returns: undefined }
       create_absent_records_for_date: {
         Args: { p_date: string }
         Returns: number
@@ -1755,6 +1929,18 @@ export type Database = {
       generate_monthly_salaries: {
         Args: { p_month: number; p_year: number }
         Returns: Json
+      }
+      get_assignment_group_members: {
+        Args: { p_group_id: string }
+        Returns: {
+          added_at: string
+          designation: string
+          email: string
+          first_name: string
+          institution_assignment: string
+          last_name: string
+          user_id: string
+        }[]
       }
       get_casual_leave_count: {
         Args: { p_month: number; p_user_id: string; p_year: number }
@@ -1792,6 +1978,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_user_assignment_groups: {
+        Args: { p_user_id: string }
+        Returns: {
+          group_description: string
+          group_id: string
+          group_name: string
+          member_count: number
+        }[]
       }
       get_user_institution: { Args: { _user_id: string }; Returns: string }
       has_role: {
