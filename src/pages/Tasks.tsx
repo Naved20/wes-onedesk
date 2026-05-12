@@ -212,8 +212,9 @@ const Tasks = () => {
     reward_amount: "",
     due_date: "",
     file: null as File | null,
-    assign_to: "all" as "all" | "specific",
+    assign_to: "all" as "all" | "specific" | "groups",
     assigned_user_ids: [] as string[],
+    assignment_group_ids: [] as string[],
     peer_reviewer_ids: [] as string[],
     peer_reviewer_group_ids: [] as string[],
     review_assignment_type: "group" as "group" | "individual" | "mixed",
@@ -222,6 +223,7 @@ const Tasks = () => {
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
   const [reviewerGroups, setReviewerGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
+  const [assignmentGroups, setAssignmentGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
 
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
