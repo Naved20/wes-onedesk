@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { Search, Plus, Eye, Edit, Trash2, X } from "lucide-react";
+import { Search, Plus, Eye, Edit, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { z } from "zod";
 
@@ -54,9 +54,11 @@ export default function Employees() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterShift, setFilterShift] = useState<string>("all");
   const [filterRole, setFilterRole] = useState<string>("all");
-  const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [filterDesignation, setFilterDesignation] = useState<string>("all");
   const [filterEmploymentType, setFilterEmploymentType] = useState<string>("all");
+  const [filterSeniority, setFilterSeniority] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function Employees() {
   const [formLastName, setFormLastName] = useState("");
   const [formRole, setFormRole] = useState<AppRole>("employee");
   const [formDesignation, setFormDesignation] = useState("");
+  const [formSeniority, setFormSeniority] = useState("");
   const [formInstitution, setFormInstitution] = useState("");
   const [formPhone, setFormPhone] = useState("");
 
@@ -80,6 +83,7 @@ export default function Employees() {
   const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState<AppRole>("employee");
   const [editDesignation, setEditDesignation] = useState("");
+  const [editSeniority, setEditSeniority] = useState("");
   const [editInstitution, setEditInstitution] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
@@ -168,6 +172,7 @@ export default function Employees() {
     setFormLastName("");
     setFormRole("employee");
     setFormDesignation("");
+    setFormSeniority("");
     setFormInstitution("");
     setFormPhone("");
   };
@@ -202,6 +207,7 @@ export default function Employees() {
           lastName: formLastName.trim(),
           role: formRole,
           designation: formDesignation.trim() || undefined,
+          seniority: formSeniority.trim() || undefined,
           institutionAssignment: formInstitution.trim() || undefined,
           phone: formPhone.trim() || undefined,
         },
@@ -242,6 +248,7 @@ export default function Employees() {
     setEditEmail(employee.email || "");
     setEditPassword(""); // Clear password field
     setEditDesignation(employee.designation || "");
+    setEditSeniority(employee.seniority || "");
     setEditInstitution(employee.institution_assignment || "");
     setEditPhone(employee.phone || "");
     setEditIsActive(employee.is_active ?? true);
@@ -291,6 +298,7 @@ export default function Employees() {
           last_name: editLastName.trim(),
           email: editEmail.trim(),
           designation: editDesignation.trim() || null,
+          seniority: editSeniority.trim() || null,
           institution_assignment: editInstitution.trim() || null,
           phone: editPhone.trim() || null,
           is_active: editIsActive,
@@ -418,10 +426,6 @@ export default function Employees() {
     const matchesRole = filterRole === "all" || 
       emp.role === filterRole;
     
-    // Department filter
-    const matchesDepartment = filterDepartment === "all" || 
-      emp.department === filterDepartment;
-    
     // Designation filter
     const matchesDesignation = filterDesignation === "all" || 
       emp.designation === filterDesignation;
@@ -430,14 +434,85 @@ export default function Employees() {
     const matchesEmploymentType = filterEmploymentType === "all" || 
       emp.employment_type === filterEmploymentType;
     
+    // Seniority filter
+    const matchesSeniority = filterSeniority === "all" || 
+      emp.seniority === filterSeniority;
+    
     return matchesSearch && matchesInstitution && matchesStatus && 
-           matchesShift && matchesRole && matchesDepartment && 
-           matchesDesignation && matchesEmploymentType;
+           matchesShift && matchesRole && 
+           matchesDesignation && matchesEmploymentType && matchesSeniority;
   });
 
+  // Sort filtered employees
+  const sortedEmployees = [...filteredEmployees].sort((a, b) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortBy) {
+      case "name":
+        aValue = `${a.first_name} ${a.last_name}`.toLowerCase();
+        bValue = `${b.first_name} ${b.last_name}`.toLowerCase();
+        break;
+      case "email":
+        aValue = a.email?.toLowerCase() || "";
+        bValue = b.email?.toLowerCase() || "";
+        break;
+      case "designation":
+        aValue = a.designation?.toLowerCase() || "";
+        bValue = b.designation?.toLowerCase() || "";
+        break;
+      case "seniority":
+        aValue = a.seniority?.toLowerCase() || "";
+        bValue = b.seniority?.toLowerCase() || "";
+        break;
+      case "institution":
+        aValue = a.institution_assignment?.toLowerCase() || "";
+        bValue = b.institution_assignment?.toLowerCase() || "";
+        break;
+      case "shift":
+        aValue = a.shift_name?.toLowerCase() || "";
+        bValue = b.shift_name?.toLowerCase() || "";
+        break;
+      case "role":
+        aValue = a.role?.toLowerCase() || "";
+        bValue = b.role?.toLowerCase() || "";
+        break;
+      case "status":
+        aValue = a.is_active ? "active" : "inactive";
+        bValue = b.is_active ? "active" : "inactive";
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-4 w-4 ml-1" />
+    ) : (
+      <ArrowDown className="h-4 w-4 ml-1" />
+    );
+  };
+
   // Get unique values for filters
-  const uniqueDepartments = Array.from(new Set(employees.map(e => e.department).filter(Boolean)));
   const uniqueDesignations = Array.from(new Set(employees.map(e => e.designation).filter(Boolean)));
+  const uniqueSeniorities = Array.from(new Set(employees.map(e => e.seniority).filter(Boolean)));
   const uniqueEmploymentTypes = Array.from(new Set(employees.map(e => e.employment_type).filter(Boolean)));
 
   const clearAllFilters = () => {
@@ -445,14 +520,14 @@ export default function Employees() {
     setFilterStatus("all");
     setFilterShift("all");
     setFilterRole("all");
-    setFilterDepartment("all");
     setFilterDesignation("all");
+    setFilterSeniority("all");
     setFilterEmploymentType("all");
   };
 
   const hasActiveFilters = filterInstitution !== "all" || filterStatus !== "all" || 
-    filterShift !== "all" || filterRole !== "all" || filterDepartment !== "all" || 
-    filterDesignation !== "all" || filterEmploymentType !== "all";
+    filterShift !== "all" || filterRole !== "all" || 
+    filterDesignation !== "all" || filterSeniority !== "all" || filterEmploymentType !== "all";
 
   return (
     <DashboardLayout>
@@ -474,7 +549,7 @@ export default function Employees() {
                     Add Employee
                   </Button>
                 </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Employee</DialogTitle>
                 </DialogHeader>
@@ -547,6 +622,16 @@ export default function Employees() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="seniority">Seniority</Label>
+                    <Input
+                      id="seniority"
+                      value={formSeniority}
+                      onChange={(e) => setFormSeniority(e.target.value)}
+                      maxLength={100}
+                      placeholder="e.g., Junior, Senior, Lead"
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="institution">Institution</Label>
                     <Select value={formInstitution} onValueChange={setFormInstitution}>
                       <SelectTrigger>
@@ -596,7 +681,7 @@ export default function Employees() {
               </div>
               
               {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
                 <div className="space-y-2">
                   <Label className="text-sm text-muted-foreground">Institution</Label>
                   <Select value={filterInstitution} onValueChange={setFilterInstitution}>
@@ -664,6 +749,22 @@ export default function Employees() {
                   </Select>
                 </div>
                 
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Seniority</Label>
+                  <Select value={filterSeniority} onValueChange={setFilterSeniority}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Seniorities" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Seniorities</SelectItem>
+                      {uniqueSeniorities.map((sen) => (
+                        <SelectItem key={sen} value={sen!}>
+                          {sen}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
   
               </div>
               
@@ -715,22 +816,22 @@ export default function Employees() {
                       </button>
                     </Badge>
                   )}
-                  {filterDepartment !== "all" && (
+                  {filterDesignation !== "all" && (
                     <Badge variant="secondary" className="gap-1">
-                      Department: {filterDepartment}
+                      Designation: {filterDesignation}
                       <button
-                        onClick={() => setFilterDepartment("all")}
+                        onClick={() => setFilterDesignation("all")}
                         className="ml-1 hover:text-destructive"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   )}
-                  {filterDesignation !== "all" && (
+                  {filterSeniority !== "all" && (
                     <Badge variant="secondary" className="gap-1">
-                      Designation: {filterDesignation}
+                      Seniority: {filterSeniority}
                       <button
-                        onClick={() => setFilterDesignation("all")}
+                        onClick={() => setFilterSeniority("all")}
                         className="ml-1 hover:text-destructive"
                       >
                         <X className="h-3 w-3" />
@@ -761,7 +862,7 @@ export default function Employees() {
               
               {/* Results Count */}
               <div className="text-sm text-muted-foreground">
-                Showing {filteredEmployees.length} of {employees.length} employees
+                Showing {sortedEmployees.length} of {employees.length} employees
               </div>
             </div>
           </CardHeader>
@@ -770,7 +871,7 @@ export default function Employees() {
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-            ) : filteredEmployees.length === 0 ? (
+            ) : sortedEmployees.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 {searchQuery ? "No employees match your search" : "No employees found"}
               </div>
@@ -780,19 +881,91 @@ export default function Employees() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-16">S.No.</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Designation</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Institution</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("name")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Name
+                          {getSortIcon("name")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("email")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Email
+                          {getSortIcon("email")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("designation")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Designation
+                          {getSortIcon("designation")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("seniority")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Seniority
+                          {getSortIcon("seniority")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("institution")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Institution
+                          {getSortIcon("institution")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("shift")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Shift
+                          {getSortIcon("shift")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("role")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Role
+                          {getSortIcon("role")}
+                        </Button>
+                      </TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort("status")}
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                        >
+                          Status
+                          {getSortIcon("status")}
+                        </Button>
+                      </TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredEmployees.map((employee, index) => (
+                    {sortedEmployees.map((employee, index) => (
                       <TableRow key={employee.id}>
                         <TableCell className="font-medium text-muted-foreground">
                           {index + 1}
@@ -802,7 +975,7 @@ export default function Employees() {
                         </TableCell>
                         <TableCell>{employee.email}</TableCell>
                         <TableCell>{employee.designation || "-"}</TableCell>
-                        <TableCell>{employee.department || "-"}</TableCell>
+                        <TableCell>{employee.seniority || "-"}</TableCell>
                         <TableCell>{employee.institution_assignment || "-"}</TableCell>
                         <TableCell>
                           {employee.shift_name ? (
@@ -945,6 +1118,16 @@ export default function Employees() {
                 value={editDesignation}
                 onChange={(e) => setEditDesignation(e.target.value)}
                 maxLength={100}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editSeniority">Seniority</Label>
+              <Input
+                id="editSeniority"
+                value={editSeniority}
+                onChange={(e) => setEditSeniority(e.target.value)}
+                maxLength={100}
+                placeholder="e.g., Junior, Senior, Lead"
               />
             </div>
             <div className="space-y-2">

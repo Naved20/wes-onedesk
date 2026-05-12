@@ -14,6 +14,7 @@ interface CreateUserRequest {
   role: "admin" | "manager" | "employee";
   department?: string;
   designation?: string;
+  seniority?: string;
   institutionAssignment?: string;
   phone?: string;
 }
@@ -86,7 +87,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Parse request body
     const body: CreateUserRequest = await req.json();
-    const { email, password, firstName, lastName, role, department, designation, institutionAssignment, phone } = body;
+    const { email, password, firstName, lastName, role, department, designation, seniority, institutionAssignment, phone } = body;
 
     // Validate input
     if (!email || !password || !firstName || !lastName || !role) {
@@ -131,6 +132,7 @@ const handler = async (req: Request): Promise<Response> => {
         last_name: lastName,
         department,
         designation,
+        seniority,
         institution_assignment: institutionAssignment,
         phone,
       });
