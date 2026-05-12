@@ -11,6 +11,7 @@ import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2, Scan } from "l
 import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
+import { updateSessionActivity, logoutFaceSession, isSessionValid } from "@/lib/faceSessionManager";
 
 interface HistoryRow {
   id: string;
@@ -35,18 +36,57 @@ export default function FaceHub() {
   const [checkInData, setCheckInData] = useState<{ name: string; time: string } | null>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem("faceAttendanceAuth") !== "true") {
-      navigate("/auth");
-      return;
-    }
+    const checkAuth = async () => {
+      if (localStorage.getItem("faceAttendanceAuth") !== "true") {
+        navigate("/auth");
+        return;
+      }
+
+      // Only check session validity if it exists and was created more than 5 seconds ago
+      const sessionToken = localStorage.getItem("faceSessionToken");
+      const sessionCreatedAt = localStorage.getItem("faceSessionCreatedAt");
+      
+      if (sessionToken && sessionCreatedAt) {
+        const createdTime = parseInt(sessionCreatedAt);
+        const now = Date.now();
+        
+        // Only validate if session is older than 5 seconds (skip validation right after login)
+        if (now - createdTime > 5000) {
+          const valid = await isSessionValid(sessionToken);
+          if (!valid) {
+            localStorage.removeItem("faceAttendanceAuth");
+            localStorage.removeItem("faceSessionToken");
+            localStorage.removeItem("faceSessionCreatedAt");
+            toast({
+              title: "Session Expired",
+              description: "Your session has been logged out by admin",
+              variant: "destructive",
+            });
+            navigate("/auth");
+            return;
+          }
+        }
+      }
+    };
+
+    checkAuth();
     initCamera();
     loadFaceModels()
       .then(() => setModelsReady(true))
       .catch((e) => toast({ title: "Model load failed", description: String(e), variant: "destructive" }));
     fetchHistory();
 
+    // Update activity every 30 seconds
+    const activityInterval = setInterval(() => {
+      const sessionToken = localStorage.getItem("faceSessionToken");
+      if (sessionToken) {
+        updateSessionActivity(sessionToken);
+      }
+    }, 30000);
+
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      clearInterval(activityInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -154,8 +194,14 @@ export default function FaceHub() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("faceAttendanceAuth");
+  const handleLogout = async () => {
+    const sessionToken = localStorage.getItem("faceSessionToken");
+    if (sessionToken) {
+      await logoutFaceSession(sessionToken, "User logout");
+    }
+    localStorage.removeItem("faceAttendanceAuth");
+    localStorage.removeItem("faceSessionToken");
+    localStorage.removeItem("faceSessionCreatedAt");
     streamRef.current?.getTracks().forEach((t) => t.stop());
     navigate("/auth");
   };

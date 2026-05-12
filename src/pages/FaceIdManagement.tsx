@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Camera, Trash2, UserPlus, Loader2, CheckCircle2, X } from "lucide-react";
+import { Camera, Trash2, UserPlus, Loader2, CheckCircle2, X, Monitor } from "lucide-react";
 import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { Database } from "@/integrations/supabase/types";
 
@@ -55,6 +56,7 @@ function EmployeeSkeleton() {
 }
 
 export default function FaceIdManagement() {
+  const navigate = useNavigate();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -342,9 +344,15 @@ export default function FaceIdManagement() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Face ID Management</h1>
-          <p className="text-muted-foreground">Enroll employees for face-based attendance check-in</p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Face ID Management</h1>
+            <p className="text-muted-foreground">Enroll employees for face-based attendance check-in</p>
+          </div>
+          <Button onClick={() => navigate("/face-sessions")} variant="outline">
+            <Monitor className="h-4 w-4 mr-2" />
+            View Active Sessions
+          </Button>
         </div>
 
         <Card>

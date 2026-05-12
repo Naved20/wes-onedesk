@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Camera, Lock } from "lucide-react";
+import { createFaceSession } from "@/lib/faceSessionManager";
 
 export default function FaceAttendanceAuth() {
   const navigate = useNavigate();
@@ -42,8 +43,13 @@ export default function FaceAttendanceAuth() {
         credentials.username.toLowerCase() === validCredentials.username.toLowerCase() &&
         credentials.password === validCredentials.password
       ) {
-        // Store session
-        sessionStorage.setItem("faceAttendanceAuth", "true");
+        // Create session in database
+        const sessionToken = await createFaceSession();
+        
+        // Store session permanently in localStorage (unlimited duration)
+        localStorage.setItem("faceAttendanceAuth", "true");
+        localStorage.setItem("faceSessionToken", sessionToken);
+        localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
         
         toast({
           title: "Login Successful",

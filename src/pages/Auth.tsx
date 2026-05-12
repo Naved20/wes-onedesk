@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "@/hooks/use-toast";
 import { z } from "zod";
 import wesLogo from "@/assets/wes-logo.jpg";
+import { createFaceSession } from "@/lib/faceSessionManager";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Please enter a valid email").max(255),
@@ -53,7 +54,12 @@ export default function Auth() {
         loginEmail.toLowerCase() === "face@wazireducationsocity.com" &&
         loginPassword === "WES@12345"
       ) {
-        sessionStorage.setItem("faceAttendanceAuth", "true");
+        // Create session in database
+        const sessionToken = await createFaceSession();
+        
+        localStorage.setItem("faceAttendanceAuth", "true");
+        localStorage.setItem("faceSessionToken", sessionToken);
+        localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
         toast({
           title: "Face Attendance Access",
           description: "Redirecting to face hub...",

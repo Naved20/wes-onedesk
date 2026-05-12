@@ -37,7 +37,7 @@ export default function FaceAttendance() {
 
   useEffect(() => {
     // Check if authenticated for face attendance
-    const isAuthenticated = sessionStorage.getItem("faceAttendanceAuth");
+    const isAuthenticated = localStorage.getItem("faceAttendanceAuth");
     if (!isAuthenticated) {
       navigate("/auth");
       return;
@@ -310,7 +310,7 @@ export default function FaceAttendance() {
                 variant="ghost"
                 size="icon"
                 onClick={() => {
-                  sessionStorage.removeItem("faceAttendanceAuth");
+                  localStorage.removeItem("faceAttendanceAuth");
                   navigate("/auth");
                 }}
               >
