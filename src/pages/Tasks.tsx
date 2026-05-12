@@ -1953,6 +1953,50 @@ const Tasks = () => {
                     </div>
                   )}
 
+                  {formData.assign_to === "groups" && (
+                    <div className="space-y-2 bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="h-5 w-5 text-purple-600" />
+                        <Label className="text-base font-semibold text-purple-900 dark:text-purple-100">
+                          1️⃣ Select Assignment Groups
+                        </Label>
+                      </div>
+                      <p className="text-sm text-purple-700 dark:text-purple-300 font-medium">
+                        👉 All members of selected groups will receive this task
+                      </p>
+                      <div className="border rounded-lg p-4 max-h-60 overflow-y-auto space-y-2 bg-white dark:bg-gray-900">
+                        {assignmentGroups.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No assignment groups available. Create one in Assignment Groups page.</p>
+                        ) : (
+                          assignmentGroups.map((g) => (
+                            <div key={g.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`assign-grp-${g.id}`}
+                                checked={formData.assignment_group_ids.includes(g.id)}
+                                onCheckedChange={(checked) => {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    assignment_group_ids: checked
+                                      ? [...prev.assignment_group_ids, g.id]
+                                      : prev.assignment_group_ids.filter(id => id !== g.id),
+                                  }));
+                                }}
+                              />
+                              <Label htmlFor={`assign-grp-${g.id}`} className="text-sm font-normal cursor-pointer flex-1">
+                                {g.name} <span className="text-muted-foreground">({g.member_ids.length} members)</span>
+                              </Label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {formData.assignment_group_ids.length > 0 && (
+                        <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">
+                          ✅ {formData.assignment_group_ids.length} group(s) selected · {Array.from(new Set(formData.assignment_group_ids.flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []))).length} unique member(s)
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Review Assignment Type Selection */}
                   <div className="space-y-4 bg-orange-50 dark:bg-orange-950/20 p-4 rounded-lg border-2 border-orange-200 dark:border-orange-800">
                     <div className="flex items-center gap-2">
