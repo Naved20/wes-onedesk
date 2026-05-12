@@ -880,111 +880,111 @@ export default function Employees() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-16">S.No.</TableHead>
-                      <TableHead>
+                      <TableHead className="w-12 text-xs">S.No.</TableHead>
+                      <TableHead className="min-w-[120px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("name")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Name
                           {getSortIcon("name")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[150px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("email")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Email
                           {getSortIcon("email")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[100px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("designation")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Designation
                           {getSortIcon("designation")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[80px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("seniority")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Seniority
                           {getSortIcon("seniority")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[80px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("institution")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Institution
                           {getSortIcon("institution")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[90px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("shift")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Shift
                           {getSortIcon("shift")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[80px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("role")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Role
                           {getSortIcon("role")}
                         </Button>
                       </TableHead>
-                      <TableHead>
+                      <TableHead className="min-w-[70px]">
                         <Button
                           variant="ghost"
                           onClick={() => handleSort("status")}
-                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center"
+                          className="h-auto p-0 font-semibold hover:bg-transparent flex items-center text-xs"
                         >
                           Status
                           {getSortIcon("status")}
                         </Button>
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="text-right w-[100px] text-xs">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedEmployees.map((employee, index) => (
-                      <TableRow key={employee.id}>
-                        <TableCell className="font-medium text-muted-foreground">
+                      <TableRow key={employee.id} className="text-sm">
+                        <TableCell className="font-medium text-muted-foreground text-xs py-2">
                           {index + 1}
                         </TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium py-2">
                           {employee.first_name} {employee.last_name}
                         </TableCell>
-                        <TableCell>{employee.email}</TableCell>
-                        <TableCell>{employee.designation || "-"}</TableCell>
-                        <TableCell>{employee.seniority || "-"}</TableCell>
-                        <TableCell>{employee.institution_assignment || "-"}</TableCell>
-                        <TableCell>
+                        <TableCell className="py-2 text-xs">{employee.email}</TableCell>
+                        <TableCell className="py-2 text-xs">{employee.designation || "-"}</TableCell>
+                        <TableCell className="py-2 text-xs">{employee.seniority || "-"}</TableCell>
+                        <TableCell className="py-2 text-xs">{employee.institution_assignment || "-"}</TableCell>
+                        <TableCell className="py-2">
                           {employee.shift_name ? (
-                            <Badge variant="outline">{employee.shift_name}</Badge>
+                            <Badge variant="outline" className="text-xs px-1.5 py-0">{employee.shift_name}</Badge>
                           ) : (
-                            "-"
+                            <span className="text-xs">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-2">
                           <Badge 
                             variant={
                               employee.role === "admin" 
@@ -993,24 +993,26 @@ export default function Employees() {
                                   ? "default" 
                                   : "secondary"
                             }
+                            className="text-xs px-1.5 py-0"
                           >
                             {employee.role ? employee.role.charAt(0).toUpperCase() + employee.role.slice(1) : "-"}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={employee.is_active ? "default" : "secondary"}>
+                        <TableCell className="py-2">
+                          <Badge variant={employee.is_active ? "default" : "secondary"} className="text-xs px-1.5 py-0">
                             {employee.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                        <TableCell className="text-right py-2">
+                          <div className="flex justify-end gap-1">
                             {(role === "admin" || role === "manager") && (
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7"
                                 onClick={() => navigate(`/employee/${employee.id}`)}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {role === "admin" && (
@@ -1018,16 +1020,18 @@ export default function Employees() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7"
                                   onClick={() => openEditDialog(employee)}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7"
                                   onClick={() => openDeleteDialog(employee)}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </>
                             )}
