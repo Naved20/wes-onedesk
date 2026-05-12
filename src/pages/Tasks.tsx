@@ -1418,6 +1418,12 @@ const Tasks = () => {
 
       if (deleteError) throw deleteError;
 
+      // Delete existing assignment group references
+      await (supabase as any)
+        .from("task_assignment_groups")
+        .delete()
+        .eq("task_id", editingTask.id);
+
       // Then, create new assignments
       if (editFormData.assign_to === "all") {
         const assignments = employees.map(emp => ({
@@ -1430,6 +1436,30 @@ const Tasks = () => {
           .insert(assignments);
 
         if (assignError) throw assignError;
+      } else if (editFormData.assign_to === "groups") {
+        const groupMemberIds = editFormData.assignment_group_ids
+          .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+        const uniqueMemberIds = Array.from(new Set(groupMemberIds));
+
+        if (uniqueMemberIds.length > 0) {
+          const assignments = uniqueMemberIds.map(uid => ({
+            task_id: editingTask.id,
+            user_id: uid,
+          }));
+          const { error: assignError } = await supabase
+            .from("task_assignments" as any)
+            .insert(assignments);
+          if (assignError) throw assignError;
+        }
+
+        const groupRefs = editFormData.assignment_group_ids.map(gid => ({
+          task_id: editingTask.id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_assignment_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       } else {
         const assignments = editFormData.assigned_user_ids.map(userId => ({
           task_id: editingTask.id,
