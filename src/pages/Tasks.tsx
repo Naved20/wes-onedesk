@@ -759,6 +759,15 @@ const Tasks = () => {
       return;
     }
 
+    if (formData.assign_to === "groups" && formData.assignment_group_ids.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one assignment group",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!user?.id) {
       toast({
         title: "Error",
