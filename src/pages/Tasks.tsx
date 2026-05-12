@@ -1247,6 +1247,18 @@ const Tasks = () => {
       console.error("Error fetching task groups:", e);
     }
 
+    // Fetch which assignment groups were assigned to this task
+    let assignedGroupIds: string[] = [];
+    try {
+      const { data } = await (supabase as any)
+        .from("task_assignment_groups")
+        .select("group_id")
+        .eq("task_id", task.id);
+      assignedGroupIds = (data || []).map((r: any) => r.group_id);
+    } catch (e) {
+      console.error("Error fetching task assignment groups:", e);
+    }
+
     // Fetch individual reviewer assignments
     let individualAssignments: Array<{ user_id: string; reviewer_id: string }> = [];
     try {
@@ -1268,8 +1280,9 @@ const Tasks = () => {
       due_date: task.due_date ? task.due_date.split('T')[0] : "",
       file: null,
       keepExistingFile: true,
-      assign_to: assignedUserIds.length === employees.length ? "all" : "specific",
+      assign_to: assignedGroupIds.length > 0 ? "groups" : (assignedUserIds.length === employees.length ? "all" : "specific"),
       assigned_user_ids: assignedUserIds,
+      assignment_group_ids: assignedGroupIds,
       peer_reviewer_ids: currentReviewers.map(r => r.user_id),
       peer_reviewer_group_ids: groupIds,
       review_assignment_type: (task as any).review_assignment_type || "group",
