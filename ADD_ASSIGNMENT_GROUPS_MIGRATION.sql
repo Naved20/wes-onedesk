@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.assignment_group_members (
   UNIQUE(group_id, user_id)
 );
 
+
 -- Add indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_assignment_groups_active ON public.assignment_groups(is_active);
 CREATE INDEX IF NOT EXISTS idx_assignment_groups_name ON public.assignment_groups(name);
