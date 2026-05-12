@@ -835,6 +835,32 @@ const Tasks = () => {
           .insert(assignments);
 
         if (assignError) throw assignError;
+      } else if (formData.assign_to === "groups") {
+        // Assign to all members of selected groups (union, dedup)
+        const groupMemberIds = formData.assignment_group_ids
+          .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+        const uniqueMemberIds = Array.from(new Set(groupMemberIds));
+
+        if (uniqueMemberIds.length > 0) {
+          const assignments = uniqueMemberIds.map(uid => ({
+            task_id: (taskData as any).id,
+            user_id: uid,
+          }));
+          const { error: assignError } = await supabase
+            .from("task_assignments" as any)
+            .insert(assignments);
+          if (assignError) throw assignError;
+        }
+
+        // Record which groups were assigned
+        const groupRefs = formData.assignment_group_ids.map(gid => ({
+          task_id: (taskData as any).id,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_assignment_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
       } else {
         // Assign to selected employees
         const assignments = formData.assigned_user_ids.map(userId => ({
