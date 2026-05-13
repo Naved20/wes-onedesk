@@ -117,7 +117,7 @@ export const createFaceSession = async (): Promise<string> => {
     const ipAddress = await getIPAddress();
     const locationInfo = await getLocation();
 
-    const { error } = await supabase.from("face_attendance_sessions").insert({
+    const { error } = await (supabase as any).from("face_attendance_sessions").insert({
       session_token: sessionToken,
       device_info: deviceInfo,
       ip_address: ipAddress,
