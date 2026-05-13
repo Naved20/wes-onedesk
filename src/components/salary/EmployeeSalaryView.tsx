@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Clock, Calculator, CheckCircle, Lock, AlertCircle, TrendingUp, TrendingDown, User, Coins } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -431,6 +432,11 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // Earnings state
+  const [totalEarnings, setTotalEarnings] = useState<number>(0);
+  const [earningsByType, setEarningsByType] = useState<Record<string, number>>({});
+  const [loadingEarnings, setLoadingEarnings] = useState(false);
 
   const fetchSalary = useCallback(async () => {
     setLoading(true);
@@ -458,9 +464,54 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
     }
   }, [userId, selectedMonth, selectedYear]);
 
+  const fetchTotalEarnings = useCallback(async () => {
+    if (!userId) return;
+    
+    setLoadingEarnings(true);
+    try {
+      // Fetch earnings with task details to get type
+      const { data, error } = await supabase
+        .from("task_earnings" as any)
+        .select(`
+          amount,
+          status,
+          task_id,
+          tasks!inner(type)
+        `)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Error fetching earnings:", error);
+        return;
+      }
+
+      // Calculate total approved and paid earnings
+      const approvedEarnings = (data || [])
+        .filter((earning: any) => earning.status === "approved" || earning.status === "paid");
+      
+      const total = approvedEarnings
+        .reduce((sum: number, earning: any) => sum + (parseFloat(earning.amount) || 0), 0);
+
+      // Calculate earnings by type
+      const byType: Record<string, number> = {};
+      approvedEarnings.forEach((earning: any) => {
+        const taskType = earning.tasks?.type || "Unassigned Type";
+        byType[taskType] = (byType[taskType] || 0) + parseFloat(earning.amount || 0);
+      });
+
+      setTotalEarnings(total);
+      setEarningsByType(byType);
+    } catch (error) {
+      console.error("Error fetching total earnings:", error);
+    } finally {
+      setLoadingEarnings(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
     fetchSalary();
-  }, [fetchSalary]);
+    fetchTotalEarnings();
+  }, [fetchSalary, fetchTotalEarnings]);
 
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount === null || amount === undefined) return "₹0.00";
@@ -495,7 +546,20 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
   }
 
   return (
-    <div className="space-y-6">
+    <Tabs defaultValue="salary" className="space-y-6">
+      <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsTrigger value="salary" className="gap-2">
+          <DollarSign className="h-4 w-4" />
+          Salary
+        </TabsTrigger>
+        <TabsTrigger value="earnings" className="gap-2">
+          <Coins className="h-4 w-4" />
+          Earnings
+        </TabsTrigger>
+      </TabsList>
+
+      {/* Salary Tab */}
+      <TabsContent value="salary" className="space-y-6">
       {/* Month/Year Selector and Potential Earning Button */}
       <div className="flex gap-4 flex-wrap items-center justify-between">
         <div className="flex gap-4 flex-wrap">
@@ -801,6 +865,135 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
           </Card>
         </>
       )}
-    </div>
+      </TabsContent>
+
+      {/* Earnings Tab */}
+      <TabsContent value="earnings" className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Total Earnings Card */}
+          <Card className="border-primary/20 bg-gradient-to-br from-green-50 to-transparent dark:from-green-950/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Coins className="h-5 w-5 text-green-600" />
+                  <CardTitle className="text-lg">Total Earnings</CardTitle>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchTotalEarnings}
+                  disabled={loadingEarnings}
+                >
+                  Refresh
+                </Button>
+              </div>
+              <CardDescription>From completed tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingEarnings ? (
+                <Skeleton className="h-12 w-32" />
+              ) : (
+                <>
+                  <div className="text-4xl font-bold text-green-600">
+                    ₹{totalEarnings.toFixed(2)}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Approved & Paid
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Earnings by Type Card */}
+          <Card className="border-primary/20 bg-gradient-to-br from-blue-50 to-transparent dark:from-blue-950/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-lg">Earnings by Type</CardTitle>
+              </div>
+              <CardDescription>Breakdown by task type</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingEarnings ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : Object.keys(earningsByType).length === 0 ? (
+                <p className="text-sm text-muted-foreground">No earnings yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(earningsByType).map(([type, amount]) => {
+                    const icon = 
+                      type === "English Reading, listening & speaking Task" ? "📚" :
+                      type === "Lesson Plan & Delivery" ? "📝" :
+                      type === "Soft & Digital Skills" ? "💻" :
+                      "❓";
+                    
+                    const displayType = 
+                      type === "English Reading, listening & speaking Task" ? "English Reading" :
+                      type === "Lesson Plan & Delivery" ? "Lesson Plan" :
+                      type === "Soft & Digital Skills" ? "Soft & Digital" :
+                      type;
+
+                    return (
+                      <div
+                        key={type}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{icon}</span>
+                          <span className="font-medium text-sm">{displayType}</span>
+                        </div>
+                        <span className="font-bold text-blue-600">
+                          ₹{amount.toFixed(2)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Earnings Info Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">About Earnings</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Task-based Rewards</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Earn money by completing assigned tasks. Each task type has a different reward amount.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <TrendingUp className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Approved Earnings</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Earnings are counted only after your task response is reviewed and approved by admin or peer reviewers.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <Coins className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Payment Status</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Total earnings shown include both approved and paid amounts. Check individual task status for payment details.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }

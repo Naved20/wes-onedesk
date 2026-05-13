@@ -222,6 +222,13 @@ const Tasks = () => {
     individual_reviewer_assignments: [] as Array<{ user_id: string; reviewer_id: string }>,
   });
 
+  // Predefined reward amounts for each task type
+  const rewardAmountsByType: Record<string, string> = {
+    "English Reading, listening & speaking Task": "10",
+    "Lesson Plan & Delivery": "15",
+    "Soft & Digital Skills": "20",
+  };
+
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
   const [reviewerGroups, setReviewerGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
   const [assignmentGroups, setAssignmentGroups] = useState<Array<{ id: string; name: string; member_ids: string[] }>>([]);
@@ -238,6 +245,11 @@ const Tasks = () => {
   const [remarkFormData, setRemarkFormData] = useState({
     remark_text: "",
     rating: 5,
+    confidence: 5,
+    vocabulary: 5,
+    tone: 5,
+    hand_gesture: 5,
+    speed: 5,
   });
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -361,6 +373,9 @@ const Tasks = () => {
         `)
         .eq("user_id", user.id);
 
+      console.log("💰 Earnings data:", data);
+      console.log("❌ Earnings error:", error);
+
       if (error) {
         console.error("Error fetching earnings:", error);
         return;
@@ -370,15 +385,21 @@ const Tasks = () => {
       const approvedEarnings = (data || [])
         .filter((earning: any) => earning.status === "approved" || earning.status === "paid");
       
+      console.log("✅ Approved earnings:", approvedEarnings);
+      
       const total = approvedEarnings
         .reduce((sum: number, earning: any) => sum + (parseFloat(earning.amount) || 0), 0);
 
       // Calculate earnings by type
       const byType: Record<string, number> = {};
       approvedEarnings.forEach((earning: any) => {
+        console.log("🔍 Full earning object:", JSON.stringify(earning, null, 2));
         const taskType = earning.tasks?.type || "Other";
+        console.log("📊 Processing earning:", { taskType, amount: earning.amount, tasks: earning.tasks });
         byType[taskType] = (byType[taskType] || 0) + parseFloat(earning.amount || 0);
       });
+
+      console.log("📈 Earnings by type:", byType);
 
       setTotalEarnings(total);
       setEarningsByType(byType);
@@ -1098,6 +1119,15 @@ const Tasks = () => {
 
     setSubmitting(true);
     try {
+      // Calculate average rating from all categories
+      const avgRating = Math.round(
+        (remarkFormData.confidence + 
+         remarkFormData.vocabulary + 
+         remarkFormData.tone + 
+         remarkFormData.hand_gesture + 
+         remarkFormData.speed) / 5
+      );
+
       // Insert remark
       const { data: remarkData, error: remarkError } = await supabase
         .from("task_remarks" as any)
@@ -1105,7 +1135,12 @@ const Tasks = () => {
           response_id: selectedResponse.id,
           remarked_by: user?.id,
           remark_text: remarkFormData.remark_text,
-          rating: remarkFormData.rating,
+          rating: avgRating,
+          confidence: remarkFormData.confidence,
+          vocabulary: remarkFormData.vocabulary,
+          tone: remarkFormData.tone,
+          hand_gesture: remarkFormData.hand_gesture,
+          speed: remarkFormData.speed,
         })
         .select()
         .single();
@@ -1150,7 +1185,15 @@ const Tasks = () => {
           : "Remark added successfully",
       });
 
-      setRemarkFormData({ remark_text: "", rating: 5 });
+      setRemarkFormData({ 
+        remark_text: "", 
+        rating: 5,
+        confidence: 5,
+        vocabulary: 5,
+        tone: 5,
+        hand_gesture: 5,
+        speed: 5,
+      });
       setRemarkDialogOpen(false);
       fetchRemarks(selectedResponse.id);
     } catch (error) {
@@ -1845,18 +1888,33 @@ const Tasks = () => {
                     <Label htmlFor="type">Type *</Label>
                     <Select 
                       value={formData.type} 
-                      onValueChange={(value) => setFormData({ ...formData, type: value })}
+                      onValueChange={(value) => {
+                        setFormData({ 
+                          ...formData, 
+                          type: value,
+                          reward_amount: rewardAmountsByType[value] || formData.reward_amount
+                        });
+                      }}
                       required
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="English Reading, listening & speaking Task">English Reading, listening & speaking Task</SelectItem>
-                        <SelectItem value="Lesson Plan & Delivery">Lesson Plan & Delivery</SelectItem>
-                        <SelectItem value="Soft & Digital Skills">Soft & Digital Skills</SelectItem>
+                        <SelectItem value="English Reading, listening & speaking Task">
+                          📚 English Reading (₹10)
+                        </SelectItem>
+                        <SelectItem value="Lesson Plan & Delivery">
+                          📝 Lesson Plan (₹15)
+                        </SelectItem>
+                        <SelectItem value="Soft & Digital Skills">
+                          💻 Soft & Digital (₹20)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Reward amount will be auto-filled based on type
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="category">Category</Label>
@@ -1883,18 +1941,18 @@ const Tasks = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="reward_amount">Reward Amount (₹) - Optional</Label>
+                    <Label htmlFor="reward_amount">Reward Amount (₹)</Label>
                     <Input
                       id="reward_amount"
                       type="number"
                       min="0"
                       step="0.01"
-                      placeholder="Enter reward amount in rupees"
+                      placeholder="Auto-filled based on type"
                       value={formData.reward_amount}
                       onChange={(e) => setFormData({ ...formData, reward_amount: e.target.value })}
                     />
                     <p className="text-xs text-muted-foreground">
-                      💰 Employees will earn this amount when their task response is reviewed and approved
+                      Auto-filled when you select a type. You can change it if needed.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -2403,7 +2461,7 @@ const Tasks = () => {
                         <>
                           {earningsByType["English Reading, listening & speaking Task"] !== undefined && (
                             <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
-                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">English Reading</span>
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">📚 English Reading</span>
                               <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
                                 ₹{earningsByType["English Reading, listening & speaking Task"].toFixed(2)}
                               </span>
@@ -2411,7 +2469,7 @@ const Tasks = () => {
                           )}
                           {earningsByType["Lesson Plan & Delivery"] !== undefined && (
                             <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
-                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Lesson Plan</span>
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">📝 Lesson Plan</span>
                               <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
                                 ₹{earningsByType["Lesson Plan & Delivery"].toFixed(2)}
                               </span>
@@ -2419,9 +2477,17 @@ const Tasks = () => {
                           )}
                           {earningsByType["Soft & Digital Skills"] !== undefined && (
                             <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
-                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Soft & Digital</span>
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">💻 Soft & Digital</span>
                               <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
                                 ₹{earningsByType["Soft & Digital Skills"].toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {earningsByType["Other"] !== undefined && (
+                            <div className="flex items-center justify-between p-2 bg-orange-100/50 dark:bg-orange-900/20 rounded">
+                              <span className="text-sm font-medium text-orange-700 dark:text-orange-300">❓ Unassigned Type</span>
+                              <span className="text-sm font-bold text-orange-900 dark:text-orange-100">
+                                ₹{earningsByType["Other"].toFixed(2)}
                               </span>
                             </div>
                           )}
@@ -2908,6 +2974,108 @@ const Tasks = () => {
                                               {renderFilePreview(userResponse.file_url, userResponse.file_name)}
                                             </div>
                                           )}
+
+                                          {/* Remarks on employee's response */}
+                                          <div className="mt-4 space-y-2 pl-4 border-l-2 border-muted">
+                                            <p className="text-sm font-medium text-muted-foreground">
+                                              Remarks ({remarks[userResponse.id]?.length || 0}):
+                                            </p>
+                                            {!remarks[userResponse.id] || remarks[userResponse.id].length === 0 ? (
+                                              <p className="text-xs text-muted-foreground italic">
+                                                No remarks yet. Your response is pending review.
+                                              </p>
+                                            ) : (
+                                              remarks[userResponse.id].map((remark) => (
+                                                <div key={remark.id} className="bg-muted p-4 rounded-md space-y-3">
+                                                  <div className="flex items-center justify-between">
+                                                    <div>
+                                                      <p className="text-xs font-medium">
+                                                        {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
+                                                      </p>
+                                                      <p className="text-xs text-muted-foreground">
+                                                        {format(new Date(remark.created_at), "MMM dd, HH:mm")}
+                                                      </p>
+                                                    </div>
+                                                    {remark.rating && (
+                                                      <div className="flex items-center gap-1">
+                                                        <span className="text-yellow-400">
+                                                          {"★".repeat(remark.rating)}{"☆".repeat(5 - remark.rating)}
+                                                        </span>
+                                                        <span className="text-xs font-semibold">{remark.rating}/5</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  
+                                                  <p className="text-sm">{remark.remark_text}</p>
+                                                  
+                                                  {/* Detailed Rating Breakdown */}
+                                                  {(remark as any).confidence && (
+                                                    <div className="border-t pt-3 space-y-2">
+                                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                                        Rating Breakdown:
+                                                      </p>
+                                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                                        {/* Confidence */}
+                                                        <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                          <span className="font-medium">💪 Confidence</span>
+                                                          <div className="flex items-center gap-1">
+                                                            <span className="text-yellow-400">
+                                                              {"★".repeat((remark as any).confidence || 0)}{"☆".repeat(5 - ((remark as any).confidence || 0))}
+                                                            </span>
+                                                            <span className="font-semibold">{(remark as any).confidence}/5</span>
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        {/* Vocabulary */}
+                                                        <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                          <span className="font-medium">📚 Vocabulary</span>
+                                                          <div className="flex items-center gap-1">
+                                                            <span className="text-yellow-400">
+                                                              {"★".repeat((remark as any).vocabulary || 0)}{"☆".repeat(5 - ((remark as any).vocabulary || 0))}
+                                                            </span>
+                                                            <span className="font-semibold">{(remark as any).vocabulary}/5</span>
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        {/* Tone */}
+                                                        <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                          <span className="font-medium">🎵 Tone</span>
+                                                          <div className="flex items-center gap-1">
+                                                            <span className="text-yellow-400">
+                                                              {"★".repeat((remark as any).tone || 0)}{"☆".repeat(5 - ((remark as any).tone || 0))}
+                                                            </span>
+                                                            <span className="font-semibold">{(remark as any).tone}/5</span>
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        {/* Hand Gesture */}
+                                                        <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                          <span className="font-medium">👋 Hand Gesture</span>
+                                                          <div className="flex items-center gap-1">
+                                                            <span className="text-yellow-400">
+                                                              {"★".repeat((remark as any).hand_gesture || 0)}{"☆".repeat(5 - ((remark as any).hand_gesture || 0))}
+                                                            </span>
+                                                            <span className="font-semibold">{(remark as any).hand_gesture}/5</span>
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        {/* Speed */}
+                                                        <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                          <span className="font-medium">⚡ Speed</span>
+                                                          <div className="flex items-center gap-1">
+                                                            <span className="text-yellow-400">
+                                                              {"★".repeat((remark as any).speed || 0)}{"☆".repeat(5 - ((remark as any).speed || 0))}
+                                                            </span>
+                                                            <span className="font-semibold">{(remark as any).speed}/5</span>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ))
+                                            )}
+                                          </div>
                                         </CardContent>
                                       </Card>
                                     </div>
@@ -3259,12 +3427,18 @@ const Tasks = () => {
                                   )}
 
                                   {/* Remarks on employee's response */}
-                                  {remarks[userResponse.id] && remarks[userResponse.id].length > 0 && (
-                                    <div className="mt-4 space-y-2 pl-4 border-l-2 border-primary">
-                                      <p className="text-sm font-medium text-primary">Remarks:</p>
-                                      {remarks[userResponse.id].map((remark) => (
-                                        <div key={remark.id} className="bg-muted p-3 rounded-md">
-                                          <div className="flex items-center justify-between mb-2">
+                                  <div className="mt-4 space-y-2 pl-4 border-l-2 border-muted">
+                                    <p className="text-sm font-medium text-muted-foreground">
+                                      Remarks ({remarks[userResponse.id]?.length || 0}):
+                                    </p>
+                                    {!remarks[userResponse.id] || remarks[userResponse.id].length === 0 ? (
+                                      <p className="text-xs text-muted-foreground italic">
+                                        No remarks yet. Your response is pending review.
+                                      </p>
+                                    ) : (
+                                      remarks[userResponse.id].map((remark) => (
+                                        <div key={remark.id} className="bg-muted p-4 rounded-md space-y-3">
+                                          <div className="flex items-center justify-between">
                                             <div>
                                               <p className="text-xs font-medium">
                                                 {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
@@ -3282,11 +3456,77 @@ const Tasks = () => {
                                               </div>
                                             )}
                                           </div>
+                                          
                                           <p className="text-sm">{remark.remark_text}</p>
+                                          
+                                          {/* Detailed Rating Breakdown */}
+                                          {(remark as any).confidence && (
+                                            <div className="border-t pt-3 space-y-2">
+                                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                                Rating Breakdown:
+                                              </p>
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                                {/* Confidence */}
+                                                <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                  <span className="font-medium">💪 Confidence</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat((remark as any).confidence || 0)}{"☆".repeat(5 - ((remark as any).confidence || 0))}
+                                                    </span>
+                                                    <span className="font-semibold">{(remark as any).confidence}/5</span>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Vocabulary */}
+                                                <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                  <span className="font-medium">📚 Vocabulary</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat((remark as any).vocabulary || 0)}{"☆".repeat(5 - ((remark as any).vocabulary || 0))}
+                                                    </span>
+                                                    <span className="font-semibold">{(remark as any).vocabulary}/5</span>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Tone */}
+                                                <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                  <span className="font-medium">🎵 Tone</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat((remark as any).tone || 0)}{"☆".repeat(5 - ((remark as any).tone || 0))}
+                                                    </span>
+                                                    <span className="font-semibold">{(remark as any).tone}/5</span>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Hand Gesture */}
+                                                <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                  <span className="font-medium">👋 Hand Gesture</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat((remark as any).hand_gesture || 0)}{"☆".repeat(5 - ((remark as any).hand_gesture || 0))}
+                                                    </span>
+                                                    <span className="font-semibold">{(remark as any).hand_gesture}/5</span>
+                                                  </div>
+                                                </div>
+                                                
+                                                {/* Speed */}
+                                                <div className="flex items-center justify-between bg-background/50 p-2 rounded">
+                                                  <span className="font-medium">⚡ Speed</span>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="text-yellow-400">
+                                                      {"★".repeat((remark as any).speed || 0)}{"☆".repeat(5 - ((remark as any).speed || 0))}
+                                                    </span>
+                                                    <span className="font-semibold">{(remark as any).speed}/5</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
-                                      ))}
-                                    </div>
-                                  )}
+                                      ))
+                                    )}
+                                  </div>
                                 </CardContent>
                               </Card>
                             </div>
@@ -3436,11 +3676,11 @@ const Tasks = () => {
 
       {/* Remark Dialog */}
       <Dialog open={remarkDialogOpen} onOpenChange={setRemarkDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Remark</DialogTitle>
             <DialogDescription>
-              Add your remark or feedback on this response
+              Rate the response on different parameters and add your feedback
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRemarkSubmit} className="space-y-4">
@@ -3448,43 +3688,139 @@ const Tasks = () => {
               <Label htmlFor="remark_text">Your Remark</Label>
               <Textarea
                 id="remark_text"
-                placeholder="Enter your remark"
+                placeholder="Enter your detailed feedback"
                 value={remarkFormData.remark_text}
                 onChange={(e) => setRemarkFormData({ ...remarkFormData, remark_text: e.target.value })}
                 rows={4}
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="rating">Rating (1-5)</Label>
-              <div className="flex items-center gap-4">
-                <input
-                  id="rating"
-                  type="range"
-                  min="1"
-                  max="5"
-                  value={remarkFormData.rating}
-                  onChange={(e) => setRemarkFormData({ ...remarkFormData, rating: parseInt(e.target.value) })}
-                  className="flex-1"
-                />
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setRemarkFormData({ ...remarkFormData, rating: star })}
-                      className={`text-2xl transition-colors ${
-                        star <= remarkFormData.rating ? "text-yellow-400" : "text-gray-300"
-                      }`}
-                    >
-                      ★
-                    </button>
+
+            {/* Rating Categories with Radio Buttons */}
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="font-semibold text-sm">Rate on Different Parameters (Select 1-5)</h3>
+              
+              {/* Confidence */}
+              <div className="space-y-2">
+                <Label className="font-medium">💪 Confidence (आत्मविश्वास)</Label>
+                <div className="flex gap-4 items-center">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="confidence"
+                        value={value}
+                        checked={remarkFormData.confidence === value}
+                        onChange={() => setRemarkFormData({ ...remarkFormData, confidence: value })}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{value}</span>
+                      <span className="text-yellow-400">★</span>
+                    </label>
                   ))}
                 </div>
-                <span className="font-semibold text-lg w-8 text-center">{remarkFormData.rating}</span>
+              </div>
+
+              {/* Vocabulary */}
+              <div className="space-y-2">
+                <Label className="font-medium">📚 Vocabulary (शब्दावली)</Label>
+                <div className="flex gap-4 items-center">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="vocabulary"
+                        value={value}
+                        checked={remarkFormData.vocabulary === value}
+                        onChange={() => setRemarkFormData({ ...remarkFormData, vocabulary: value })}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{value}</span>
+                      <span className="text-yellow-400">★</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tone */}
+              <div className="space-y-2">
+                <Label className="font-medium">🎵 Tone (स्वर)</Label>
+                <div className="flex gap-4 items-center">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="tone"
+                        value={value}
+                        checked={remarkFormData.tone === value}
+                        onChange={() => setRemarkFormData({ ...remarkFormData, tone: value })}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{value}</span>
+                      <span className="text-yellow-400">★</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hand Gesture */}
+              <div className="space-y-2">
+                <Label className="font-medium">👋 Hand Gesture (हाथ के इशारे)</Label>
+                <div className="flex gap-4 items-center">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="hand_gesture"
+                        value={value}
+                        checked={remarkFormData.hand_gesture === value}
+                        onChange={() => setRemarkFormData({ ...remarkFormData, hand_gesture: value })}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{value}</span>
+                      <span className="text-yellow-400">★</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Speed */}
+              <div className="space-y-2">
+                <Label className="font-medium">⚡ Speed (गति)</Label>
+                <div className="flex gap-4 items-center">
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <label key={value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="speed"
+                        value={value}
+                        checked={remarkFormData.speed === value}
+                        onChange={() => setRemarkFormData({ ...remarkFormData, speed: value })}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{value}</span>
+                      <span className="text-yellow-400">★</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Average Rating Display */}
+              <div className="bg-muted p-3 rounded-md">
+                <p className="text-sm font-medium">
+                  Overall Average Rating: {" "}
+                  <span className="text-lg font-bold text-yellow-600">
+                    {Math.round((remarkFormData.confidence + remarkFormData.vocabulary + remarkFormData.tone + remarkFormData.hand_gesture + remarkFormData.speed) / 5)}/5
+                  </span>
+                  {" "}
+                  <span className="text-yellow-400">
+                    {"★".repeat(Math.round((remarkFormData.confidence + remarkFormData.vocabulary + remarkFormData.tone + remarkFormData.hand_gesture + remarkFormData.speed) / 5))}
+                  </span>
+                </p>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+
+            <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setRemarkDialogOpen(false)}>
                 Cancel
               </Button>
@@ -3521,18 +3857,33 @@ const Tasks = () => {
               <Label htmlFor="edit-type">Type *</Label>
               <Select 
                 value={editFormData.type} 
-                onValueChange={(value) => setEditFormData({ ...editFormData, type: value })}
+                onValueChange={(value) => {
+                  setEditFormData({ 
+                    ...editFormData, 
+                    type: value,
+                    reward_amount: rewardAmountsByType[value] || editFormData.reward_amount
+                  });
+                }}
                 required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="English Reading, listening & speaking Task">English Reading, listening & speaking Task</SelectItem>
-                  <SelectItem value="Lesson Plan & Delivery">Lesson Plan & Delivery</SelectItem>
-                  <SelectItem value="Soft & Digital Skills">Soft & Digital Skills</SelectItem>
+                  <SelectItem value="English Reading, listening & speaking Task">
+                    📚 English Reading (₹10)
+                  </SelectItem>
+                  <SelectItem value="Lesson Plan & Delivery">
+                    📝 Lesson Plan (₹15)
+                  </SelectItem>
+                  <SelectItem value="Soft & Digital Skills">
+                    💻 Soft & Digital (₹20)
+                  </SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Reward amount will be auto-filled based on type
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-category">Category</Label>
