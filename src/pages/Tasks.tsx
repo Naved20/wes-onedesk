@@ -3017,44 +3017,61 @@ const Tasks = () => {
                                         </div>
                                       )}
 
-                                      {/* Remarks - Always show section for debugging */}
-                                      {console.log(`🎨 Rendering remarks section for response ${response.id}:`, {
-                                        hasRemarks: responseRemarks.length > 0,
-                                        remarksCount: responseRemarks.length,
-                                        remarks: responseRemarks
-                                      })}
-                                      <div className="mt-4 space-y-2 pl-4 border-l-2 border-muted">
-                                        <p className="text-sm font-medium text-muted-foreground">
-                                          Remarks ({responseRemarks.length}):
-                                        </p>
-                                        {responseRemarks.length === 0 ? (
-                                          <p className="text-xs text-muted-foreground italic">No remarks yet</p>
-                                        ) : (
-                                          responseRemarks.map((remark) => (
-                                            <div key={remark.id} className="bg-muted p-3 rounded-md">
-                                              <div className="flex items-center justify-between mb-2">
-                                                <div>
-                                                  <p className="text-xs font-medium">
-                                                    {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
-                                                  </p>
-                                                  <p className="text-xs text-muted-foreground">
-                                                    {format(new Date(remark.created_at), "MMM dd, HH:mm")}
-                                                  </p>
-                                                </div>
-                                                {remark.rating && (
-                                                  <div className="flex items-center gap-1">
-                                                    <span className="text-yellow-400">
-                                                      {"★".repeat(remark.rating)}{"☆".repeat(5 - remark.rating)}
-                                                    </span>
-                                                    <span className="text-xs font-semibold">{remark.rating}/5</span>
-                                                  </div>
-                                                )}
+                                      {/* Remarks grouped: Peer Reviewer vs Admin/Manager */}
+                                      {(() => {
+                                        const reviewerIds = new Set((peerReviewers[task.id] || []).map(r => r.user_id));
+                                        const peerRemarks = responseRemarks.filter(r => reviewerIds.has(r.remarked_by));
+                                        const adminRemarks = responseRemarks.filter(r => !reviewerIds.has(r.remarked_by));
+                                        const renderRemark = (remark: any) => (
+                                          <div key={remark.id} className="bg-muted p-3 rounded-md">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <div>
+                                                <p className="text-xs font-medium">
+                                                  {remark.employee_profiles?.first_name} {remark.employee_profiles?.last_name}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  {format(new Date(remark.created_at), "MMM dd, HH:mm")}
+                                                </p>
                                               </div>
-                                              <p className="text-sm">{remark.remark_text}</p>
+                                              {remark.rating && (
+                                                <div className="flex items-center gap-1">
+                                                  <span className="text-yellow-400">
+                                                    {"★".repeat(remark.rating)}{"☆".repeat(5 - remark.rating)}
+                                                  </span>
+                                                  <span className="text-xs font-semibold">{remark.rating}/5</span>
+                                                </div>
+                                              )}
                                             </div>
-                                          ))
-                                        )}
-                                      </div>
+                                            <p className="text-sm whitespace-pre-wrap">{remark.remark_text}</p>
+                                          </div>
+                                        );
+                                        return (
+                                          <div className="mt-4 space-y-3 pl-4 border-l-2 border-muted">
+                                            <p className="text-sm font-medium text-muted-foreground">
+                                              Remarks ({responseRemarks.length})
+                                            </p>
+                                            {responseRemarks.length === 0 && (
+                                              <p className="text-xs text-muted-foreground italic">No remarks yet</p>
+                                            )}
+                                            {peerRemarks.length > 0 && (
+                                              <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                                                  Peer Reviewer Remarks ({peerRemarks.length})
+                                                </p>
+                                                {peerRemarks.map(renderRemark)}
+                                              </div>
+                                            )}
+                                            {adminRemarks.length > 0 && (
+                                              <div className="space-y-2">
+                                                <p className="text-xs font-semibold text-primary uppercase tracking-wide">
+                                                  Admin / Manager Remarks ({adminRemarks.length})
+                                                </p>
+                                                {adminRemarks.map(renderRemark)}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </CardContent>
                                   </Card>
                                 );
