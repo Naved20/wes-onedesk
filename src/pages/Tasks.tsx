@@ -200,6 +200,7 @@ const Tasks = () => {
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
   
   const [totalEarnings, setTotalEarnings] = useState<number>(0);
+  const [earningsByType, setEarningsByType] = useState<Record<string, number>>({});
   const [loadingEarnings, setLoadingEarnings] = useState(false);
   
   const TASKS_PER_PAGE = 4;
@@ -228,8 +229,8 @@ const Tasks = () => {
   const [responseFormData, setResponseFormData] = useState({
     response_text: "",
     link: "",
-    article_file: null as File | null,
-    additional_file: null as File | null,
+    article_link: "",
+    video_link: "",
     file: null as File | null,
   });
   const [responseMode, setResponseMode] = useState<"link" | "file">("link");
@@ -349,9 +350,15 @@ const Tasks = () => {
     
     setLoadingEarnings(true);
     try {
+      // Fetch earnings with task details to get type
       const { data, error } = await supabase
         .from("task_earnings" as any)
-        .select("amount, status")
+        .select(`
+          amount,
+          status,
+          task_id,
+          tasks!inner(type)
+        `)
         .eq("user_id", user.id);
 
       if (error) {
@@ -360,11 +367,21 @@ const Tasks = () => {
       }
 
       // Calculate total approved and paid earnings
-      const total = (data || [])
-        .filter((earning: any) => earning.status === "approved" || earning.status === "paid")
+      const approvedEarnings = (data || [])
+        .filter((earning: any) => earning.status === "approved" || earning.status === "paid");
+      
+      const total = approvedEarnings
         .reduce((sum: number, earning: any) => sum + (parseFloat(earning.amount) || 0), 0);
 
+      // Calculate earnings by type
+      const byType: Record<string, number> = {};
+      approvedEarnings.forEach((earning: any) => {
+        const taskType = earning.tasks?.type || "Other";
+        byType[taskType] = (byType[taskType] || 0) + parseFloat(earning.amount || 0);
+      });
+
       setTotalEarnings(total);
+      setEarningsByType(byType);
     } catch (error) {
       console.error("Error fetching total earnings:", error);
     } finally {
@@ -983,10 +1000,6 @@ const Tasks = () => {
     try {
       let fileUrl = null;
       let fileName = null;
-      let articleFileUrl = null;
-      let articleFileName = null;
-      let additionalFileUrl = null;
-      let additionalFileName = null;
 
       // Upload main file to Supabase Storage if exists
       if (responseFormData.file) {
@@ -1007,49 +1020,10 @@ const Tasks = () => {
         fileName = responseFormData.file.name;
       }
 
-      // Upload article file to Supabase Storage if exists
-      if (responseFormData.article_file) {
-        const fileExt = responseFormData.article_file.name.split('.').pop();
-        const filePath = `articles/${crypto.randomUUID()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('task-responses')
-          .upload(filePath, responseFormData.article_file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('task-responses')
-          .getPublicUrl(filePath);
-
-        articleFileUrl = publicUrl;
-        articleFileName = responseFormData.article_file.name;
-      }
-
-      // Upload additional file to Supabase Storage if exists
-      if (responseFormData.additional_file) {
-        const fileExt = responseFormData.additional_file.name.split('.').pop();
-        const filePath = `additional/${crypto.randomUUID()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('task-responses')
-          .upload(filePath, responseFormData.additional_file);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('task-responses')
-          .getPublicUrl(filePath);
-
-        additionalFileUrl = publicUrl;
-        additionalFileName = responseFormData.additional_file.name;
-      }
-
       // Find existing response for this user/task to decide insert vs update
       const existing = (responses[selectedTask.id] || []).find(r => r.user_id === user?.id);
 
-      // Build payload — when editing, only overwrite files if a new one was chosen,
-      // otherwise keep the previously uploaded URLs/names.
+      // Build payload with links instead of file uploads
       const payload: any = {
         task_id: selectedTask.id,
         user_id: user?.id,
@@ -1057,10 +1031,8 @@ const Tasks = () => {
         link: responseFormData.link.trim() || null,
         file_url: responseFormData.file ? fileUrl : (existing?.file_url ?? fileUrl),
         file_name: responseFormData.file ? fileName : (existing?.file_name ?? fileName),
-        article_file_url: responseFormData.article_file ? articleFileUrl : ((existing as any)?.article_file_url ?? articleFileUrl),
-        article_file_name: responseFormData.article_file ? articleFileName : ((existing as any)?.article_file_name ?? articleFileName),
-        additional_file_url: responseFormData.additional_file ? additionalFileUrl : ((existing as any)?.additional_file_url ?? additionalFileUrl),
-        additional_file_name: responseFormData.additional_file ? additionalFileName : ((existing as any)?.additional_file_name ?? additionalFileName),
+        article_link: responseFormData.article_link.trim() || null,
+        video_link: responseFormData.video_link.trim() || null,
       };
 
       if (existing) {
@@ -1081,7 +1053,7 @@ const Tasks = () => {
         description: existing ? "Response updated successfully" : "Response submitted successfully",
       });
 
-      setResponseFormData({ response_text: "", link: "", file: null, article_file: null, additional_file: null });
+      setResponseFormData({ response_text: "", link: "", article_link: "", video_link: "", file: null });
       setResponseDialogOpen(false);
       setSelectedTask(null);
       
@@ -2371,43 +2343,96 @@ const Tasks = () => {
 
         {/* Total Earnings Card - Only for Employees */}
         {role === "employee" && (
-          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-green-700 dark:text-green-300">Total Earnings</p>
-                    {loadingEarnings ? (
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="h-8 w-32 bg-green-200 dark:bg-green-800 animate-pulse rounded"></div>
-                      </div>
-                    ) : (
-                      <p className="text-3xl font-bold text-green-900 dark:text-green-100">
-                        ₹{totalEarnings.toFixed(2)}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Total Earnings */}
+            <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+                      <Coins className="h-8 w-8 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-green-700 dark:text-green-300">Total Earnings</p>
+                      {loadingEarnings ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="h-8 w-32 bg-green-200 dark:bg-green-800 animate-pulse rounded"></div>
+                        </div>
+                      ) : (
+                        <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                          ₹{totalEarnings.toFixed(2)}
+                        </p>
+                      )}
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        From completed tasks
                       </p>
-                    )}
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      From completed and reviewed tasks
-                    </p>
+                    </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchTotalEarnings}
+                    disabled={loadingEarnings}
+                    className="border-green-300 hover:bg-green-100 dark:border-green-700 dark:hover:bg-green-900/30"
+                  >
+                    {loadingEarnings ? "Refreshing..." : "Refresh"}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={fetchTotalEarnings}
-                  disabled={loadingEarnings}
-                  className="border-green-300 hover:bg-green-100 dark:border-green-700 dark:hover:bg-green-900/30"
-                >
-                  {loadingEarnings ? "Refreshing..." : "Refresh"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Earnings by Type */}
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Coins className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Earnings by Type</p>
+                  </div>
+                  {loadingEarnings ? (
+                    <div className="space-y-2">
+                      <div className="h-6 bg-blue-200 dark:bg-blue-800 animate-pulse rounded"></div>
+                      <div className="h-6 bg-blue-200 dark:bg-blue-800 animate-pulse rounded"></div>
+                      <div className="h-6 bg-blue-200 dark:bg-blue-800 animate-pulse rounded"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.keys(earningsByType).length === 0 ? (
+                        <p className="text-sm text-blue-600 dark:text-blue-400">No earnings yet</p>
+                      ) : (
+                        <>
+                          {earningsByType["English Reading, listening & speaking Task"] !== undefined && (
+                            <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">English Reading</span>
+                              <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                                ₹{earningsByType["English Reading, listening & speaking Task"].toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {earningsByType["Lesson Plan & Delivery"] !== undefined && (
+                            <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Lesson Plan</span>
+                              <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                                ₹{earningsByType["Lesson Plan & Delivery"].toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {earningsByType["Soft & Digital Skills"] !== undefined && (
+                            <div className="flex items-center justify-between p-2 bg-blue-100/50 dark:bg-blue-900/20 rounded">
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Soft & Digital</span>
+                              <span className="text-sm font-bold text-blue-900 dark:text-blue-100">
+                                ₹{earningsByType["Soft & Digital Skills"].toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Search and Filter Section */}
@@ -2828,9 +2853,9 @@ const Tasks = () => {
                                             setResponseFormData({
                                               response_text: userResponse.response_text || "",
                                               link: userResponse.link || "",
+                                              article_link: (userResponse as any).article_link || "",
+                                              video_link: (userResponse as any).video_link || "",
                                               file: null,
-                                              article_file: null,
-                                              additional_file: null,
                                             });
                                             setResponseDialogOpen(true);
                                           }}
@@ -2843,14 +2868,40 @@ const Tasks = () => {
                                         <CardContent className="pt-4 space-y-3">
                                           <p className="text-sm whitespace-pre-wrap">{userResponse.response_text}</p>
                                           {userResponse.link && (
-                                            <a 
-                                              href={userResponse.link} 
-                                              target="_blank" 
-                                              rel="noopener noreferrer"
-                                              className="text-sm text-primary hover:underline flex items-center gap-1"
-                                            >
-                                              🔗 {userResponse.link}
-                                            </a>
+                                            <div className="pt-2">
+                                              <a 
+                                                href={userResponse.link} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                                              >
+                                                🔗 Main Link: {userResponse.link}
+                                              </a>
+                                            </div>
+                                          )}
+                                          {(userResponse as any).article_link && (
+                                            <div className="pt-2">
+                                              <a 
+                                                href={(userResponse as any).article_link} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                                              >
+                                                📄 Article Link: {(userResponse as any).article_link}
+                                              </a>
+                                            </div>
+                                          )}
+                                          {(userResponse as any).video_link && (
+                                            <div className="pt-2">
+                                              <a 
+                                                href={(userResponse as any).video_link} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-primary hover:underline flex items-center gap-1"
+                                              >
+                                                🎥 Video Link: {(userResponse as any).video_link}
+                                              </a>
+                                            </div>
                                           )}
                                           {userResponse.file_url && userResponse.file_name && (
                                             <div className="pt-2 border-t">
@@ -3061,7 +3112,31 @@ const Tasks = () => {
                                             rel="noopener noreferrer"
                                             className="text-sm text-primary hover:underline flex items-center gap-1"
                                           >
-                                            🔗 {response.link}
+                                            🔗 Main Link: {response.link}
+                                          </a>
+                                        </div>
+                                      )}
+                                      {(response as any).article_link && (
+                                        <div className="pt-2">
+                                          <a 
+                                            href={(response as any).article_link} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-primary hover:underline flex items-center gap-1"
+                                          >
+                                            📄 Article Link: {(response as any).article_link}
+                                          </a>
+                                        </div>
+                                      )}
+                                      {(response as any).video_link && (
+                                        <div className="pt-2">
+                                          <a 
+                                            href={(response as any).video_link} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-primary hover:underline flex items-center gap-1"
+                                          >
+                                            🎥 Video Link: {(response as any).video_link}
                                           </a>
                                         </div>
                                       )}
@@ -3119,9 +3194,9 @@ const Tasks = () => {
                                     setResponseFormData({
                                       response_text: userResponse.response_text || "",
                                       link: userResponse.link || "",
+                                      article_link: (userResponse as any).article_link || "",
+                                      video_link: (userResponse as any).video_link || "",
                                       file: null,
-                                      article_file: null,
-                                      additional_file: null,
                                     });
                                     setResponseDialogOpen(true);
                                   }}
@@ -3149,7 +3224,31 @@ const Tasks = () => {
                                         rel="noopener noreferrer"
                                         className="text-sm text-primary hover:underline flex items-center gap-1"
                                       >
-                                        🔗 {userResponse.link}
+                                        🔗 Main Link: {userResponse.link}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {(userResponse as any).article_link && (
+                                    <div className="pt-2">
+                                      <a 
+                                        href={(userResponse as any).article_link} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                                      >
+                                        📄 Article Link: {(userResponse as any).article_link}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {(userResponse as any).video_link && (
+                                    <div className="pt-2">
+                                      <a 
+                                        href={(userResponse as any).video_link} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-sm text-primary hover:underline flex items-center gap-1"
+                                      >
+                                        🎥 Video Link: {(userResponse as any).video_link}
                                       </a>
                                     </div>
                                   )}
@@ -3245,8 +3344,8 @@ const Tasks = () => {
             <DialogTitle>{isEditingResponse ? "Edit Task Response" : "Submit Task Response"}</DialogTitle>
             <DialogDescription>
               {isEditingResponse
-                ? "Update your response. Existing files are kept unless you upload new ones."
-                : "Submit your task with a link and/or upload article/vocabulary/handwritten notes"}
+                ? "Update your response with links to your work"
+                : "Submit your task with links to your work (main link, article link, video link)"}
             </DialogDescription>
           </DialogHeader>
             );
@@ -3282,69 +3381,39 @@ const Tasks = () => {
               </p>
             </div>
 
-            {/* Article / Vocabulary / Handwritten Notes Upload Field */}
+            {/* Article / Vocabulary / Handwritten Notes Link Field */}
             <div className="space-y-2">
-              <Label htmlFor="article_file" className="flex items-center gap-2">
+              <Label htmlFor="article_link" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                Article / Vocabulary / Handwritten Notes (Optional)
+                Article / Vocabulary / Handwritten Notes Link (Optional)
               </Label>
               <Input
-                id="article_file"
-                type="file"
-                accept="image/*,application/pdf,.doc,.docx,.txt"
-                onChange={(e) => setResponseFormData({ ...responseFormData, article_file: e.target.files?.[0] || null })}
+                id="article_link"
+                type="url"
+                placeholder="https://example.com (Link to your article, vocabulary, or notes)"
+                value={responseFormData.article_link}
+                onChange={(e) => setResponseFormData({ ...responseFormData, article_link: e.target.value })}
               />
-              {responseFormData.article_file && (
-                <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                  <File className="h-4 w-4 text-primary" />
-                  <p className="text-sm text-muted-foreground flex-1">
-                    {responseFormData.article_file.name}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setResponseFormData({ ...responseFormData, article_file: null })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
               <p className="text-xs text-muted-foreground">
-                Upload article, vocabulary list, or handwritten notes (PDF, image, doc, txt)
+                Paste a link to your article, vocabulary list, or handwritten notes (Google Drive, Docs, etc.)
               </p>
             </div>
 
-            {/* Additional File Upload Field */}
+            {/* Video Link Field */}
             <div className="space-y-2">
-              <Label htmlFor="additional_file" className="flex items-center gap-2">
+              <Label htmlFor="video_link" className="flex items-center gap-2">
                 <ImageIcon className="h-4 w-4" />
-                Additional File Upload (Optional)
+                Video Link (Optional)
               </Label>
               <Input
-                id="additional_file"
-                type="file"
-                accept="image/*,application/pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx"
-                onChange={(e) => setResponseFormData({ ...responseFormData, additional_file: e.target.files?.[0] || null })}
+                id="video_link"
+                type="url"
+                placeholder="https://example.com (YouTube, Google Drive video link, etc.)"
+                value={responseFormData.video_link}
+                onChange={(e) => setResponseFormData({ ...responseFormData, video_link: e.target.value })}
               />
-              {responseFormData.additional_file && (
-                <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                  <File className="h-4 w-4 text-primary" />
-                  <p className="text-sm text-muted-foreground flex-1">
-                    {responseFormData.additional_file.name}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setResponseFormData({ ...responseFormData, additional_file: null })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
               <p className="text-xs text-muted-foreground">
-                Upload any additional supporting files (PDF, image, doc, ppt, xls, txt)
+                Paste a link to your video (YouTube, Google Drive, or any other video hosting platform)
               </p>
             </div>
 

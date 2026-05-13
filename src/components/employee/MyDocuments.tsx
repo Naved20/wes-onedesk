@@ -164,6 +164,7 @@ export function MyDocuments({ userId, isViewOnly = false }: MyDocumentsProps) {
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                   <DialogTitle>Upload New Document</DialogTitle>
+                  <p className="text-sm text-muted-foreground">Upload a new document for this employee</p>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
@@ -225,13 +226,13 @@ export function MyDocuments({ userId, isViewOnly = false }: MyDocumentsProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {documents.map((document) => {
-              const fileExt = document.document_name.split('.').pop()?.toLowerCase();
+            {documents.map((doc) => {
+              const fileExt = doc.document_name.split('.').pop()?.toLowerCase();
               const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExt || '');
               const isPdf = fileExt === 'pdf';
 
               return (
-                <div key={document.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {isImage ? (
                       <ImageIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
@@ -241,10 +242,10 @@ export function MyDocuments({ userId, isViewOnly = false }: MyDocumentsProps) {
                       <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{document.title}</p>
+                      <p className="font-medium truncate">{doc.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(document.uploaded_at), "MMM dd, yyyy")}
-                        {document.document_type && ` • ${document.document_type}`}
+                        {format(new Date(doc.uploaded_at), "MMM dd, yyyy")}
+                        {doc.document_type && ` • ${doc.document_type}`}
                       </p>
                     </div>
                   </div>
@@ -252,16 +253,56 @@ export function MyDocuments({ userId, isViewOnly = false }: MyDocumentsProps) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      asChild
+                      onClick={async () => {
+                        try {
+                          // Extract file path from URL
+                          const urlParts = doc.file_url.split('/');
+                          const bucketIndex = urlParts.findIndex(part => part === 'employee-documents');
+                          if (bucketIndex === -1) {
+                            // Fallback: try direct download
+                            window.open(doc.file_url, '_blank');
+                            return;
+                          }
+                          
+                          const filePath = urlParts.slice(bucketIndex + 1).join('/');
+                          
+                          // Download file from storage
+                          const { data, error } = await supabase.storage
+                            .from('employee-documents')
+                            .download(filePath);
+                          
+                          if (error) {
+                            console.error('Download error:', error);
+                            // Fallback: try direct download
+                            window.open(doc.file_url, '_blank');
+                            return;
+                          }
+                          
+                          // Create blob URL and trigger download
+                          const blobUrl = URL.createObjectURL(data);
+                          const link = window.document.createElement('a');
+                          link.href = blobUrl;
+                          link.download = doc.document_name;
+                          window.document.body.appendChild(link);
+                          link.click();
+                          window.document.body.removeChild(link);
+                          URL.revokeObjectURL(blobUrl);
+                          
+                          toast({
+                            title: "Success",
+                            description: "Document downloaded successfully",
+                          });
+                        } catch (error) {
+                          console.error('Download error:', error);
+                          toast({
+                            title: "Error",
+                            description: "Failed to download document",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                     >
-                      <a
-                        href={document.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={document.document_name}
-                      >
-                        <Download className="h-4 w-4" />
-                      </a>
+                      <Download className="h-4 w-4" />
                     </Button>
                     {!isViewOnly && (
                       <AlertDialog>
@@ -274,13 +315,13 @@ export function MyDocuments({ userId, isViewOnly = false }: MyDocumentsProps) {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Document</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to delete "{document.title}"? This action cannot be undone.
+                              Are you sure you want to delete "{doc.title}"? This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => handleDelete(document.id, document.file_url)}
+                              onClick={() => handleDelete(doc.id, doc.file_url)}
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
                               Delete
