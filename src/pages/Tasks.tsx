@@ -2905,6 +2905,12 @@ const Tasks = () => {
                                               🔗 {response.link}
                                             </a>
                                           )}
+                                          {response.file_url && response.file_name && (
+                                            <div className="pt-2 border-t">
+                                              {renderFilePreview(response.file_url, response.file_name)}
+                                            </div>
+                                          )}
+                                          {renderResponseRemarks(response.id, task.id)}
                                         </CardContent>
                                       </Card>
                                     ))}
