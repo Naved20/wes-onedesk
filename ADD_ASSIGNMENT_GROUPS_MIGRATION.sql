@@ -32,6 +32,13 @@ ALTER TABLE public.assignment_group_members ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for assignment_groups
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Admins and managers can view assignment groups" ON public.assignment_groups;
+DROP POLICY IF EXISTS "Employees can view their assignment groups" ON public.assignment_groups;
+DROP POLICY IF EXISTS "Admins can create assignment groups" ON public.assignment_groups;
+DROP POLICY IF EXISTS "Admins can update assignment groups" ON public.assignment_groups;
+DROP POLICY IF EXISTS "Admins can delete assignment groups" ON public.assignment_groups;
+
 -- Admins and managers can view all groups
 CREATE POLICY "Admins and managers can view assignment groups"
   ON public.assignment_groups
@@ -45,18 +52,12 @@ CREATE POLICY "Admins and managers can view assignment groups"
     )
   );
 
--- Employees can view groups they are members of
-CREATE POLICY "Employees can view their assignment groups"
+-- Employees can view all active groups (simplified)
+CREATE POLICY "Employees can view assignment groups"
   ON public.assignment_groups
   FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.assignment_group_members
-      WHERE assignment_group_members.group_id = assignment_groups.id
-      AND assignment_group_members.user_id = auth.uid()
-    )
-  );
+  USING (is_active = TRUE);
 
 -- Only admins can create groups
 CREATE POLICY "Admins can create assignment groups"
@@ -99,6 +100,12 @@ CREATE POLICY "Admins can delete assignment groups"
 
 -- RLS Policies for assignment_group_members
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Admins and managers can view assignment group members" ON public.assignment_group_members;
+DROP POLICY IF EXISTS "Employees can view their group members" ON public.assignment_group_members;
+DROP POLICY IF EXISTS "Admins can add assignment group members" ON public.assignment_group_members;
+DROP POLICY IF EXISTS "Admins can remove assignment group members" ON public.assignment_group_members;
+
 -- Admins and managers can view all members
 CREATE POLICY "Admins and managers can view assignment group members"
   ON public.assignment_group_members
@@ -112,18 +119,12 @@ CREATE POLICY "Admins and managers can view assignment group members"
     )
   );
 
--- Employees can view members of groups they belong to
-CREATE POLICY "Employees can view their group members"
+-- Employees can view all members (simplified to avoid recursion)
+CREATE POLICY "Employees can view assignment group members"
   ON public.assignment_group_members
   FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.assignment_group_members agm
-      WHERE agm.group_id = assignment_group_members.group_id
-      AND agm.user_id = auth.uid()
-    )
-  );
+  USING (TRUE);
 
 -- Only admins can add members
 CREATE POLICY "Admins can add assignment group members"

@@ -562,51 +562,48 @@ const Tasks = () => {
 
   const fetchRemarks = async (responseId: string) => {
     try {
-      // First try with join
-      let { data, error } = await supabase
+      console.log("🔍 Fetching remarks for response:", responseId);
+      
+      // Fetch remarks without join (join is failing due to FK relationship issue)
+      const { data: remarksData, error: remarksError } = await supabase
         .from("task_remarks" as any)
-        .select(`
-          *,
-          employee_profiles:remarked_by(first_name, last_name)
-        `)
+        .select("*")
         .eq("response_id", responseId)
         .order("created_at", { ascending: false });
-
-      // If join fails or returns null profiles, fetch manually
-      if (error || !data || data.some((r: any) => !r.employee_profiles)) {
-        const { data: remarksData, error: remarksError } = await supabase
-          .from("task_remarks" as any)
-          .select("*")
-          .eq("response_id", responseId)
-          .order("created_at", { ascending: false });
-        
-        if (remarksError) throw remarksError;
-        
-        // Manually fetch employee profiles
-        if (remarksData && remarksData.length > 0) {
-          const enrichedData = await Promise.all(
-            remarksData.map(async (remark: any) => {
-              const { data: profile } = await supabase
-                .from("employee_profiles")
-                .select("first_name, last_name")
-                .eq("user_id", remark.remarked_by)
-                .single();
-              
-              return {
-                ...remark,
-                employee_profiles: profile || { first_name: "Unknown", last_name: "User" }
-              };
-            })
-          );
-          
-          setRemarks(prev => ({ ...prev, [responseId]: enrichedData as any }));
-        }
-        return;
+      
+      console.log("📊 Remarks fetch result:", { remarksData, remarksError, count: remarksData?.length });
+      
+      if (remarksError) {
+        console.error("❌ Error fetching remarks:", remarksError);
+        throw remarksError;
       }
       
-      setRemarks(prev => ({ ...prev, [responseId]: data as any || [] }));
+      // Manually fetch employee profiles for all remarks
+      if (remarksData && remarksData.length > 0) {
+        const enrichedData = await Promise.all(
+          remarksData.map(async (remark: any) => {
+            const { data: profile } = await supabase
+              .from("employee_profiles")
+              .select("first_name, last_name")
+              .eq("user_id", remark.remarked_by)
+              .single();
+            
+            return {
+              ...remark,
+              employee_profiles: profile || { first_name: "Unknown", last_name: "User" }
+            };
+          })
+        );
+        
+        console.log("✅ Enriched remarks data:", enrichedData);
+        setRemarks(prev => ({ ...prev, [responseId]: enrichedData as any }));
+      } else {
+        console.log("ℹ️ No remarks found for this response");
+        setRemarks(prev => ({ ...prev, [responseId]: [] }));
+      }
     } catch (error) {
-      console.error("Error fetching remarks:", error);
+      console.error("❌ Error fetching remarks:", error);
+      setRemarks(prev => ({ ...prev, [responseId]: [] }));
     }
   };
 
@@ -2966,6 +2963,13 @@ const Tasks = () => {
                                   <div className="space-y-4">
                                     {visibleResponses.map((response) => {
                                 const responseRemarks = remarks[response.id] || [];
+                                console.log(`💬 Response ${response.id}:`, {
+                                  responseId: response.id,
+                                  remarksInState: remarks[response.id],
+                                  remarksArray: responseRemarks,
+                                  remarksLength: responseRemarks.length,
+                                  allRemarksState: remarks
+                                });
                                 
                                 return (
                                   <Card key={response.id}>
@@ -3013,11 +3017,20 @@ const Tasks = () => {
                                         </div>
                                       )}
 
-                                      {/* Remarks */}
-                                      {responseRemarks.length > 0 && (
-                                        <div className="mt-4 space-y-2 pl-4 border-l-2 border-primary">
-                                          <p className="text-sm font-medium text-primary">Remarks:</p>
-                                          {responseRemarks.map((remark) => (
+                                      {/* Remarks - Always show section for debugging */}
+                                      {console.log(`🎨 Rendering remarks section for response ${response.id}:`, {
+                                        hasRemarks: responseRemarks.length > 0,
+                                        remarksCount: responseRemarks.length,
+                                        remarks: responseRemarks
+                                      })}
+                                      <div className="mt-4 space-y-2 pl-4 border-l-2 border-muted">
+                                        <p className="text-sm font-medium text-muted-foreground">
+                                          Remarks ({responseRemarks.length}):
+                                        </p>
+                                        {responseRemarks.length === 0 ? (
+                                          <p className="text-xs text-muted-foreground italic">No remarks yet</p>
+                                        ) : (
+                                          responseRemarks.map((remark) => (
                                             <div key={remark.id} className="bg-muted p-3 rounded-md">
                                               <div className="flex items-center justify-between mb-2">
                                                 <div>
@@ -3039,9 +3052,9 @@ const Tasks = () => {
                                               </div>
                                               <p className="text-sm">{remark.remark_text}</p>
                                             </div>
-                                          ))}
-                                        </div>
-                                      )}
+                                          ))
+                                        )}
+                                      </div>
                                     </CardContent>
                                   </Card>
                                 );
