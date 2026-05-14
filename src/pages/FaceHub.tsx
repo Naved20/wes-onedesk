@@ -219,6 +219,7 @@ export default function FaceHub() {
       // If successful, play sound and show popup
       if (data.ok) {
         playSuccessSound();
+        speakAttendanceEnrolled(data.employeeName || "Employee");
         setCheckInData({
           name: data.employeeName || "Employee",
           time: format(new Date(), "hh:mm a"),

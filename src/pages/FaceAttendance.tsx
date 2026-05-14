@@ -277,10 +277,12 @@ export default function FaceAttendance() {
 
       // Play success sound
       playSuccessSound();
+      const fullName = `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim();
+      speakAttendanceEnrolled(fullName || "Employee");
 
       // Show success dialog
       setCheckInData({
-        name: `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim(),
+        name: fullName,
         time: format(new Date(), "hh:mm a"),
         shiftName: shift.shift_name,
         shiftStartTime: shift.start_time,
