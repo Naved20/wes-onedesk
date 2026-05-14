@@ -1721,31 +1721,46 @@ export type Database = {
       }
       task_remarks: {
         Row: {
+          confidence: number | null
           created_at: string | null
+          hand_gesture: number | null
           id: string
           rating: number | null
           remark_text: string
           remarked_by: string
           response_id: string
+          speed: number | null
+          tone: number | null
           updated_at: string | null
+          vocabulary: number | null
         }
         Insert: {
+          confidence?: number | null
           created_at?: string | null
+          hand_gesture?: number | null
           id?: string
           rating?: number | null
           remark_text: string
           remarked_by: string
           response_id: string
+          speed?: number | null
+          tone?: number | null
           updated_at?: string | null
+          vocabulary?: number | null
         }
         Update: {
+          confidence?: number | null
           created_at?: string | null
+          hand_gesture?: number | null
           id?: string
           rating?: number | null
           remark_text?: string
           remarked_by?: string
           response_id?: string
+          speed?: number | null
+          tone?: number | null
           updated_at?: string | null
+          vocabulary?: number | null
         }
         Relationships: [
           {
@@ -1763,6 +1778,7 @@ export type Database = {
           additional_file_url: string | null
           article_file_name: string | null
           article_file_url: string | null
+          article_link: string | null
           created_at: string | null
           file_name: string | null
           file_url: string | null
@@ -1772,12 +1788,14 @@ export type Database = {
           task_id: string
           updated_at: string | null
           user_id: string
+          video_link: string | null
         }
         Insert: {
           additional_file_name?: string | null
           additional_file_url?: string | null
           article_file_name?: string | null
           article_file_url?: string | null
+          article_link?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -1787,12 +1805,14 @@ export type Database = {
           task_id: string
           updated_at?: string | null
           user_id: string
+          video_link?: string | null
         }
         Update: {
           additional_file_name?: string | null
           additional_file_url?: string | null
           article_file_name?: string | null
           article_file_url?: string | null
+          article_link?: string | null
           created_at?: string | null
           file_name?: string | null
           file_url?: string | null
@@ -1802,6 +1822,7 @@ export type Database = {
           task_id?: string
           updated_at?: string | null
           user_id?: string
+          video_link?: string | null
         }
         Relationships: [
           {
