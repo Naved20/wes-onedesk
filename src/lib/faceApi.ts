@@ -26,7 +26,7 @@ export async function getFaceDescriptor(
 ): Promise<Float32Array | null> {
   await loadFaceModels();
   const detection = await faceapi
-    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.35 }))
+    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
     .withFaceLandmarks()
     .withFaceDescriptor();
   return detection?.descriptor ?? null;
@@ -78,7 +78,7 @@ export function euclideanDistance(a: Float32Array | number[], b: Float32Array | 
   return Math.sqrt(sum);
 }
 
-export const MATCH_THRESHOLD = 0.68; // lower = stricter; averaged samples need a little room for live camera lighting
+export const MATCH_THRESHOLD = 0.40; // Stricter threshold - distance must be below 0.40 for match
 
 export function findBestMatch(
   candidate: Float32Array,

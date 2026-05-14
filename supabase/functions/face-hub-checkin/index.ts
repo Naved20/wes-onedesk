@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MATCH_THRESHOLD = 0.68;
+const MATCH_THRESHOLD = 0.40; // Stricter threshold - distance must be below 0.40 for match
 
 type Descriptor = number[];
 
@@ -157,6 +157,9 @@ serve(async (req) => {
       p_date: today,
     });
     const shiftId = shiftRows?.[0]?.shift_id ?? null;
+    const shiftName = shiftRows?.[0]?.shift_name ?? null;
+    const shiftStartTime = shiftRows?.[0]?.start_time ?? null;
+    const shiftEndTime = shiftRows?.[0]?.end_time ?? null;
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("attendance")
@@ -221,6 +224,9 @@ serve(async (req) => {
       enrolledCount: validEnrollments.length,
       employeeName,
       attendanceId,
+      shiftName,
+      shiftStartTime,
+      shiftEndTime,
     });
   } catch (error) {
     console.error("Face hub check-in error:", error);

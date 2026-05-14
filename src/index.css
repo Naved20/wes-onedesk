@@ -172,3 +172,7 @@ All colors MUST be HSL.
 .success-progress-bar {
   animation: progressBar 3s linear forwards;
 }
+
+.error-progress-bar {
+  animation: progressBar 4s linear forwards;
+}

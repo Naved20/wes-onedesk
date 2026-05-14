@@ -33,7 +33,15 @@ export default function FaceHub() {
   const [lastDistance, setLastDistance] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [checkInData, setCheckInData] = useState<{ name: string; time: string } | null>(null);
+  const [showNotEnrolledDialog, setShowNotEnrolledDialog] = useState(false);
+  const [notEnrolledDistance, setNotEnrolledDistance] = useState<number | null>(null);
+  const [checkInData, setCheckInData] = useState<{ 
+    name: string; 
+    time: string; 
+    shiftName?: string;
+    shiftStartTime?: string;
+    shiftEndTime?: string;
+  } | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -149,6 +157,13 @@ export default function FaceHub() {
       const descriptor = await getAveragedFaceDescriptor(v, 7, 160);
       if (!descriptor) {
         setLastResult({ ok: false, msg: "No face detected. Please face the camera squarely with good lighting." });
+        
+        // Show not enrolled popup for no face detected
+        setShowNotEnrolledDialog(true);
+        setTimeout(() => {
+          setShowNotEnrolledDialog(false);
+        }, 4000);
+        
         await supabase.from("face_checkin_history").insert({
           user_id: null,
           matched: false,
@@ -167,15 +182,49 @@ export default function FaceHub() {
         return;
       }
 
-      setLastDistance(typeof data.distance === "number" ? data.distance : null);
+      // CRITICAL: Frontend validation - reject if distance > 0.40
+      const distance = typeof data.distance === "number" ? data.distance : null;
+      if (distance !== null && distance > 0.40) {
+        setLastResult({ 
+          ok: false, 
+          msg: `Face not recognized. Match quality too low (${distance.toFixed(3)}). Please ensure you are enrolled.` 
+        });
+        setLastDistance(distance);
+        setNotEnrolledDistance(distance);
+        
+        // Show not enrolled popup
+        setShowNotEnrolledDialog(true);
+        
+        // Auto-close after 4 seconds
+        setTimeout(() => {
+          setShowNotEnrolledDialog(false);
+          setNotEnrolledDistance(null);
+        }, 4000);
+        
+        // Log failed attempt
+        await supabase.from("face_checkin_history").insert({
+          user_id: null,
+          matched: false,
+          match_distance: distance,
+          notes: "Rejected by frontend - distance above threshold",
+        });
+        
+        fetchHistory();
+        return;
+      }
+
+      setLastDistance(distance);
       setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
       
       // If successful, play sound and show popup
       if (data.ok) {
         playSuccessSound();
         setCheckInData({
-          name: data.employee_name || "Employee",
-          time: format(new Date(), "hh:mm a")
+          name: data.employeeName || "Employee",
+          time: format(new Date(), "hh:mm a"),
+          shiftName: data.shiftName,
+          shiftStartTime: data.shiftStartTime,
+          shiftEndTime: data.shiftEndTime,
         });
         setShowSuccessDialog(true);
         
@@ -208,8 +257,8 @@ export default function FaceHub() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+      <div className="max-w-xl mx-auto">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <img src={wesLogo} alt="WES" className="h-12 w-12 rounded-full object-cover" />
             <div>
@@ -232,7 +281,7 @@ export default function FaceHub() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="checkin" className="mt-4">
+          <TabsContent value="checkin" className="mt-2">
             <Card>
               <CardHeader>
                 <CardTitle>Camera</CardTitle>
@@ -241,7 +290,7 @@ export default function FaceHub() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[5/8] border-4 border-primary/30 shadow-2xl">
+                <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[9/8] border-4 border-primary/30 shadow-2xl">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   {scanning && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
@@ -327,11 +376,58 @@ export default function FaceHub() {
                   <p className="text-muted-foreground">
                     Checked in at <span className="font-semibold">{checkInData.time}</span>
                   </p>
+                  {checkInData.shiftName && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm font-medium text-blue-900">
+                        Shift: {checkInData.shiftName}
+                      </p>
+                      {checkInData.shiftStartTime && checkInData.shiftEndTime && (
+                        <p className="text-xs text-blue-700 mt-1">
+                          {checkInData.shiftStartTime} - {checkInData.shiftEndTime}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div className="success-progress-bar h-full bg-green-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Not Enrolled Dialog */}
+      <Dialog open={showNotEnrolledDialog} onOpenChange={setShowNotEnrolledDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-red-100 p-3">
+              <XCircle className="h-12 w-12 text-red-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-red-600">Not Enrolled!</h3>
+              <p className="text-base text-muted-foreground px-4">
+                Your face is not registered in the system.
+              </p>
+              {notEnrolledDistance !== null && (
+                <p className="text-sm text-muted-foreground">
+                  Match score: <span className="font-mono font-semibold">{notEnrolledDistance.toFixed(3)}</span>
+                </p>
+              )}
+              <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-sm font-medium text-orange-900 mb-2">
+                  Please contact your administrator to:
+                </p>
+                <ul className="text-xs text-orange-800 text-left space-y-1">
+                  <li>• Register your face in the system</li>
+                  <li>• Verify your enrollment status</li>
+                  <li>• Get access to face attendance</li>
+                </ul>
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="error-progress-bar h-full bg-red-600 rounded-full"></div>
             </div>
           </div>
         </DialogContent>

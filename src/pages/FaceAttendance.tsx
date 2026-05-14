@@ -32,7 +32,14 @@ export default function FaceAttendance() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
-  const [checkInData, setCheckInData] = useState<{ name: string; time: string } | null>(null);
+  const [showNotEnrolledDialog, setShowNotEnrolledDialog] = useState(false);
+  const [checkInData, setCheckInData] = useState<{ 
+    name: string; 
+    time: string;
+    shiftName?: string;
+    shiftStartTime?: string;
+    shiftEndTime?: string;
+  } | null>(null);
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -274,7 +281,10 @@ export default function FaceAttendance() {
       // Show success dialog
       setCheckInData({
         name: `${currentUser?.first_name || ''} ${currentUser?.last_name || ''}`.trim(),
-        time: format(new Date(), "hh:mm a")
+        time: format(new Date(), "hh:mm a"),
+        shiftName: shift.shift_name,
+        shiftStartTime: shift.start_time,
+        shiftEndTime: shift.end_time,
       });
       setShowSuccessDialog(true);
 
@@ -505,11 +515,53 @@ export default function FaceAttendance() {
                   <p className="text-muted-foreground">
                     Checked in at <span className="font-semibold">{checkInData.time}</span>
                   </p>
+                  {checkInData.shiftName && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <p className="text-sm font-medium text-blue-900">
+                        Shift: {checkInData.shiftName}
+                      </p>
+                      {checkInData.shiftStartTime && checkInData.shiftEndTime && (
+                        <p className="text-xs text-blue-700 mt-1">
+                          {checkInData.shiftStartTime} - {checkInData.shiftEndTime}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div className="success-progress-bar h-full bg-green-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Not Enrolled Dialog */}
+      <Dialog open={showNotEnrolledDialog} onOpenChange={setShowNotEnrolledDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-red-100 p-3">
+              <XCircle className="h-12 w-12 text-red-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-red-600">Not Enrolled!</h3>
+              <p className="text-base text-muted-foreground px-4">
+                Your face is not registered in the system.
+              </p>
+              <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-sm font-medium text-orange-900 mb-2">
+                  Please contact your administrator to:
+                </p>
+                <ul className="text-xs text-orange-800 text-left space-y-1">
+                  <li>• Register your face in the system</li>
+                  <li>• Verify your enrollment status</li>
+                  <li>• Get access to face attendance</li>
+                </ul>
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="error-progress-bar h-full bg-red-600 rounded-full"></div>
             </div>
           </div>
         </DialogContent>
