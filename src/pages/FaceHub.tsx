@@ -12,6 +12,7 @@ import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 import { updateSessionActivity, logoutFaceSession, isSessionValid } from "@/lib/faceSessionManager";
+import { speakAttendanceEnrolled } from "@/lib/speak";
 
 interface HistoryRow {
   id: string;
