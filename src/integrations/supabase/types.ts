@@ -344,6 +344,8 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          document_link: string | null
+          document_type: string | null
           id: string
           title: string
           updated_at: string | null
@@ -353,6 +355,8 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          document_link?: string | null
+          document_type?: string | null
           id?: string
           title: string
           updated_at?: string | null
@@ -362,11 +366,34 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          document_link?: string | null
+          document_type?: string | null
           id?: string
           title?: string
           updated_at?: string | null
           updated_by?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      document_types: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          type_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          type_name: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          type_name?: string
         }
         Relationships: []
       }

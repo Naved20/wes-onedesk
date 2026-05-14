@@ -12,6 +12,7 @@ import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 import { updateSessionActivity, logoutFaceSession, isSessionValid } from "@/lib/faceSessionManager";
+import { speakAttendanceEnrolled } from "@/lib/speak";
 
 interface HistoryRow {
   id: string;
@@ -219,6 +220,7 @@ export default function FaceHub() {
       // If successful, play sound and show popup
       if (data.ok) {
         playSuccessSound();
+        speakAttendanceEnrolled(data.employeeName || "Employee");
         setCheckInData({
           name: data.employeeName || "Employee",
           time: format(new Date(), "hh:mm a"),
