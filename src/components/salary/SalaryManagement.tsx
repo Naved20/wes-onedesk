@@ -440,6 +440,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
   const [auditHistory, setAuditHistory] = useState<AuditRecord[]>([]);
   const [unlockReason, setUnlockReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Search and Sort states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<"employee" | "base_salary" | "working_days" | "present" | "gross" | "net_salary">("employee");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   // Form state
   const [formData, setFormData] = useState({
@@ -888,6 +893,62 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
   const draftOrPendingCount = salaryRecords.filter(s => !s.is_locked && (s.approval_status === "draft" || s.approval_status === "pending_approval")).length;
   const approvedUnlockedCount = salaryRecords.filter(s => s.approval_status === "approved" && !s.is_locked).length;
 
+  // Filter and sort salary records
+  const filteredAndSortedRecords = salaryRecords
+    .filter((record) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return record.employee_name?.toLowerCase().includes(query);
+    })
+    .sort((a, b) => {
+      let aValue: string | number = "";
+      let bValue: string | number = "";
+
+      switch (sortField) {
+        case "employee":
+          aValue = a.employee_name || "";
+          bValue = b.employee_name || "";
+          break;
+        case "base_salary":
+          aValue = a.base_salary || 0;
+          bValue = b.base_salary || 0;
+          break;
+        case "working_days":
+          aValue = a.working_days || 0;
+          bValue = b.working_days || 0;
+          break;
+        case "present":
+          aValue = a.present_days || 0;
+          bValue = b.present_days || 0;
+          break;
+        case "gross":
+          aValue = a.gross_salary || 0;
+          bValue = b.gross_salary || 0;
+          break;
+        case "net_salary":
+          aValue = a.final_salary || a.net_salary_calculated || 0;
+          bValue = b.final_salary || b.net_salary_calculated || 0;
+          break;
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === "asc" ? comparison : -comparison;
+      }
+
+      const comparison = (aValue as number) - (bValue as number);
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
   const months = [
     { value: 1, label: "January" },
     { value: 2, label: "February" },
@@ -977,17 +1038,18 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       </div>
 
       <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">All Salaries</TabsTrigger>
-          {isAdmin && pendingApprovals.length > 0 && (
-            <TabsTrigger value="pending" className="relative">
-              Pending Approval
-              <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-yellow-500 text-white">
-                {pendingApprovals.length}
-              </span>
-            </TabsTrigger>
-          )}
-        </TabsList>
+        <div className="flex items-center justify-between">
+      
+          {/* Search Bar */}
+          <div className="w-72">
+            <Input
+              placeholder="Search by employee name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full"
+            />
+          </div>
+        </div>
 
         <TabsContent value="all">
           <Card>
@@ -1005,31 +1067,93 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 <div className="flex justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-              ) : salaryRecords.length === 0 ? (
+              ) : filteredAndSortedRecords.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
-                  <p>No salary records for this period</p>
-                  <Button variant="outline" className="mt-4" onClick={generateMonthlySalaries} disabled={generating}>
-                    {generating ? "Generating..." : "Generate Salary Records"}
-                  </Button>
+                  <p>{searchQuery ? "No employees found matching your search" : "No salary records for this period"}</p>
+                  {!searchQuery && (
+                    <Button variant="outline" className="mt-4" onClick={generateMonthlySalaries} disabled={generating}>
+                      {generating ? "Generating..." : "Generate Salary Records"}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Base Salary</TableHead>
-                        <TableHead className="text-right">Working Days</TableHead>
-                        <TableHead className="text-right">Present</TableHead>
-                        <TableHead className="text-right">Gross</TableHead>
-                        <TableHead className="text-right">Net Salary</TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("employee")}
+                        >
+                          <div className="flex items-center gap-2">
+                            Employee
+                            {sortField === "employee" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("base_salary")}
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            Base Salary
+                            {sortField === "base_salary" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("working_days")}
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            Working Days
+                            {sortField === "working_days" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("present")}
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            Present
+                            {sortField === "present" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("gross")}
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            Gross
+                            {sortField === "gross" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-muted transition-colors"
+                          onClick={() => handleSort("net_salary")}
+                        >
+                          <div className="flex items-center justify-end gap-2">
+                            Net Salary
+                            {sortField === "net_salary" && (
+                              <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                            )}
+                          </div>
+                        </TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {salaryRecords.map((salary) => (
+                      {filteredAndSortedRecords.map((salary) => (
                         <TableRow key={salary.id}>
                           <TableCell className="font-medium">{salary.employee_name}</TableCell>
                           <TableCell className="text-right">₹{salary.base_salary?.toLocaleString()}</TableCell>

@@ -133,6 +133,7 @@ export default function EmployeeProfile() {
       const { error } = await supabase
         .from("employee_profiles")
         .update({
+          employee_id: profile.employee_id,
           first_name: profile.first_name,
           last_name: profile.last_name,
           designation: profile.designation,
@@ -198,6 +199,8 @@ export default function EmployeeProfile() {
       if (error) throw error;
       toast({ title: "Saved", description: "Profile updated successfully" });
       setIsEditing(false);
+      // Refresh profile to get latest data
+      await fetchProfile(profile.id);
     } catch (error) {
       console.error("Error saving profile:", error);
       toast({ title: "Error", description: "Failed to save profile", variant: "destructive" });
