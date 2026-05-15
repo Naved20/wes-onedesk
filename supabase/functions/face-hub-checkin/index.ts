@@ -6,7 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MATCH_THRESHOLD = 0.40; // Stricter threshold - distance must be below 0.40 for match
+const MATCH_THRESHOLD = 0.30; // Stricter threshold - distance must be below 0.30 for match
+const CONFIDENCE_GAP = 0.20; // Second-best match must be at least 0.20 worse than best match
 
 type Descriptor = number[];
 
@@ -120,25 +121,48 @@ serve(async (req) => {
     }
 
     let bestMatch: { user_id: string; distance: number } | null = null;
+    let secondBestMatch: { user_id: string; distance: number } | null = null;
+    
     for (const enrollment of validEnrollments) {
       const distance = euclideanDistance(candidate, enrollment.descriptor);
+      
       if (!bestMatch || distance < bestMatch.distance) {
+        // New best match found - demote current best to second best
+        secondBestMatch = bestMatch;
         bestMatch = { user_id: enrollment.user_id, distance };
+      } else if (!secondBestMatch || distance < secondBestMatch.distance) {
+        // New second best match found
+        secondBestMatch = { user_id: enrollment.user_id, distance };
       }
     }
 
-    if (!bestMatch || bestMatch.distance > MATCH_THRESHOLD) {
+    // CRITICAL: Confidence check to prevent wrong person matching
+    // Only accept match if:
+    // 1. Best match distance is below strict threshold (0.30)
+    // 2. Second best match is significantly worse (gap > 0.20) OR doesn't exist
+    const isConfidentMatch = bestMatch && 
+      bestMatch.distance <= MATCH_THRESHOLD && 
+      (!secondBestMatch || (secondBestMatch.distance - bestMatch.distance) >= CONFIDENCE_GAP);
+
+    if (!bestMatch || !isConfidentMatch) {
+      const reason = !bestMatch 
+        ? "No match found"
+        : bestMatch.distance > MATCH_THRESHOLD
+        ? `Distance too high (${bestMatch.distance.toFixed(3)} > ${MATCH_THRESHOLD})`
+        : `Not confident - second match too close (best: ${bestMatch.distance.toFixed(3)}, second: ${secondBestMatch?.distance.toFixed(3)})`;
+      
       await supabaseAdmin.from("face_checkin_history").insert({
         user_id: null,
         matched: false,
         match_distance: bestMatch?.distance ?? null,
-        notes: "No match above threshold",
+        notes: reason,
       });
 
       return json({
         ok: false,
-        message: `Face not recognized (distance: ${bestMatch?.distance.toFixed(3) ?? "n/a"})`,
+        message: `Face not recognized. ${reason}`,
         distance: bestMatch?.distance ?? null,
+        secondBestDistance: secondBestMatch?.distance ?? null,
         enrolledCount: validEnrollments.length,
       });
     }
