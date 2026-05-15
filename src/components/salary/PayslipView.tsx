@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Download, AlertCircle, DollarSign, TrendingUp } from "lucide-react";
+import { generatePayslipPDF } from "./PayslipPDF";
 
 interface SalaryDetail {
   id: string;
@@ -237,66 +236,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
   };
 
   const handleDownload = async () => {
-    try {
-      const element = document.getElementById("payslip-content");
-      if (!element) {
-        toast({
-          title: "Error",
-          description: "Could not find payslip content",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const monthLabel = months.find(m => m.value === selectedMonth)?.label;
-      const filename = `Payslip_${employeeInfo?.first_name}_${monthLabel}_${selectedYear}.pdf`;
-
-      // Create canvas from HTML
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      let heightLeft = canvas.height * imgWidth / canvas.width;
-      let position = 0;
-
-      // Add image to PDF
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, heightLeft);
-      heightLeft -= pageHeight;
-
-      // Add additional pages if needed
-      while (heightLeft >= 0) {
-        position = heightLeft - canvas.height * imgWidth / canvas.width;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, heightLeft);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(filename);
-
-      toast({
-        title: "Success",
-        description: `Payslip downloaded as ${filename}`,
-      });
-    } catch (error) {
-      console.error("Error downloading PDF:", error);
-      toast({
-        title: "Error",
-        description: "Failed to download payslip",
-        variant: "destructive",
-      });
-    }
+    await generatePayslipPDF();
   };
 
   if (loading) {
@@ -351,7 +291,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
           {/* Header */}
           <div className="text-center mb-8 pb-6 border-b-2 border-gray-300">
             <h1 className="text-3xl font-bold text-primary mb-2">PAYSLIP</h1>
-            <p className="text-gray-600 font-semibold">{monthLabel} {selectedYear}</p>
+            <p className="text-gray-600 font-semibold" data-month-year>{monthLabel} {selectedYear}</p>
             <p className="text-sm text-gray-500">Salary Statement</p>
           </div>
 
@@ -362,7 +302,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               <div className="space-y-2 text-sm">
                 <div>
                   <span className="font-semibold">Name:</span>
-                  <span className="ml-2">{employeeInfo?.first_name} {employeeInfo?.last_name}</span>
+                  <span className="ml-2" data-employee-name>{employeeInfo?.first_name} {employeeInfo?.last_name}</span>
                 </div>
                 <div>
                   <span className="font-semibold">Employee ID:</span>
