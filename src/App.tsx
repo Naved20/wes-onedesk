@@ -12,6 +12,7 @@ import EmployeeProfile from "./pages/EmployeeProfile";
 import Attendance from "./pages/Attendance";
 import Leaves from "./pages/Leaves";
 import Salaries from "./pages/Salaries";
+import SalarySlip from "./pages/SalarySlip";
 import Documents from "./pages/Documents";
 import Performance from "./pages/Performance";
 import Announcements from "./pages/Announcements";
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
             <Route path="/leaves" element={<ProtectedRoute><Leaves /></ProtectedRoute>} />
             <Route path="/salaries" element={<ProtectedRoute><Salaries /></ProtectedRoute>} />
+            <Route path="/salary-slip" element={<ProtectedRoute><SalarySlip /></ProtectedRoute>} />
             <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
             <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />

@@ -34,17 +34,38 @@ interface SalaryRecord {
   absent_days: number | null;
   paid_leave_days: number | null;
   per_day_salary: number | null;
-  hra_amount: number | null;
-  travel_allowance: number | null;
-  special_bonus: number | null;
-  pf_deduction: number | null;
+  
+  // Fixed components
+  basic_earned: number | null;
+  hra_earned: number | null;
+  other_allowance_earned: number | null;
+  
+  // Variable earnings
+  variable_earnings_details: Record<string, string> | null;
+  variable_earnings_total: number | null;
+  
+  // Deductions
+  epf_employee: number | null;
+  esic_employee: number | null;
+  manual_deduction: number | null;
   tds_deduction: number | null;
   professional_tax: number | null;
   other_deductions: number | null;
+  total_deductions: number | null;
+  
+  // Calculated totals
   gross_salary: number | null;
   net_salary_calculated: number | null;
   net_salary_manual: number | null;
   final_salary: number | null;
+  
+  // Employer contributions
+  epf_employer: number | null;
+  esic_employer: number | null;
+  total_employer_contribution: number | null;
+  total_ctc: number | null;
+  
+  // Approval
   manager_proposed_salary: number | null;
   manager_justification: string | null;
   approval_status: string | null;
@@ -52,6 +73,12 @@ interface SalaryRecord {
   locked_at: string | null;
   created_at: string;
   employee_name?: string;
+  
+  // Legacy fields (for backward compatibility)
+  hra_amount: number | null;
+  travel_allowance: number | null;
+  special_bonus: number | null;
+  pf_deduction: number | null;
 }
 
 interface AuditRecord {
@@ -446,19 +473,55 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
   const [sortField, setSortField] = useState<"employee" | "base_salary" | "working_days" | "present" | "gross" | "net_salary">("employee");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  // Form state
+  // Earning types for variable earnings
+  const [earningTypes, setEarningTypes] = useState<Array<{
+    earning_code: string;
+    earning_name: string;
+  }>>([]);
+
+  // Fetch earning types for variable earnings
+  useEffect(() => {
+    const fetchEarningTypes = async () => {
+      const { data } = await supabase
+        .from("earning_types" as any)
+        .select("earning_code, earning_name")
+        .eq("is_active", true)
+        .order("display_order");
+      
+      setEarningTypes(data || []);
+    };
+    
+    fetchEarningTypes();
+  }, []);
+
+  // Form state - Updated with complete structure
   const [formData, setFormData] = useState({
-    base_salary: 0,
+    // From salary_structures
+    fixed_gross_salary: 0,
+    basic_percentage: 50,
+    hra_percentage: 40,
+    other_allowance_percentage: 30,
+    
+    // Attendance (auto-fetched)
     working_days: 0,
     present_days: 0,
     paid_leave_days: 0,
-    hra_amount: 0,
-    travel_allowance: 0,
-    special_bonus: 0,
-    pf_deduction: 0,
+    absent_days: 0,
+    
+    // Variable Earnings (dynamic)
+    variable_earnings: {} as Record<string, string>,
+    
+    // Deductions
+    epf_percentage: 12,
+    esic_percentage: 0.75,
+    epf_applicable: true,
+    esic_applicable: true,
+    manual_deduction: 0,
     tds_deduction: 0,
     professional_tax: 0,
     other_deductions: 0,
+    
+    // Manual override
     net_salary_manual: null as number | null,
     manager_justification: "",
   });
@@ -510,21 +573,85 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     fetchData();
   }, [fetchData]);
 
-  // Live calculation based on form data
-  const calculateSalary = useCallback(() => {
-    const perDaySalary = formData.working_days > 0 ? formData.base_salary / formData.working_days : 0;
-    const effectiveDays = formData.present_days + formData.paid_leave_days;
-    const basicEarned = perDaySalary * effectiveDays;
-    const grossSalary = basicEarned + formData.hra_amount + formData.travel_allowance + formData.special_bonus;
-    const totalDeductions = formData.pf_deduction + formData.tds_deduction + formData.professional_tax + formData.other_deductions;
-    const netSalary = grossSalary - totalDeductions;
+  // Fetch earning types for variable earnings
+  useEffect(() => {
+    const fetchEarningTypes = async () => {
+      const { data } = await supabase
+        .from("earning_types")
+        .select("earning_code, earning_name")
+        .eq("is_active", true)
+        .order("display_order");
+      
+      setEarningTypes(data || []);
+    };
+    
+    fetchEarningTypes();
+  }, []);
 
+  // Live calculation based on form data - UPDATED WITH COMPLETE STRUCTURE
+  const calculateSalary = useCallback(() => {
+    const perDayRate = formData.working_days > 0 
+      ? formData.fixed_gross_salary / formData.working_days 
+      : 0;
+    
+    const effectiveDays = formData.present_days + formData.paid_leave_days;
+    const grossEarned = perDayRate * effectiveDays;
+    
+    // Fixed components
+    const basicEarned = grossEarned * (formData.basic_percentage / 100);
+    const hraEarned = basicEarned * (formData.hra_percentage / 100);
+    const otherAllowanceEarned = grossEarned * (formData.other_allowance_percentage / 100);
+    
+    // Variable earnings
+    const totalVariableEarnings = Object.values(formData.variable_earnings).reduce(
+      (sum, val) => sum + (parseFloat(val as string) || 0), 0
+    );
+    
+    // Total gross
+    const totalGrossEarnings = grossEarned + totalVariableEarnings;
+    
+    // Deductions
+    const epfEmployee = formData.epf_applicable 
+      ? (basicEarned * formData.epf_percentage / 100) 
+      : 0;
+    const esicEmployee = formData.esic_applicable 
+      ? (totalGrossEarnings * formData.esic_percentage / 100) 
+      : 0;
+    const totalDeductions = epfEmployee + esicEmployee + 
+      formData.manual_deduction + formData.tds_deduction + 
+      formData.professional_tax + formData.other_deductions;
+    
+    // Net payable
+    const netPayable = totalGrossEarnings - totalDeductions;
+    
+    // Employer contributions
+    const epfEmployer = formData.epf_applicable 
+      ? (basicEarned * formData.epf_percentage / 100) 
+      : 0;
+    const esicEmployer = formData.esic_applicable 
+      ? (totalGrossEarnings * 3.25 / 100) 
+      : 0;
+    const totalEmployerBenefit = epfEmployer + esicEmployer;
+    
+    // Total CTC
+    const totalCTC = totalGrossEarnings + totalEmployerBenefit;
+    
     return {
-      per_day_salary: Math.round(perDaySalary * 100) / 100,
-      basic_earned: Math.round(basicEarned * 100) / 100,
-      gross_salary: Math.round(grossSalary * 100) / 100,
-      total_deductions: Math.round(totalDeductions * 100) / 100,
-      net_salary_calculated: Math.round(netSalary * 100) / 100,
+      perDayRate: Math.round(perDayRate * 100) / 100,
+      grossEarned: Math.round(grossEarned * 100) / 100,
+      basicEarned: Math.round(basicEarned * 100) / 100,
+      hraEarned: Math.round(hraEarned * 100) / 100,
+      otherAllowanceEarned: Math.round(otherAllowanceEarned * 100) / 100,
+      totalVariableEarnings: Math.round(totalVariableEarnings * 100) / 100,
+      totalGrossEarnings: Math.round(totalGrossEarnings * 100) / 100,
+      epfEmployee: Math.round(epfEmployee * 100) / 100,
+      esicEmployee: Math.round(esicEmployee * 100) / 100,
+      totalDeductions: Math.round(totalDeductions * 100) / 100,
+      netPayable: Math.round(netPayable * 100) / 100,
+      epfEmployer: Math.round(epfEmployer * 100) / 100,
+      esicEmployer: Math.round(esicEmployer * 100) / 100,
+      totalEmployerBenefit: Math.round(totalEmployerBenefit * 100) / 100,
+      totalCTC: Math.round(totalCTC * 100) / 100,
     };
   }, [formData]);
 
@@ -558,24 +685,101 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     }
   };
 
-  const openEditDialog = (salary: SalaryRecord) => {
-    setSelectedSalary(salary);
-    setFormData({
-      base_salary: salary.base_salary || 0,
-      working_days: salary.working_days || 0,
-      present_days: salary.present_days || 0,
-      paid_leave_days: salary.paid_leave_days || 0,
-      hra_amount: salary.hra_amount || 0,
-      travel_allowance: salary.travel_allowance || 0,
-      special_bonus: salary.special_bonus || 0,
-      pf_deduction: salary.pf_deduction || 0,
-      tds_deduction: salary.tds_deduction || 0,
-      professional_tax: salary.professional_tax || 0,
-      other_deductions: salary.other_deductions || 0,
-      net_salary_manual: salary.net_salary_manual,
-      manager_justification: salary.manager_justification || "",
+  const calculateAttendanceSummary = (attendanceRecords: any[]) => {
+    let presentDays = 0;
+    let paidLeaveDays = 0;
+    let absentDays = 0;
+    
+    attendanceRecords.forEach((record) => {
+      const status = record.status?.toLowerCase();
+      const isHalfDay = record.is_half_day;
+      
+      if (status === 'approved' || status === 'present') {
+        presentDays += isHalfDay ? 0.5 : 1;
+      } else if (status === 'paid_leave') {
+        paidLeaveDays += isHalfDay ? 0.5 : 1;
+      } else if (status === 'absent' || status === 'rejected') {
+        absentDays += isHalfDay ? 0.5 : 1;
+      }
     });
-    setEditDialogOpen(true);
+    
+    return {
+      presentDays: Math.round(presentDays * 10) / 10,
+      paidLeaveDays: Math.round(paidLeaveDays * 10) / 10,
+      absentDays: Math.round(absentDays * 10) / 10,
+    };
+  };
+
+  const openEditDialog = async (salary: SalaryRecord) => {
+    setSelectedSalary(salary);
+    setLoading(true);
+    
+    try {
+      // 1. Fetch employee's salary structure
+      const { data: structure } = await supabase
+        .from("salary_structures" as any)
+        .select("*")
+        .eq("user_id", salary.user_id)
+        .eq("is_active", true)
+        .maybeSingle();
+      
+      // 2. Fetch attendance data for the month
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      
+      const { data: attendanceData } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("user_id", salary.user_id)
+        .gte("date", startDate)
+        .lte("date", endDate);
+      
+      // 3. Calculate attendance summary
+      const attendanceSummary = calculateAttendanceSummary(attendanceData || []);
+      
+      // 4. Set form data with all values
+      setFormData({
+        // From salary_structures
+        fixed_gross_salary: (structure as any)?.fixed_gross_salary || salary.base_salary || 0,
+        basic_percentage: (structure as any)?.basic_percentage || 50,
+        hra_percentage: (structure as any)?.hra_percentage || 40,
+        other_allowance_percentage: (structure as any)?.other_allowance_percentage || 30,
+        
+        // Attendance (auto-calculated)
+        working_days: salary.working_days || 26,
+        present_days: attendanceSummary.presentDays,
+        paid_leave_days: attendanceSummary.paidLeaveDays,
+        absent_days: attendanceSummary.absentDays,
+        
+        // Variable earnings (from existing salary record)
+        variable_earnings: salary.variable_earnings_details || {},
+        
+        // Deductions
+        epf_percentage: (structure as any)?.epf_employee_rate || 12,
+        esic_percentage: (structure as any)?.esic_employee_rate || 0.75,
+        epf_applicable: (structure as any)?.epf_applicable ?? true,
+        esic_applicable: (structure as any)?.esic_applicable ?? true,
+        manual_deduction: salary.manual_deduction || 0,
+        tds_deduction: salary.tds_deduction || 0,
+        professional_tax: salary.professional_tax || 0,
+        other_deductions: salary.other_deductions || 0,
+        
+        // Manual override
+        net_salary_manual: salary.net_salary_manual,
+        manager_justification: salary.manager_justification || "",
+      });
+      
+    } catch (error) {
+      console.error("Error loading salary data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load salary data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+      setEditDialogOpen(true);
+    }
   };
 
   const openHistoryDialog = async (salary: SalaryRecord) => {
@@ -614,22 +818,48 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       const calculated = calculateSalary();
 
       const updateData: Record<string, unknown> = {
-        base_salary: formData.base_salary,
+        // From salary_structures
+        base_salary: formData.fixed_gross_salary,
+        
+        // Attendance
         working_days: formData.working_days,
         present_days: formData.present_days,
         paid_leave_days: formData.paid_leave_days,
-        per_day_salary: calculated.per_day_salary,
-        hra_amount: formData.hra_amount,
-        travel_allowance: formData.travel_allowance,
-        special_bonus: formData.special_bonus,
-        pf_deduction: formData.pf_deduction,
+        absent_days: formData.absent_days,
+        
+        // Calculated values
+        per_day_salary: calculated.perDayRate,
+        
+        // Fixed components
+        basic_earned: calculated.basicEarned,
+        hra_earned: calculated.hraEarned,
+        other_allowance_earned: calculated.otherAllowanceEarned,
+        
+        // Variable earnings
+        variable_earnings_details: formData.variable_earnings,
+        variable_earnings_total: calculated.totalVariableEarnings,
+        
+        // Employee deductions
+        epf_employee: calculated.epfEmployee,
+        esic_employee: calculated.esicEmployee,
+        manual_deduction: formData.manual_deduction,
         tds_deduction: formData.tds_deduction,
         professional_tax: formData.professional_tax,
         other_deductions: formData.other_deductions,
-        gross_salary: calculated.gross_salary,
-        net_salary_calculated: calculated.net_salary_calculated,
+        total_deductions: calculated.totalDeductions,
+        
+        // Calculated totals
+        gross_salary: calculated.totalGrossEarnings,
+        net_salary_calculated: calculated.netPayable,
         net_salary_manual: formData.net_salary_manual,
-        final_salary: formData.net_salary_manual || calculated.net_salary_calculated,
+        final_salary: formData.net_salary_manual || calculated.netPayable,
+        
+        // Employer contributions
+        epf_employer: calculated.epfEmployer,
+        esic_employer: calculated.esicEmployer,
+        total_employer_contribution: calculated.totalEmployerBenefit,
+        total_ctc: calculated.totalCTC,
+        
         updated_at: new Date().toISOString(),
       };
 
@@ -658,9 +888,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
       toast({
         title: "Success",
-        description: isAdmin && formData.net_salary_manual 
-          ? "Salary updated and approved" 
-          : "Salary record updated successfully",
+        description: "Salary updated successfully with complete breakdown",
       });
       setEditDialogOpen(false);
       fetchData();
@@ -1259,170 +1487,407 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
       {/* Edit Salary Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5" />
               Edit Salary - {selectedSalary?.employee_name}
             </DialogTitle>
             <DialogDescription>
-              {months.find(m => m.value === selectedMonth)?.label} {selectedYear} | {isAdmin ? "Full Admin Access" : "Manager Edit"}
+              {months.find(m => m.value === selectedMonth)?.label} {selectedYear} | Attendance-based calculation
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Earnings Section */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-sm border-b pb-2">Earnings</h4>
-              <div className="space-y-3">
-                <div>
-                  <Label>Base Salary</Label>
-                  <Input
-                    type="number"
-                    value={formData.base_salary}
-                    onChange={(e) => setFormData(p => ({ ...p, base_salary: Number(e.target.value) }))}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+          <Tabs defaultValue="earnings" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="earnings">Earnings</TabsTrigger>
+              <TabsTrigger value="deductions">Deductions</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="earnings" className="space-y-6">
+              {/* Attendance Summary - Editable for Admin */}
+              <div className={`p-4 rounded-lg border ${isAdmin ? 'bg-amber-50 dark:bg-amber-950 border-amber-200' : 'bg-blue-50 dark:bg-blue-950 border-blue-200'}`}>
+                <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Attendance Summary {isAdmin ? '(Editable)' : '(Auto-fetched)'}
+                </h4>
+                <div className="grid grid-cols-4 gap-4 text-sm">
                   <div>
-                    <Label>Working Days</Label>
-                    <Input
-                      type="number"
-                      value={formData.working_days}
-                      onChange={(e) => setFormData(p => ({ ...p, working_days: Number(e.target.value) }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">Working Days</Label>
+                    {isAdmin ? (
+                      <Input
+                        type="number"
+                        value={formData.working_days}
+                        onChange={(e) => setFormData(p => ({ ...p, working_days: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg">{formData.working_days}</p>
+                    )}
                   </div>
                   <div>
-                    <Label>Present Days</Label>
-                    <Input
-                      type="number"
-                      value={formData.present_days}
-                      onChange={(e) => setFormData(p => ({ ...p, present_days: Number(e.target.value) }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">Present Days</Label>
+                    {isAdmin ? (
+                      <Input
+                        type="number"
+                        value={formData.present_days}
+                        onChange={(e) => setFormData(p => ({ ...p, present_days: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-green-600">{formData.present_days}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Paid Leaves</Label>
+                    {isAdmin ? (
+                      <Input
+                        type="number"
+                        value={formData.paid_leave_days}
+                        onChange={(e) => setFormData(p => ({ ...p, paid_leave_days: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-blue-600">{formData.paid_leave_days}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Absent Days</Label>
+                    {isAdmin ? (
+                      <Input
+                        type="number"
+                        value={formData.absent_days}
+                        onChange={(e) => setFormData(p => ({ ...p, absent_days: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-red-600">{formData.absent_days}</p>
+                    )}
                   </div>
                 </div>
-                <div>
-                  <Label>Paid Leave Days</Label>
-                  <Input
-                    type="number"
-                    value={formData.paid_leave_days}
-                    onChange={(e) => setFormData(p => ({ ...p, paid_leave_days: Number(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label>HRA Amount</Label>
-                  <Input
-                    type="number"
-                    value={formData.hra_amount}
-                    onChange={(e) => setFormData(p => ({ ...p, hra_amount: Number(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label>Travel Allowance</Label>
-                  <Input
-                    type="number"
-                    value={formData.travel_allowance}
-                    onChange={(e) => setFormData(p => ({ ...p, travel_allowance: Number(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label>Special Bonus</Label>
-                  <Input
-                    type="number"
-                    value={formData.special_bonus}
-                    onChange={(e) => setFormData(p => ({ ...p, special_bonus: Number(e.target.value) }))}
-                  />
+                <div className="mt-3 pt-3 border-t" style={{ borderColor: isAdmin ? '#fcd34d' : '#93c5fd' }}>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Total Paid Days:</span>
+                    <span className="text-lg font-bold text-primary">
+                      {formData.present_days + formData.paid_leave_days} days
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              {/* Fixed Salary Structure */}
+              <div className="space-y-4">
+                <h4 className="font-semibold border-b pb-2">Fixed Gross Salary (Monthly) *</h4>
+                <div>
+                  <Label>Fixed Gross Salary</Label>
+                  <Input
+                    type="number"
+                    value={formData.fixed_gross_salary}
+                    onChange={(e) => setFormData(p => ({ ...p, fixed_gross_salary: Number(e.target.value) }))}
+                    className="text-lg font-semibold"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label>Basic %</Label>
+                    <Input
+                      type="number"
+                      value={formData.basic_percentage}
+                      onChange={(e) => setFormData(p => ({ ...p, basic_percentage: Number(e.target.value) }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto: {formData.basic_percentage}% of Gross = ₹{calculateSalary().basicEarned.toFixed(2)}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label>HRA % (of Basic)</Label>
+                    <Input
+                      type="number"
+                      value={formData.hra_percentage}
+                      onChange={(e) => setFormData(p => ({ ...p, hra_percentage: Number(e.target.value) }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto: {formData.hra_percentage}% of Basic = ₹{calculateSalary().hraEarned.toFixed(2)}
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label>Other Allowance %</Label>
+                    <Input
+                      type="number"
+                      value={formData.other_allowance_percentage}
+                      onChange={(e) => setFormData(p => ({ ...p, other_allowance_percentage: Number(e.target.value) }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Auto: {formData.other_allowance_percentage}% of Gross = ₹{calculateSalary().otherAllowanceEarned.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Variable Earnings */}
+              <div className="space-y-4">
+                <h4 className="font-semibold border-b pb-2">Variable Earnings</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {earningTypes.map((earning) => (
+                    <div key={earning.earning_code}>
+                      <Label>{earning.earning_name}</Label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={formData.variable_earnings[earning.earning_code] || ""}
+                        onChange={(e) => setFormData(p => ({
+                          ...p,
+                          variable_earnings: {
+                            ...p.variable_earnings,
+                            [earning.earning_code]: e.target.value
+                          }
+                        }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="deductions" className="space-y-6">
+              {/* EPF Deduction */}
+              <div className="space-y-4">
+                <h4 className="font-semibold border-b pb-2">EPF Deduction</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>EPF %</Label>
+                    <Input
+                      type="number"
+                      value={formData.epf_percentage}
+                      onChange={(e) => setFormData(p => ({ ...p, epf_percentage: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <div className="w-full">
+                      <Label>Employee EPF (Auto)</Label>
+                      <div className="h-10 px-3 py-2 bg-muted rounded-md flex items-center font-semibold">
+                        ₹{calculateSalary().epfEmployee.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formData.epf_percentage}% of Basic (₹{calculateSalary().basicEarned.toFixed(2)})
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ESIC Deduction */}
+              <div className="space-y-4">
+                <h4 className="font-semibold border-b pb-2">ESIC Deduction</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>ESIC %</Label>
+                    <Input
+                      type="number"
+                      value={formData.esic_percentage}
+                      onChange={(e) => setFormData(p => ({ ...p, esic_percentage: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <div className="w-full">
+                      <Label>Employee ESIC (Auto)</Label>
+                      <div className="h-10 px-3 py-2 bg-muted rounded-md flex items-center font-semibold">
+                        ₹{calculateSalary().esicEmployee.toFixed(2)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formData.esic_percentage}% of Total Gross (₹{calculateSalary().totalGrossEarnings.toFixed(2)})
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Manual Deductions */}
+              <div className="space-y-4">
+                <h4 className="font-semibold border-b pb-2">Manual Deductions</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Manual Deduction</Label>
+                    <Input
+                      type="number"
+                      value={formData.manual_deduction}
+                      onChange={(e) => setFormData(p => ({ ...p, manual_deduction: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>TDS Deduction</Label>
+                    <Input
+                      type="number"
+                      value={formData.tds_deduction}
+                      onChange={(e) => setFormData(p => ({ ...p, tds_deduction: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Professional Tax</Label>
+                    <Input
+                      type="number"
+                      value={formData.professional_tax}
+                      onChange={(e) => setFormData(p => ({ ...p, professional_tax: Number(e.target.value) }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Other Deductions</Label>
+                    <Input
+                      type="number"
+                      value={formData.other_deductions}
+                      onChange={(e) => setFormData(p => ({ ...p, other_deductions: Number(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          {/* Live Calculation Panel */}
+          <div className="mt-6 p-6 bg-gradient-to-br from-primary/5 to-secondary/5 rounded-lg border-2 border-primary/20">
+            <div className="flex items-center gap-2 mb-4">
+              <Calculator className="h-5 w-5 text-primary" />
+              <h4 className="font-bold text-lg">Live Calculation</h4>
             </div>
-
-            {/* Deductions Section */}
-            <div className="space-y-4">
-              <h4 className="font-semibold text-sm border-b pb-2">Deductions</h4>
-              <div className="space-y-3">
-                <div>
-                  <Label>PF Deduction (12%)</Label>
-                  <Input
-                    type="number"
-                    value={formData.pf_deduction}
-                    onChange={(e) => setFormData(p => ({ ...p, pf_deduction: Number(e.target.value) }))}
-                  />
+            
+            <div className="space-y-3">
+              {/* A. Fixed Salary Structure */}
+              <div className="space-y-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>A. Fixed Salary Structure</span>
                 </div>
-                <div>
-                  <Label>TDS Deduction</Label>
-                  <Input
-                    type="number"
-                    value={formData.tds_deduction}
-                    onChange={(e) => setFormData(p => ({ ...p, tds_deduction: Number(e.target.value) }))}
-                  />
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Fixed Gross Salary</span>
+                  <span className="font-medium">₹{formData.fixed_gross_salary.toLocaleString()}</span>
                 </div>
-                <div>
-                  <Label>Professional Tax</Label>
-                  <Input
-                    type="number"
-                    value={formData.professional_tax}
-                    onChange={(e) => setFormData(p => ({ ...p, professional_tax: Number(e.target.value) }))}
-                  />
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Basic ({formData.basic_percentage}%)</span>
+                  <span className="font-medium">₹{calculateSalary().basicEarned.toLocaleString()}</span>
                 </div>
-                <div>
-                  <Label>Other Deductions</Label>
-                  <Input
-                    type="number"
-                    value={formData.other_deductions}
-                    onChange={(e) => setFormData(p => ({ ...p, other_deductions: Number(e.target.value) }))}
-                  />
+                <div className="flex justify-between text-sm pl-4">
+                  <span>HRA ({formData.hra_percentage}% of Basic)</span>
+                  <span className="font-medium">₹{calculateSalary().hraEarned.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Other Allowance ({formData.other_allowance_percentage}%)</span>
+                  <span className="font-medium">₹{calculateSalary().otherAllowanceEarned.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* Live Calculation Preview */}
-              <div className="mt-4 p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex items-center gap-2 mb-2">
-                  <Calculator className="h-4 w-4 text-primary" />
-                  <span className="font-semibold text-sm">Live Calculation</span>
+              {/* B. Total Earnings */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>B. Total Earnings</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Per Day Salary:</span>
-                  <span className="font-medium">₹{calculated.per_day_salary.toLocaleString()}</span>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Fixed Gross (Earned based on attendance)</span>
+                  <span className="font-medium">₹{calculateSalary().grossEarned.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Basic Earned:</span>
-                  <span className="font-medium">₹{calculated.basic_earned.toLocaleString()}</span>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Variable Earnings</span>
+                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Gross Salary:</span>
-                  <span className="font-medium">₹{calculated.gross_salary.toLocaleString()}</span>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Gross Earnings</span>
+                  <span className="text-primary">₹{calculateSalary().totalGrossEarnings.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Total Deductions:</span>
-                  <span className="font-medium text-destructive">-₹{calculated.total_deductions.toLocaleString()}</span>
+              </div>
+
+              {/* C. Employee Deductions */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>C. Employee Deductions</span>
                 </div>
-                <div className="flex justify-between font-semibold border-t pt-2">
-                  <span>Calculated Net:</span>
-                  <span className="text-green-600">₹{calculated.net_salary_calculated.toLocaleString()}</span>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>EPF Employee</span>
+                  <span className="font-medium">₹{calculateSalary().epfEmployee.toLocaleString()}</span>
                 </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>ESIC Employee</span>
+                  <span className="font-medium">₹{calculateSalary().esicEmployee.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Deductions</span>
+                  <span className="text-destructive">₹{calculateSalary().totalDeductions.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* D. Net Payable */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-bold text-xl border-t-2 pt-3 text-green-600">
+                  <span>D. Net Payable to Employee</span>
+                  <span>₹{calculateSalary().netPayable.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* E. Employer Contributions */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>E. Employer Contributions</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>EPF Employer ({formData.epf_percentage}%)</span>
+                  <span className="font-medium">₹{calculateSalary().epfEmployer.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>ESIC Employer (3.25%)</span>
+                  <span className="font-medium">₹{calculateSalary().esicEmployer.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Employer Benefit</span>
+                  <span>₹{calculateSalary().totalEmployerBenefit.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* F. Total CTC */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-bold text-2xl border-t-2 pt-3 text-primary">
+                  <span>F. Total Cost to Company</span>
+                  <span>₹{calculateSalary().totalCTC.toLocaleString()}</span>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Gross Earnings + Employer Benefits
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Direct Net Salary Input - Both Admin and Manager */}
+          {/* Manual Override Section */}
           <div className="border-t pt-4 space-y-4">
-            <div className="p-4 border rounded-lg bg-primary/5">
-              <Label className="text-base font-semibold">Direct Net Salary Input</Label>
+            <div className="p-4 border rounded-lg bg-amber-50 dark:bg-amber-950">
+              <Label className="text-base font-semibold">Direct Net Salary Override (Optional)</Label>
               <p className="text-xs text-muted-foreground mb-3">
                 {isAdmin 
-                  ? "As admin, entering a value here will override calculations and auto-approve"
-                  : "Enter the final net salary you want to set (will be submitted for admin approval)"}
+                  ? "Override the calculated net salary if needed (will auto-approve)"
+                  : "Propose a different net salary (requires admin approval)"}
               </p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">₹</span>
-                <Input
-                  type="number"
-                  className="text-lg font-semibold"
-                  placeholder="Enter net salary"
-                  value={formData.net_salary_manual || ""}
-                  onChange={(e) => setFormData(p => ({ ...p, net_salary_manual: e.target.value ? Number(e.target.value) : null }))}
-                />
-              </div>
+              <Input
+                type="number"
+                className="text-lg font-semibold"
+                placeholder="Leave empty to use calculated value"
+                value={formData.net_salary_manual || ""}
+                onChange={(e) => setFormData(p => ({ ...p, net_salary_manual: e.target.value ? Number(e.target.value) : null }))}
+              />
+              {formData.net_salary_manual && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Difference from Calculated:</span>
+                    <span className={`font-semibold ${
+                      formData.net_salary_manual > calculateSalary().netPayable 
+                        ? "text-green-600" 
+                        : formData.net_salary_manual < calculateSalary().netPayable
+                        ? "text-red-600"
+                        : "text-muted-foreground"
+                    }`}>
+                      {formData.net_salary_manual > calculateSalary().netPayable ? "+" : ""}
+                      ₹{(formData.net_salary_manual - calculateSalary().netPayable).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {isManager && !isAdmin && formData.net_salary_manual && (
@@ -1434,24 +1899,6 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   onChange={(e) => setFormData(p => ({ ...p, manager_justification: e.target.value }))}
                   rows={3}
                 />
-              </div>
-            )}
-
-            {formData.net_salary_manual && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Difference from Calculated:</span>
-                  <span className={`font-semibold ${
-                    formData.net_salary_manual > calculated.net_salary_calculated 
-                      ? "text-green-600" 
-                      : formData.net_salary_manual < calculated.net_salary_calculated
-                      ? "text-red-600"
-                      : "text-muted-foreground"
-                  }`}>
-                    {formData.net_salary_manual > calculated.net_salary_calculated ? "+" : ""}
-                    ₹{(formData.net_salary_manual - calculated.net_salary_calculated).toLocaleString()}
-                  </span>
-                </div>
               </div>
             )}
           </div>
