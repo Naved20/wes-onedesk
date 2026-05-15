@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { SalaryManagement } from "@/components/salary/SalaryManagement";
 import { EmployeeSalaryView } from "@/components/salary/EmployeeSalaryView";
+import { PayslipView } from "@/components/salary/PayslipView";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -442,10 +443,10 @@ export default function Salaries() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Salaries</h1>
-            <p className="text-muted-foreground">View your salary details and breakdown</p>
+            <h1 className="text-3xl font-bold tracking-tight">My Salary Slip</h1>
+            <p className="text-muted-foreground">Complete salary breakdown and payslip details</p>
           </div>
-          <EmployeeSalaryView userId={user.id} isAdmin={false} />
+          <PayslipView userId={user.id} />
         </div>
       </DashboardLayout>
     );

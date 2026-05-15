@@ -244,7 +244,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Salary Status Widget for Admin/Manager */}
+        {/* Salary Status Widget for Admin/Manager only */}
         {(role === "admin" || role === "manager") && user && (
           <div className="grid gap-4 md:grid-cols-2">
             <SalaryStatusWidget userId={user.id} isAdmin={role === "admin"} />

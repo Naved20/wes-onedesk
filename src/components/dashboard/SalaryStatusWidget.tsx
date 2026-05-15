@@ -366,13 +366,7 @@ export function SalaryStatusWidget({ userId, isAdmin }: SalaryStatusWidgetProps)
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
 
-          {/* View Salary Slip button for employees */}
-          {!isAdmin && (
-            <Button className="w-full" onClick={() => navigate("/salary-slip")}>
-              View My Salary Details
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          )}
+          {/* View Salary Slip button removed - employees access via /salary-slip directly */}
         </CardContent>
       </Card>
 
