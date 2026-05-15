@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins } from "lucide-react";
+import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { PayslipView } from "./PayslipView";
 
 interface Employee {
   user_id: string;
@@ -461,6 +462,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [payslipDialogOpen, setPayslipDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
   const [selectedSalary, setSelectedSalary] = useState<SalaryRecord | null>(null);
@@ -802,6 +804,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         variant: "destructive",
       });
     }
+  };
+
+  const openPayslipDialog = (salary: SalaryRecord) => {
+    setSelectedSalary(salary);
+    setPayslipDialogOpen(true);
   };
 
   const openUnlockDialog = (salary: SalaryRecord) => {
@@ -1397,6 +1404,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                           <TableCell>{getStatusBadge(salary)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openPayslipDialog(salary)} title="View Payslip">
+                                <FileText className="h-4 w-4" />
+                              </Button>
                               {canEditSalary(salary) && (
                                 <Button size="sm" variant="outline" onClick={() => openEditDialog(salary)}>
                                   <Calculator className="h-4 w-4" />
@@ -2003,6 +2013,33 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             <Button variant="destructive" onClick={handleUnlock} disabled={!unlockReason.trim()}>
               <Unlock className="h-4 w-4 mr-1" />
               Confirm Unlock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payslip View Dialog */}
+      <Dialog open={payslipDialogOpen} onOpenChange={setPayslipDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Payslip - {selectedSalary?.employee_name}
+            </DialogTitle>
+            <DialogDescription>
+              {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSalary && (
+            <PayslipView 
+              userId={selectedSalary.user_id} 
+              month={selectedSalary.month} 
+              year={selectedSalary.year} 
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayslipDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

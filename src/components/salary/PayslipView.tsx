@@ -260,6 +260,11 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
   const monthLabel = months.find(m => m.value === selectedMonth)?.label;
   const perDayRate = salary.working_days > 0 ? salary.base_salary / salary.working_days : 0;
+  
+  // Fallback CTC calculation if not set in database
+  const calculatedCTC = salary.total_ctc > 0 
+    ? salary.total_ctc 
+    : (salary.gross_salary || 0) + (salary.total_employer_contribution || 0);
 
   return (
     <div className="space-y-4">
@@ -306,11 +311,23 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                 </div>
                 <div>
                   <span className="font-semibold">Employee ID:</span>
-                  <span className="ml-2">{employeeInfo?.user_id?.slice(0, 8).toUpperCase()}</span>
+                  <span className="ml-2">{employeeInfo?.employee_id || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Designation:</span>
+                  <span className="ml-2">{employeeInfo?.designation || "N/A"}</span>
                 </div>
                 <div>
                   <span className="font-semibold">Department:</span>
                   <span className="ml-2">{employeeInfo?.institution_assignment || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Email:</span>
+                  <span className="ml-2">{employeeInfo?.email || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Phone:</span>
+                  <span className="ml-2">{employeeInfo?.phone || "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -336,6 +353,18 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                       {salary.approval_status === "approved" ? "Approved" : "Pending"}
                     </Badge>
                   </span>
+                </div>
+                <div>
+                  <span className="font-semibold">Date of Joining:</span>
+                  <span className="ml-2">{employeeInfo?.date_of_joining ? new Date(employeeInfo.date_of_joining).toLocaleDateString() : "N/A"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">PAN Number:</span>
+                  <span className="ml-2">{employeeInfo?.pan_number || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="font-semibold">Bank Account:</span>
+                  <span className="ml-2">{employeeInfo?.bank_account_number || "N/A"}</span>
                 </div>
               </div>
             </div>
@@ -545,7 +574,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               <Separator className="bg-white/30 mb-4" />
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold">Your Total CTC</span>
-                <span className="text-4xl font-bold">₹{salary.total_ctc.toLocaleString()}</span>
+                <span className="text-4xl font-bold">₹{calculatedCTC.toLocaleString()}</span>
               </div>
               <p className="text-xs mt-3 opacity-90">
                 This is the total value of your compensation package including salary and employer benefits
@@ -682,8 +711,8 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   {/* CTC */}
                   <tr className="bg-gradient-to-r from-primary/20 to-primary/10 font-bold border-t-2 border-primary">
                     <td className="p-3">Total Cost to Company (CTC)</td>
-                    <td className="text-right p-3 text-primary">₹{salary.total_ctc.toLocaleString()}</td>
-                    <td className="text-right p-3">{((salary.total_ctc / salary.gross_salary) * 100).toFixed(2)}%</td>
+                    <td className="text-right p-3 text-primary">₹{calculatedCTC.toLocaleString()}</td>
+                    <td className="text-right p-3">{((calculatedCTC / salary.gross_salary) * 100).toFixed(2)}%</td>
                   </tr>
                 </tbody>
               </table>
@@ -712,7 +741,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </div>
               <div className="flex justify-between p-3 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg font-bold border-2 border-primary">
                 <span>Total CTC</span>
-                <span className="text-primary">₹{salary.total_ctc.toLocaleString()}</span>
+                <span className="text-primary">₹{calculatedCTC.toLocaleString()}</span>
               </div>
             </div>
           </div>
