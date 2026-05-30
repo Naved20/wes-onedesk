@@ -276,13 +276,34 @@ export default function Attendance() {
     // Check calculated_status first for direct status display
     const calculatedStatus = record.calculated_status?.toLowerCase();
     
+    // Check if this date is a holiday
+    const recordDate = new Date(record.date).toISOString().split('T')[0];
+    const isHoliday = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate) || isSunday(new Date(record.date));
+    
     // Debug log
     if (record.employee_name?.includes("test") || Math.random() < 0.1) {
       console.log("Badge for:", record.employee_name, {
         status: record.status,
         calculated_status: record.calculated_status,
-        calculatedStatus: calculatedStatus
+        calculatedStatus: calculatedStatus,
+        isHoliday: isHoliday
       });
+    }
+    
+    // If absent on a holiday, show HO (Holiday) instead of AB
+    if (calculatedStatus === "absent" && isHoliday) {
+      return (
+        <div className="flex flex-wrap gap-1 items-center">
+          <Badge variant="outline" className="font-mono bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
+            HO
+          </Badge>
+          {record.status === "pending" && (
+            <Badge variant="outline" className="text-xs">
+              Pending Review
+            </Badge>
+          )}
+        </div>
+      );
     }
     
     // If absent from calculated_status, show AB
@@ -625,6 +646,82 @@ export default function Attendance() {
         {/* Manager/Admin View with Tabs */}
         {(role === "admin" || role === "manager") ? (
           <>
+
+                    {/* Month Summary - Top Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Summary Stats */}
+            <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">
+                  {format(selectedMonth, "MMM yyyy")} Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Total Days</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">31</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {Array.from({ length: 31 }, (_, i) => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), i + 1)).filter(d => isSunday(d)).length}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Holidays</p>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {holidays.filter(h => {
+                        const hDate = new Date(h.date);
+                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
+                               hDate.getMonth() === selectedMonth.getMonth();
+                      }).length}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {31 - Array.from({ length: 31 }, (_, i) => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), i + 1)).filter(d => isSunday(d)).length - holidays.filter(h => {
+                        const hDate = new Date(h.date);
+                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
+                               hDate.getMonth() === selectedMonth.getMonth() &&
+                               !isSunday(new Date(h.date));
+                      }).length}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Holidays List */}
+            {holidays.filter(h => {
+              const hDate = new Date(h.date);
+              return hDate.getFullYear() === selectedMonth.getFullYear() && 
+                     hDate.getMonth() === selectedMonth.getMonth();
+            }).length > 0 && (
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-purple-900 dark:text-purple-100">
+                    Holidays in {format(selectedMonth, "MMM")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {holidays.filter(h => {
+                      const hDate = new Date(h.date);
+                      return hDate.getFullYear() === selectedMonth.getFullYear() && 
+                             hDate.getMonth() === selectedMonth.getMonth();
+                    }).map(holiday => (
+                      <div key={holiday.date} className="flex justify-between items-center p-1.5 bg-white dark:bg-slate-800 rounded border border-purple-200 dark:border-purple-700 hover:shadow-sm transition-shadow">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{holiday.name}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-2 flex-shrink-0">{format(new Date(holiday.date), "MMM dd")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
             {/* Institution Filter */}
             {institutions.length > 0 && (
               <Card>
@@ -668,6 +765,8 @@ export default function Attendance() {
                 </CardContent>
               </Card>
             )}
+
+
 
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList>
@@ -1373,28 +1472,16 @@ export default function Attendance() {
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
-                            // Priority 1: If there's an approved leave (HIGHEST PRIORITY - overrides attendance)
-                            if (leaveOnDate) {
-                              const leaveType = leaveOnDate.leave_type;
-                              if (leaveType === 'casual' || leaveType === 'emergency') {
-                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
-                                statusTag = 'CL';
-                              } else if (leaveType === 'sick') {
-                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
-                                statusTag = 'SL';
-                              } else if (leaveType === 'unplanned') {
-                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                                statusTag = 'UL';
-                              } else {
-                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
-                                statusTag = 'LE';
-                              }
+                            // Priority 1: If it's a holiday (HIGHEST PRIORITY - overrides everything)
+                            if (isHoliday) {
+                              displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                              statusTag = 'HO';
                             }
-                            // Priority 2: If there's an attendance record (but no leave)
+                            // Priority 2: If there's an attendance record (show actual status even on Sunday)
                             else if (record) {
                               const calcStatus = record.calculated_status?.toLowerCase();
                               
-                              // Rejected attendance is treated as Absent regardless of check-in
+                              // Rejected attendance is treated as Absent
                               if (record.status === 'rejected') {
                                 displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
                                 statusTag = 'AB';
@@ -1426,15 +1513,27 @@ export default function Attendance() {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }
                             }
-                            // Priority 3: If it's a Sunday (weekend)
+                            // Priority 3: If there's an approved leave
+                            else if (leaveOnDate) {
+                              const leaveType = leaveOnDate.leave_type;
+                              if (leaveType === 'casual' || leaveType === 'emergency') {
+                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
+                                statusTag = 'CL';
+                              } else if (leaveType === 'sick') {
+                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
+                                statusTag = 'SL';
+                              } else if (leaveType === 'unplanned') {
+                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                                statusTag = 'UL';
+                              } else {
+                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
+                                statusTag = 'LE';
+                              }
+                            }
+                            // Priority 4: If it's a Sunday (weekend) with no attendance
                             else if (isSunday) {
                               displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
                               statusTag = '';
-                            }
-                            // Priority 4: If it's a holiday
-                            else if (isHoliday) {
-                              displayColor = 'bg-pink-50 dark:bg-pink-950/20 border-pink-300 dark:border-pink-700';
-                              statusTag = 'HO';
                             }
 
                             return (

@@ -145,8 +145,8 @@ export default function Salaries() {
   const esicEmployer = formData.esic_applicable ? (totalGrossEarnings * (parseFloat(formData.esic_employer_rate) || 3.25) / 100) : 0;
   const totalEmployerBenefit = epfEmployer + esicEmployer;
   
-  // F. Total Cost to Company
-  const totalCostToCompany = totalGrossEarnings + totalEmployerBenefit;
+  // F. Total Cost to Company = Net Payable + Employer Contributions
+  const totalCostToCompany = netPayable + totalEmployerBenefit;
 
   useEffect(() => {
     if (isAdmin || isManager) {
@@ -872,9 +872,9 @@ function SalaryEditForm({
               </p>
             </div>
 
-            {/* Variable Earnings */}
+            {/* Performance Based Earnings */}
             <div className="pt-3 border-t">
-              <h4 className="text-sm font-medium mb-3">Variable Earnings</h4>
+              <h4 className="text-sm font-medium mb-3">Performance Based Earnings</h4>
               
               <div className="space-y-3">
                 {earningTypes.length > 0 ? (
@@ -1157,7 +1157,7 @@ function SalaryEditForm({
                 <span className="font-semibold">₹{fixedGross.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-muted-foreground">Variable Earnings</span>
+                <span className="text-muted-foreground">Performance Based Earnings</span>
                 <span className="font-semibold">₹{totalVariableEarnings.toFixed(2)}</span>
               </div>
               <div className="border-t pt-2 flex justify-between items-center">
@@ -1241,7 +1241,7 @@ function SalaryEditForm({
                 <span className="text-2xl font-bold text-slate-700 dark:text-slate-300">₹{totalCostToCompany.toFixed(2)}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Gross Earnings + Employer Benefits
+                Net Payable + Employer Contributions
               </p>
             </CardContent>
           </Card>

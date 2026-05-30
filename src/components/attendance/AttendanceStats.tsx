@@ -171,7 +171,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
       </Card>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -244,6 +244,19 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Paid Leave - New Card */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="h-4 w-4 text-purple-500" />
+              <span className="text-xs text-muted-foreground">Paid Leave</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {stats.casual_leaves}
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Sick Leaves - Clickable */}
         <Dialog>

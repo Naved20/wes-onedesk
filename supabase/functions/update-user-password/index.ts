@@ -103,7 +103,10 @@ const handler = async (req: Request): Promise<Response> => {
     // Update the user's password using admin API
     const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
-      { password: newPassword }
+      { 
+        password: newPassword,
+        email_confirm: true  // Skip email confirmation for password change
+      }
     );
 
     if (updateError) {

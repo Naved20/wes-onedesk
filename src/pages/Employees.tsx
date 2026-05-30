@@ -290,13 +290,46 @@ export default function Employees() {
 
     setSubmitting(true);
     try {
-      // Update employee profile
+      // Update email in both auth.users and employee_profiles if email changed
+      if (editEmail.trim() !== selectedEmployee.email) {
+        console.log("Email changed, updating in both auth and profile...");
+        
+        const { data: emailUpdateData, error: emailUpdateError } = await supabase
+          .rpc('update_user_email_and_profile', {
+            p_user_id: selectedEmployee.user_id,
+            p_new_email: editEmail.trim()
+          });
+        
+        console.log("Email update response:", emailUpdateData);
+        
+        if (emailUpdateError) {
+          console.error("Email update error:", emailUpdateError);
+          toast({
+            title: "Email Update Failed",
+            description: emailUpdateError.message || "Failed to update email",
+            variant: "destructive",
+          });
+          throw new Error(`Email update failed: ${emailUpdateError.message}`);
+        }
+        
+        if (emailUpdateData && !emailUpdateData.success) {
+          toast({
+            title: "Email Update Failed",
+            description: emailUpdateData.error || "Failed to update email",
+            variant: "destructive",
+          });
+          throw new Error(emailUpdateData.error);
+        }
+        
+        console.log("Email updated successfully:", emailUpdateData);
+      }
+      
+      // Update employee profile (other fields)
       const { error: profileError } = await supabase
         .from("employee_profiles")
         .update({
           first_name: editFirstName.trim(),
           last_name: editLastName.trim(),
-          email: editEmail.trim(),
           designation: editDesignation.trim() || null,
           seniority: editSeniority.trim() || null,
           institution_assignment: editInstitution.trim() || null,
@@ -317,6 +350,8 @@ export default function Employees() {
 
       // Update password if provided using edge function
       if (editPassword) {
+        console.log("Attempting to update password for user:", selectedEmployee.user_id);
+        
         const { data: passwordData, error: passwordError } = await supabase.functions.invoke(
           "update-user-password",
           {
@@ -327,20 +362,37 @@ export default function Employees() {
           }
         );
 
+        console.log("Password update response:", { passwordData, passwordError });
+
         if (passwordError) {
           console.error("Password update error:", passwordError);
-          throw new Error("Failed to update password");
+          toast({
+            title: "Password Update Failed",
+            description: passwordError.message || "Failed to update password. Please try again.",
+            variant: "destructive",
+          });
+          throw new Error(`Password update failed: ${passwordError.message}`);
         }
 
         if (passwordData?.error) {
+          console.error("Password update error from function:", passwordData.error);
+          toast({
+            title: "Password Update Failed",
+            description: passwordData.error,
+            variant: "destructive",
+          });
           throw new Error(passwordData.error);
         }
+
+        console.log("Password updated successfully");
       }
 
       toast({
         title: "Updated",
         description: editPassword 
-          ? "Employee and password updated successfully" 
+          ? "Employee, email, and password updated successfully" 
+          : editEmail.trim() !== selectedEmployee.email
+          ? "Employee and email updated successfully. User can now login with new email."
           : "Employee updated successfully",
       });
 

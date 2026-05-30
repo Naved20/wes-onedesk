@@ -635,8 +635,20 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       : 0;
     const totalEmployerBenefit = epfEmployer + esicEmployer;
     
-    // Total CTC
-    const totalCTC = totalGrossEarnings + totalEmployerBenefit;
+    // Total CTC = Net Payable + Employer Contributions
+    const totalCTC = netPayable + totalEmployerBenefit;
+    
+    // Debug logging
+    console.log("CTC Calculation Debug:", {
+      totalGrossEarnings,
+      totalDeductions,
+      netPayable,
+      epfEmployer,
+      esicEmployer,
+      totalEmployerBenefit,
+      totalCTC,
+      formula: `${netPayable} + ${totalEmployerBenefit} = ${totalCTC}`
+    });
     
     return {
       perDayRate: Math.round(perDayRate * 100) / 100,
@@ -687,16 +699,25 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     }
   };
 
-  const calculateAttendanceSummary = (attendanceRecords: any[]) => {
+  const calculateAttendanceSummary = (attendanceRecords: any[], holidays: any[] = []) => {
     let presentDays = 0;
     let paidLeaveDays = 0;
     let absentDays = 0;
     
+    // Create a set of holiday dates for quick lookup
+    const holidayDates = new Set(
+      holidays.map(h => new Date(h.date).toISOString().split('T')[0])
+    );
+    
     attendanceRecords.forEach((record) => {
       const status = record.status?.toLowerCase();
       const isHalfDay = record.is_half_day;
+      const recordDate = new Date(record.date).toISOString().split('T')[0];
       
-      if (status === 'approved' || status === 'present') {
+      // If date is a holiday and status is absent, mark as holiday (paid leave)
+      if (holidayDates.has(recordDate) && (status === 'absent' || status === 'rejected')) {
+        paidLeaveDays += isHalfDay ? 0.5 : 1;
+      } else if (status === 'approved' || status === 'present') {
         presentDays += isHalfDay ? 0.5 : 1;
       } else if (status === 'paid_leave') {
         paidLeaveDays += isHalfDay ? 0.5 : 1;
@@ -736,8 +757,94 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .gte("date", startDate)
         .lte("date", endDate);
       
-      // 3. Calculate attendance summary
-      const attendanceSummary = calculateAttendanceSummary(attendanceData || []);
+      // 2.5. Fetch holidays for the month
+      const { data: holidaysData } = await supabase
+        .from("holidays")
+        .select("*")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      
+      // 2.6. Calculate actual working days using RPC function
+      const { data: workingDaysData } = await supabase
+        .rpc('calculate_monthly_working_days', {
+          p_year: selectedYear,
+          p_month: selectedMonth
+        });
+      
+      const actualWorkingDays = workingDaysData || salary.working_days || 26;
+      
+      // 2.7. Auto-update absent records on holidays to paid_leave
+      if (holidaysData && holidaysData.length > 0 && attendanceData && attendanceData.length > 0) {
+        const holidayDates = new Set(
+          holidaysData.map(h => new Date(h.date).toISOString().split('T')[0])
+        );
+        
+        const recordsToUpdate = attendanceData.filter(record => {
+          const recordDate = new Date(record.date).toISOString().split('T')[0];
+          return holidayDates.has(recordDate) && (record.status === 'absent' || record.status === 'rejected');
+        });
+        
+        // Update all absent records on holidays to paid_leave
+        if (recordsToUpdate.length > 0) {
+          await Promise.all(
+            recordsToUpdate.map(record =>
+              supabase
+                .from("attendance")
+                .update({ status: 'paid_leave', remarks: 'Auto-marked as paid leave (Holiday)' })
+                .eq("id", record.id)
+            )
+          );
+          
+          // Refresh attendance data after update
+          const { data: updatedAttendanceData } = await supabase
+            .from("attendance")
+            .select("*")
+            .eq("user_id", salary.user_id)
+            .gte("date", startDate)
+            .lte("date", endDate);
+          
+          // Use updated data for calculation
+          const attendanceSummary = calculateAttendanceSummary(updatedAttendanceData || [], holidaysData || []);
+          
+          // 4. Set form data with all values
+          setFormData({
+            // From salary_structures
+            fixed_gross_salary: (structure as any)?.fixed_gross_salary || salary.base_salary || 0,
+            basic_percentage: (structure as any)?.basic_percentage || 50,
+            hra_percentage: (structure as any)?.hra_percentage || 40,
+            other_allowance_percentage: (structure as any)?.other_allowance_percentage || 30,
+            
+            // Attendance (auto-calculated from attendance table and calendar)
+            working_days: actualWorkingDays,
+            present_days: attendanceSummary.presentDays,
+            paid_leave_days: attendanceSummary.paidLeaveDays,
+            absent_days: attendanceSummary.absentDays,
+            
+            // Variable earnings (from existing salary record)
+            variable_earnings: salary.variable_earnings_details || {},
+            
+            // Deductions
+            epf_percentage: (structure as any)?.epf_employee_rate || 12,
+            esic_percentage: (structure as any)?.esic_employee_rate || 0.75,
+            epf_applicable: (structure as any)?.epf_applicable ?? true,
+            esic_applicable: (structure as any)?.esic_applicable ?? true,
+            manual_deduction: salary.manual_deduction || 0,
+            tds_deduction: salary.tds_deduction || 0,
+            professional_tax: salary.professional_tax || 0,
+            other_deductions: salary.other_deductions || 0,
+            
+            // Manual override
+            net_salary_manual: salary.net_salary_manual,
+            manager_justification: salary.manager_justification || "",
+          });
+          
+          setEditDialogOpen(true);
+          return;
+        }
+      }
+      
+      // 3. Calculate attendance summary with holiday checking
+      const attendanceSummary = calculateAttendanceSummary(attendanceData || [], holidaysData || []);
       
       // 4. Set form data with all values
       setFormData({
@@ -747,8 +854,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         hra_percentage: (structure as any)?.hra_percentage || 40,
         other_allowance_percentage: (structure as any)?.other_allowance_percentage || 30,
         
-        // Attendance (auto-calculated)
-        working_days: salary.working_days || 26,
+        // Attendance (auto-calculated from attendance table and calendar)
+        working_days: actualWorkingDays,
         present_days: attendanceSummary.presentDays,
         paid_leave_days: attendanceSummary.paidLeaveDays,
         absent_days: attendanceSummary.absentDays,
@@ -1637,9 +1744,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </div>
               </div>
 
-              {/* Variable Earnings */}
+              {/* Performance Based Earnings */}
               <div className="space-y-4">
-                <h4 className="font-semibold border-b pb-2">Variable Earnings</h4>
+                <h4 className="font-semibold border-b pb-2">Performance Based Earnings</h4>
                 <div className="grid grid-cols-2 gap-4">
                   {earningTypes.map((earning) => (
                     <div key={earning.earning_code}>
@@ -1797,7 +1904,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   <span className="font-medium">₹{calculateSalary().grossEarned.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm pl-4">
-                  <span>Variable Earnings</span>
+                  <span>Performance Based Earnings</span>
                   <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between font-semibold pl-4 text-base">
@@ -1859,7 +1966,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   <span>₹{calculateSalary().totalCTC.toLocaleString()}</span>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
-                  Gross Earnings + Employer Benefits
+                  Net Payable + Employer Contributions
                 </p>
               </div>
             </div>

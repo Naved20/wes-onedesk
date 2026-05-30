@@ -155,6 +155,10 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
   }
 
   const monthLabel = months.find(m => m.value === selectedMonth)?.label;
+  
+  // Calculate CTC fresh instead of using database value
+  // CTC = Net Payable + Employer Contributions
+  const calculatedCTC = (salary.final_salary || 0) + (salary.total_employer_contribution || 0);
 
   return (
     <div className="space-y-6">
@@ -268,13 +272,13 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
             </CardContent>
           </Card>
 
-          {/* Variable Earnings */}
+          {/* Performance Based Earnings */}
           {salary.variable_earnings_total > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <TrendingUp className="h-5 w-5 text-green-600" />
-                  Variable Earnings
+                  Performance Based Earnings
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -286,7 +290,7 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                     </div>
                   ))}
                   <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-950 rounded-lg font-semibold">
-                    <span>Total Variable Earnings</span>
+                    <span>Total Performance Based Earnings</span>
                     <span className="text-lg text-green-600">₹{salary.variable_earnings_total.toLocaleString()}</span>
                   </div>
                 </div>
@@ -489,10 +493,10 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                 </div>
                 <div className="flex justify-between items-center p-4 bg-blue-600 text-white rounded-lg border-2 border-blue-600">
                   <span className="text-xl font-bold">Total CTC</span>
-                  <span className="text-3xl font-bold">₹{salary.total_ctc.toLocaleString()}</span>
+                  <span className="text-3xl font-bold">₹{calculatedCTC.toLocaleString()}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-4">
-                  Your CTC includes your net salary plus employer contributions for EPF and ESIC. This represents the total value of your compensation package.
+                  CTC = Net Payable + Employer Contributions. This represents the total value of your compensation package.
                 </p>
               </div>
             </CardContent>

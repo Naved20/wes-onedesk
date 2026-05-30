@@ -262,9 +262,8 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
   const perDayRate = salary.working_days > 0 ? salary.base_salary / salary.working_days : 0;
   
   // Fallback CTC calculation if not set in database
-  const calculatedCTC = salary.total_ctc > 0 
-    ? salary.total_ctc 
-    : (salary.gross_salary || 0) + (salary.total_employer_contribution || 0);
+  // CTC = Net Payable + Employer Contributions
+  const calculatedCTC = (salary.net_salary || 0) + (salary.total_employer_contribution || 0);
 
   return (
     <div className="space-y-4">
@@ -443,10 +442,10 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </div>
             </div>
 
-            {/* Variable Earnings */}
+            {/* Performance Based Earnings */}
             {salary.variable_earnings_total > 0 && (
               <div className="mb-4">
-                <p className="text-xs font-semibold text-gray-500 mb-2">Variable Earnings</p>
+                <p className="text-xs font-semibold text-gray-500 mb-2">Performance Based Earnings</p>
                 <div className="space-y-2 text-sm">
                   {Object.entries(salary.variable_earnings_details || {}).map(([key, value]) => (
                     <div key={key} className="flex justify-between p-2 border-l-4 border-green-400">
@@ -455,7 +454,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                     </div>
                   ))}
                   <div className="flex justify-between p-2 bg-green-50 rounded font-semibold">
-                    <span>Total Variable Earnings</span>
+                    <span>Total Performance Based Earnings</span>
                     <span>₹{salary.variable_earnings_total.toLocaleString()}</span>
                   </div>
                 </div>
@@ -563,8 +562,8 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               <p className="text-xs font-semibold mb-2 opacity-90">TOTAL COST TO COMPANY (CTC)</p>
               <div className="space-y-2 mb-4 text-sm">
                 <div className="flex justify-between">
-                  <span>Gross Earnings</span>
-                  <span>₹{salary.gross_salary.toLocaleString()}</span>
+                  <span>Net Payable to Employee</span>
+                  <span>₹{salary.net_salary.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>+ Employer Contributions</span>
@@ -622,7 +621,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   </tr>
                   {salary.variable_earnings_total > 0 && (
                     <tr className="border-b">
-                      <td className="p-3 pl-6">Variable Earnings</td>
+                      <td className="p-3 pl-6">Performance Based Earnings</td>
                       <td className="text-right p-3 font-semibold text-green-600">₹{salary.variable_earnings_total.toLocaleString()}</td>
                       <td className="text-right p-3">{((salary.variable_earnings_total / salary.gross_salary) * 100).toFixed(1)}%</td>
                     </tr>
@@ -712,7 +711,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   <tr className="bg-gradient-to-r from-primary/20 to-primary/10 font-bold border-t-2 border-primary">
                     <td className="p-3">Total Cost to Company (CTC)</td>
                     <td className="text-right p-3 text-primary">₹{calculatedCTC.toLocaleString()}</td>
-                    <td className="text-right p-3">{((calculatedCTC / salary.gross_salary) * 100).toFixed(2)}%</td>
+                    <td className="text-right p-3">100%</td>
                   </tr>
                 </tbody>
               </table>
