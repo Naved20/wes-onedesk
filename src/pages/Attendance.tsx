@@ -112,15 +112,13 @@ export default function Attendance() {
 
   const fetchAttendance = async () => {
     try {
-      // Fetch attendance for current month and previous month to ensure we have enough data
-      const monthStart = startOfMonth(new Date());
-      const twoMonthsAgo = new Date(monthStart);
-      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      // Fetch attendance for current year to show all records
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
       
       const { data: attendanceData, error } = await supabase
         .from("attendance")
         .select("*")
-        .gte("date", format(twoMonthsAgo, "yyyy-MM-dd"))
+        .gte("date", format(yearStart, "yyyy-MM-dd"))
         .order("date", { ascending: false });
 
       if (error) throw error;
@@ -200,12 +198,43 @@ export default function Attendance() {
   };
 
   const fetchHolidays = async () => {
-    const { data } = await supabase
-      .from("holidays")
-      .select("date, name")
-      .order("date");
-    
-    setHolidays(data || []);
+    try {
+      // Fetch holidays from the holidays table to get names
+      const { data: holidaysData, error: holidaysError } = await supabase
+        .from("holidays")
+        .select("date, name")
+        .order("date");
+
+      if (holidaysError) {
+        console.warn("Error fetching from holidays table:", holidaysError);
+        // Fallback: fetch from attendance table
+        const { data: attendanceData } = await supabase
+          .from("attendance")
+          .select("date")
+          .eq("status", "holiday")
+          .order("date");
+        
+        const uniqueDates = new Set(attendanceData?.map(d => d.date) || []);
+        const holidays: Holiday[] = Array.from(uniqueDates).map(date => ({
+          date: date as string,
+          name: "Holiday"
+        }));
+        
+        setHolidays(holidays);
+        return;
+      }
+
+      // Transform holidays table data to Holiday format
+      const holidays: Holiday[] = (holidaysData || []).map(h => ({
+        date: h.date,
+        name: h.name
+      }));
+      
+      setHolidays(holidays);
+    } catch (error) {
+      console.error("Error fetching holidays:", error);
+      setHolidays([]);
+    }
   };
 
   const fetchLeaves = async () => {
@@ -276,9 +305,9 @@ export default function Attendance() {
     // Check calculated_status first for direct status display
     const calculatedStatus = record.calculated_status?.toLowerCase();
     
-    // Check if this date is a holiday
+    // Check if this date is a holiday (now includes Sundays from database)
     const recordDate = new Date(record.date).toISOString().split('T')[0];
-    const isHoliday = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate) || isSunday(new Date(record.date));
+    const isHoliday = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
     
     // Debug log
     if (record.employee_name?.includes("test") || Math.random() < 0.1) {
@@ -494,11 +523,9 @@ export default function Attendance() {
       );
     }
 
-    // Check if target date is a holiday (including Sundays)
+    // Check if target date is a holiday (now includes Sundays from database)
     const isTargetDateHoliday = (dateStr: string) => {
-      const date = new Date(dateStr);
-      // Check if it's Sunday OR in holidays table
-      return isSunday(date) || holidays.some(h => h.date === dateStr);
+      return holidays.some(h => h.date === dateStr);
     };
 
     // Apply status filter
@@ -564,8 +591,10 @@ export default function Attendance() {
     const targetDate = selectedDate || new Date();
     const targetDateStr = format(targetDate, "yyyy-MM-dd");
     
-    // Check if target date is a holiday (including Sundays)
-    const isHoliday = isSunday(targetDate) || holidays.some(h => h.date === targetDateStr);
+    // Check if target date is a holiday - fetch from attendance table
+    const isHoliday = attendanceRecords.some(r => 
+      r.date === targetDateStr && r.status === 'holiday'
+    );
     
     // Filter employees by institution first
     let employeesToCount = allEmployees;
@@ -614,7 +643,7 @@ export default function Attendance() {
       date: targetDate,
       isHoliday: isHoliday
     };
-  }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees, holidays]);
+  }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees]);
 
   // Pending records for manager approval
   const pendingRecords = useMemo(() => {
@@ -639,7 +668,9 @@ export default function Attendance() {
           <AttendanceStats 
             userId={user.id} 
             year={currentYear} 
-            month={currentMonth} 
+            month={currentMonth}
+            attendanceRecords={attendanceRecords}
+            holidays={holidays}
           />
         )}
 
@@ -665,7 +696,12 @@ export default function Attendance() {
                   <div className="space-y-0.5">
                     <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {Array.from({ length: 31 }, (_, i) => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), i + 1)).filter(d => isSunday(d)).length}
+                      {holidays.filter(h => {
+                        const hDate = new Date(h.date);
+                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
+                               hDate.getMonth() === selectedMonth.getMonth() &&
+                               h.name === 'Sunday';
+                      }).length}
                     </p>
                   </div>
                   <div className="space-y-0.5">
@@ -681,11 +717,10 @@ export default function Attendance() {
                   <div className="space-y-0.5">
                     <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
                     <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {31 - Array.from({ length: 31 }, (_, i) => new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), i + 1)).filter(d => isSunday(d)).length - holidays.filter(h => {
+                      {31 - holidays.filter(h => {
                         const hDate = new Date(h.date);
                         return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                               hDate.getMonth() === selectedMonth.getMonth() &&
-                               !isSunday(new Date(h.date));
+                               hDate.getMonth() === selectedMonth.getMonth();
                       }).length}
                     </p>
                   </div>
@@ -810,7 +845,7 @@ export default function Attendance() {
                       month={selectedMonth}
                       onMonthChange={setSelectedMonth}
                       modifiers={{
-                        holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)) || isSunday(date),
+                        holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)),
                       }}
                       modifiersStyles={modifiersStyles}
                       className="pointer-events-auto"
@@ -944,12 +979,7 @@ export default function Attendance() {
                       </div>
                     ) : searchFilteredRecords.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        {dailyStats.isHoliday ? (
-                          <div className="space-y-2">
-                            <p className="text-lg font-medium">🎉 Holiday</p>
-                            <p>No attendance records for holidays</p>
-                          </div>
-                        ) : employeeSearchQuery ? (
+                        {employeeSearchQuery ? (
                           "No employees match your search"
                         ) : selectedDate ? (
                           "No attendance records for this date"
@@ -1376,6 +1406,7 @@ export default function Attendance() {
                 year={employeeDialogMonth.getFullYear()} 
                 month={employeeDialogMonth.getMonth() + 1}
                 attendanceRecords={attendanceRecords as any}
+                holidays={holidays}
               />
               
               {/* Attendance Records - Calendar View */}
@@ -1472,35 +1503,35 @@ export default function Attendance() {
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
-                            // Priority 1: If it's a holiday (HIGHEST PRIORITY - overrides everything)
-                            if (isHoliday) {
-                              displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                              statusTag = 'HO';
-                            }
-                            // Priority 2: If there's an attendance record (show actual status even on Sunday)
-                            else if (record) {
-                              const calcStatus = record.calculated_status?.toLowerCase();
-                              
-                              // Rejected attendance is treated as Absent
-                              if (record.status === 'rejected') {
-                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
-                                statusTag = 'AB';
-                              } else if (calcStatus === 'absent') {
-                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
-                                statusTag = 'AB';
-                              } else if (calcStatus === 'half_day' || record.is_half_day) {
-                                displayColor = 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700';
-                                statusTag = 'HD';
-                              } else if (calcStatus === 'paid_leave') {
+                            // Check if user is present on a holiday
+                            const calcStatus = record?.calculated_status?.toLowerCase();
+                            // A record is "present" if: it has a check_in_time OR calculated_status is one of the active statuses
+                            // AND the record is not rejected AND not marked absent
+                            const isActiveRecord = record &&
+                              record.status !== 'rejected' &&
+                              calcStatus !== 'absent' &&
+                              calcStatus !== 'holiday' &&
+                              (record.check_in_time != null ||
+                                calcStatus === 'present' ||
+                                calcStatus === 'late' ||
+                                calcStatus === 'half_day' ||
+                                calcStatus === 'paid_leave' ||
+                                calcStatus === 'leave' ||
+                                record.is_half_day ||
+                                record.is_late);
+
+                            // Priority 1: If there's an active attendance record, it overrides holiday/Sunday
+                            if (isActiveRecord) {
+                              if (calcStatus === 'paid_leave') {
                                 displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
                                 statusTag = 'PL';
                               } else if (calcStatus === 'leave') {
                                 displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
                                 statusTag = 'LE';
-                              } else if (calcStatus === 'holiday') {
-                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                                statusTag = 'HO';
-                              } else if (record.is_late) {
+                              } else if (calcStatus === 'half_day' || record!.is_half_day) {
+                                displayColor = 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700';
+                                statusTag = 'HD';
+                              } else if (record!.is_late || calcStatus === 'late') {
                                 displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
                                 statusTag = 'LT';
                               } else {
@@ -1508,7 +1539,28 @@ export default function Attendance() {
                                 statusTag = 'PR';
                               }
 
-                              // Get time display
+                              if (record!.check_in_time) {
+                                displayInfo = format(new Date(record!.check_in_time), "hh:mm a");
+                              }
+                            }
+                            // Priority 2: If it's a holiday (including Sunday) with no active attendance
+                            else if (isHoliday) {
+                              displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                              statusTag = 'HO';
+                            }
+                            // Priority 3: Other attendance records (rejected/absent)
+                            else if (record) {
+                              if (record.status === 'rejected' || calcStatus === 'absent') {
+                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
+                                statusTag = 'AB';
+                              } else if (calcStatus === 'holiday') {
+                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                                statusTag = 'HO';
+                              } else {
+                                displayColor = 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700';
+                                statusTag = 'PR';
+                              }
+
                               if (record.check_in_time) {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }

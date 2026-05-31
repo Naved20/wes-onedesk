@@ -9,10 +9,9 @@ import {
   CheckCircle, 
   Clock, 
   XCircle, 
-  CalendarDays, 
-  TrendingUp,
+  CalendarDays,
   AlertCircle,
-  Coffee
+  Gift
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 
@@ -23,6 +22,7 @@ interface AttendanceStatsProps {
   year: number;
   month: number;
   attendanceRecords?: Attendance[];
+  holidays?: Array<{ date: string; name: string }>;
 }
 
 interface LeaveRecord {
@@ -48,9 +48,10 @@ interface Stats {
   effective_present: number;
   attendance_percentage: number;
   present_on_time: number;
+  total_days_in_month?: number; // Added for payroll days (total days in month)
 }
 
-export function AttendanceStats({ userId, year, month, attendanceRecords = [] }: AttendanceStatsProps) {
+export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [] }: AttendanceStatsProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -101,13 +102,24 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
       });
 
       if (error) throw error;
-      setStats(data as unknown as Stats);
+      
+      // Calculate total days in month
+      const totalDaysInMonth = new Date(year, month, 0).getDate();
+      
+      setStats({
+        ...(data as unknown as Stats),
+        total_days_in_month: totalDaysInMonth
+      });
     } catch (error) {
       console.error("Error fetching attendance stats:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Note: Holiday count is now fetched from attendance table with status = 'holiday'
+  // This is handled in the calculate_attendance_stats RPC function
+  // No separate holiday fetch needed anymore
 
   if (loading) {
     return (
@@ -134,79 +146,95 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
     return "text-red-600 dark:text-red-400";
   };
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage >= 90) return "bg-green-500";
-    if (percentage >= 75) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-
   return (
     <div className="space-y-4">
-      {/* Main Attendance Card */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Attendance Percentage</p>
-                <p className={`text-3xl font-bold ${getPercentageColor(stats.attendance_percentage)}`}>
-                  {stats.attendance_percentage}%
-                </p>
-              </div>
-            </div>
-            <div className="w-full sm:w-48">
-              <Progress 
-                value={stats.attendance_percentage} 
-                className="h-3"
-              />
-              <p className="text-xs text-muted-foreground mt-1 text-right">
-                {stats.effective_present} / {stats.working_days} effective days
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      {/* Stats Grid - New Design */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Payroll Days - Total days in month */}
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Working Days</span>
+              <CalendarDays className="h-4 w-4 text-slate-500" />
+              <span className="text-xs text-muted-foreground">Payroll Days</span>
             </div>
-            <p className="text-2xl font-bold">{stats.working_days}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-xs text-muted-foreground">Present</span>
-            </div>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {stats.present_days}
-              {stats.half_days > 0 && (
-                <span className="text-sm font-normal text-muted-foreground ml-1">
-                  (+{stats.half_days} half)
-                </span>
-              )}
+            <p className="text-2xl font-bold">{stats.total_days_in_month || 31}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Total days in month
             </p>
           </CardContent>
         </Card>
 
-        {/* Casual Leaves - Clickable */}
+        {/* Present (PR) */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-xs text-muted-foreground">Present (PR)</span>
+            </div>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+              {stats.present_days}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Half Day (HD) */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Clock className="h-4 w-4 text-orange-500" />
+              <span className="text-xs text-muted-foreground">Half Day (HD)</span>
+            </div>
+            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+              {stats.half_days}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Holiday (HO) */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Gift className="h-4 w-4 text-purple-500" />
+              <span className="text-xs text-muted-foreground">Holiday (HO)</span>
+            </div>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              {(() => {
+                // Get all holidays in this month
+                const holidaysInMonth = holidays.filter(h => {
+                  const hDate = new Date(h.date);
+                  return hDate.getMonth() === month - 1 && hDate.getFullYear() === year;
+                });
+                
+                // Find holidays where the user was present
+                const holidaysWorked = attendanceRecords.filter(r => {
+                  if (r.user_id !== userId) return false;
+                  if (new Date(r.date).getMonth() !== month - 1) return false;
+                  if (new Date(r.date).getFullYear() !== year) return false;
+                  
+                  const recordDate = new Date(r.date).toISOString().split('T')[0];
+                  const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
+                  
+                  const calcStatus = r.calculated_status?.toLowerCase();
+                  const isPresent = calcStatus === 'present' || calcStatus === 'late' || calcStatus === 'half_day' || r.is_half_day || r.is_late || calcStatus === 'paid_leave';
+                  
+                  return isHolidayDate && isPresent && r.status !== 'rejected';
+                });
+                
+                // Return total holidays minus holidays worked
+                return holidaysInMonth.length - holidaysWorked.length;
+              })()}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Paid Leave (PL) */}
         <Dialog>
           <DialogTrigger asChild>
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <Coffee className="h-4 w-4 text-blue-500" />
-                  <span className="text-xs text-muted-foreground">Casual Leaves</span>
+                  <CheckCircle className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Paid Leave (PL)</span>
                 </div>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   {stats.casual_leaves}
@@ -216,11 +244,11 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Casual Leaves</DialogTitle>
+              <DialogTitle>Paid Leaves (PL)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {leaves.filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency').length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No casual leaves this month</p>
+                <p className="text-center text-muted-foreground py-4">No paid leaves this month</p>
               ) : (
                 leaves
                   .filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency')
@@ -236,7 +264,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
                         )}
                       </div>
                       <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/30">
-                        {leave.leave_type === 'emergency' ? 'Emergency' : 'Casual'}
+                        PL
                       </Badge>
                     </div>
                   ))
@@ -245,29 +273,16 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </DialogContent>
         </Dialog>
 
-        {/* Paid Leave - New Card */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="h-4 w-4 text-purple-500" />
-              <span className="text-xs text-muted-foreground">Paid Leave</span>
-            </div>
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {stats.casual_leaves}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Sick Leaves - Clickable */}
+        {/* Leave (LE) - Sick Leaves */}
         <Dialog>
           <DialogTrigger asChild>
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-4 w-4 text-orange-500" />
-                  <span className="text-xs text-muted-foreground">Sick Leaves</span>
+                  <AlertCircle className="h-4 w-4 text-cyan-500" />
+                  <span className="text-xs text-muted-foreground">Leave (LE)</span>
                 </div>
-                <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
                   {stats.sick_leaves}
                 </p>
               </CardContent>
@@ -275,16 +290,16 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Sick Leaves</DialogTitle>
+              <DialogTitle>Leaves (LE)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {leaves.filter(l => l.leave_type === 'sick').length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No sick leaves this month</p>
+                <p className="text-center text-muted-foreground py-4">No leaves this month</p>
               ) : (
                 leaves
                   .filter(l => l.leave_type === 'sick')
                   .map((leave) => (
-                    <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-orange-50 dark:bg-orange-950/20">
+                    <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-cyan-50 dark:bg-cyan-950/20">
                       <div>
                         <p className="font-medium">
                           {format(new Date(leave.start_date), "MMM dd, yyyy")}
@@ -294,8 +309,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
                           <p className="text-sm text-muted-foreground">{leave.reason}</p>
                         )}
                       </div>
-                      <Badge variant="outline" className="bg-orange-100 dark:bg-orange-900/30">
-                        Sick
+                      <Badge variant="outline" className="bg-cyan-100 dark:bg-cyan-900/30">
+                        LE
                       </Badge>
                     </div>
                   ))
@@ -304,66 +319,14 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </DialogContent>
         </Dialog>
 
-        {/* Late Check-ins - Clickable */}
-        <Dialog>
-          <DialogTrigger asChild>
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Clock className="h-4 w-4 text-yellow-500" />
-                  <span className="text-xs text-muted-foreground">Late Check-ins</span>
-                </div>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                  {stats.late_days}
-                </p>
-              </CardContent>
-            </Card>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Late Check-ins</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {attendanceRecords
-                .filter(r => r.user_id === userId && r.is_late && 
-                  new Date(r.date).getMonth() === month - 1 &&
-                  new Date(r.date).getFullYear() === year)
-                .length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No late check-ins this month</p>
-              ) : (
-                attendanceRecords
-                  .filter(r => r.user_id === userId && r.is_late && 
-                    new Date(r.date).getMonth() === month - 1 &&
-                    new Date(r.date).getFullYear() === year)
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((record) => (
-                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
-                      <div>
-                        <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {record.check_in_time 
-                            ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
-                            : "No check-in"}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30">
-                        Late
-                      </Badge>
-                    </div>
-                  ))
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Absent - Clickable */}
+        {/* Absent (AB) */}
         <Dialog>
           <DialogTrigger asChild>
             <Card className="cursor-pointer hover:shadow-md transition-shadow">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <XCircle className="h-4 w-4 text-red-500" />
-                  <span className="text-xs text-muted-foreground">Absent</span>
+                  <span className="text-xs text-muted-foreground">Absent (AB)</span>
                 </div>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {stats.absent_days}
@@ -373,7 +336,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Absent Days</DialogTitle>
+              <DialogTitle>Absent Days (AB)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
               {attendanceRecords
@@ -400,16 +363,112 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [] }:
                             : "No check-in"}
                         </p>
                       </div>
-                      <Badge variant="destructive">
-                        {record.status === 'rejected' ? 'Rejected' : 'Absent'}
-                      </Badge>
+                      <Badge variant="destructive">AB</Badge>
                     </div>
                   ))
               )}
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Lates (LT) */}
+        <Dialog>
+          <DialogTrigger asChild>
+            <Card className="cursor-pointer hover:shadow-md transition-shadow">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock className="h-4 w-4 text-yellow-500" />
+                  <span className="text-xs text-muted-foreground">Lates (LT)</span>
+                </div>
+                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                  {stats.late_days}
+                </p>
+              </CardContent>
+            </Card>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Late Check-ins (LT)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {attendanceRecords
+                .filter(r => r.user_id === userId && r.is_late && 
+                  new Date(r.date).getMonth() === month - 1 &&
+                  new Date(r.date).getFullYear() === year)
+                .length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No late check-ins this month</p>
+              ) : (
+                attendanceRecords
+                  .filter(r => r.user_id === userId && r.is_late && 
+                    new Date(r.date).getMonth() === month - 1 &&
+                    new Date(r.date).getFullYear() === year)
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((record) => (
+                    <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+                      <div>
+                        <p className="font-medium">{format(new Date(record.date), "MMM dd, yyyy")}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {record.check_in_time 
+                            ? `Check-in: ${format(new Date(record.check_in_time), "hh:mm a")}`
+                            : "No check-in"}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30">LT</Badge>
+                    </div>
+                  ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Late Sets */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="h-4 w-4 text-amber-500" />
+              <span className="text-xs text-muted-foreground">Late Sets</span>
+            </div>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+              {Math.floor(stats.late_days / 2)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              2 lates = 1 set
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Paid Day Units - Summary Card */}
+      <Card className="bg-gradient-to-br from-primary/5 to-secondary/5">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Paid Day Units</p>
+              <p className="text-4xl font-bold text-primary">
+                {(stats.present_days + stats.half_days + stats.casual_leaves).toFixed(1)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Present ({stats.present_days}) + Half Day ({stats.half_days}) + Paid Leave ({stats.casual_leaves})
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground mb-1">Payroll Utilization</p>
+              <p className={`text-3xl font-bold ${getPercentageColor(
+                ((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100
+              )}`}>
+                {(((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100).toFixed(1)}%
+              </p>
+              <Progress 
+                value={((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100} 
+                className="h-2 w-32 mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {(stats.present_days + stats.half_days + stats.casual_leaves).toFixed(1)} / {stats.total_days_in_month || 31} days
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pending/Rejected Info - Clickable to show details */}
       {(stats.pending_days > 0 || stats.rejected_days > 0) && (
