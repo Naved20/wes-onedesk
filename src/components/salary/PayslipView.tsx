@@ -263,7 +263,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
   
   // Fallback CTC calculation if not set in database
   // CTC = Net Payable + Employer Contributions
-  const calculatedCTC = (salary.net_salary || 0) + (salary.total_employer_contribution || 0);
+  const calculatedCTC = (salary.final_salary || 0) + (salary.total_employer_contribution || 0);
 
   return (
     <div className="space-y-4">
@@ -563,11 +563,11 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               <div className="space-y-2 mb-4 text-sm">
                 <div className="flex justify-between">
                   <span>Net Payable to Employee</span>
-                  <span>₹{salary.net_salary.toLocaleString()}</span>
+                  <span>₹{(salary.final_salary || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>+ Employer Contributions</span>
-                  <span>+₹{salary.total_employer_contribution.toLocaleString()}</span>
+                  <span>+₹{(salary.total_employer_contribution || 0).toLocaleString()}</span>
                 </div>
               </div>
               <Separator className="bg-white/30 mb-4" />
