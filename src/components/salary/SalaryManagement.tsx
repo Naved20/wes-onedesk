@@ -510,6 +510,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     present_days: 0,
     half_days: 0,
     paid_leave_days: 0,
+    sick_leaves: 0,
     absent_days: 0,
     late_days: 0,
     holiday_count: 0,
