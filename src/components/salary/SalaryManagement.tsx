@@ -769,7 +769,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             });
           
           const actualWorkingDays = workingDaysData || salary.working_days || 26;
-          const attendanceSummary = calculateAttendanceSummary(attendanceData || [], holidaysData || []);
+          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidaysData || []);
           
           // Fetch salary structure
           const { data: structure } = await supabase
