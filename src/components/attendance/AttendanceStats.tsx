@@ -176,8 +176,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
   );
   
   const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
-  const lateSets = Math.floor(stats.late_days / 2);
-  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days + stats.sick_leaves);
+  const lateSets = Math.floor(stats.late_days / 3);
+  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + (stats.absent_days * 2) + stats.sick_leaves);
 
   return (
     <div className="space-y-4">
@@ -441,7 +441,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               {lateSets}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              2 lates = 1 set
+              3 lates = 1 set
             </p>
           </CardContent>
         </Card>
@@ -457,7 +457,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                 {paidDayUnits.toFixed(1)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                PR ({stats.present_days}) + HO ({holidayCount}) + HD ({stats.half_days * 0.5}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + AB ({stats.absent_days}) + LE ({stats.sick_leaves}))
+                PR ({stats.present_days}) + HO ({holidayCount}) + HD ({stats.half_days * 0.5}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + 2×AB ({stats.absent_days * 2}) + LE ({stats.sick_leaves}))
               </p>
             </div>
             <div className="text-right">

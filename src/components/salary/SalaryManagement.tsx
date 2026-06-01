@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText } from "lucide-react";
+import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText, Gift } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
 
@@ -35,6 +35,12 @@ interface SalaryRecord {
   absent_days: number | null;
   paid_leave_days: number | null;
   per_day_salary: number | null;
+  
+  // Attendance fields (saved from attendance table)
+  half_days: number | null;
+  sick_leaves: number | null;
+  late_days: number | null;
+  holiday_count: number | null;
   
   // Fixed components
   basic_earned: number | null;
@@ -597,19 +603,24 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
   // Live calculation based on form data - UPDATED WITH COMPLETE STRUCTURE
   const calculateSalary = useCallback(() => {
-    const perDayRate = formData.working_days > 0 
-      ? formData.fixed_gross_salary / formData.working_days 
+    // NEW FORMULA:
+    // Per Day Rate = Fixed Gross Salary / Payroll Days (total days in month)
+    // Gross Earned = Per Day Rate × Total Paid Days
+    
+    const payrollDays = new Date(selectedYear, selectedMonth, 0).getDate(); // Total days in month
+    
+    const perDayRate = payrollDays > 0 
+      ? formData.fixed_gross_salary / payrollDays 
       : 0;
     
-    // Calculate late sets: 2 late = 1 set, 1 set = 1 day deduction
-    const lateSets = Math.floor(formData.late_days / 2);
-    const lateSetDeduction = lateSets * perDayRate;
+    // Calculate late sets: 3 late = 1 set
+    const lateSets = Math.floor(formData.late_days / 3);
     
-    // Calculate absent penalty: 1 absent = 1 unpaid + 1 penalty day deduction
-    const absentDeduction = formData.absent_days * perDayRate;
+    // Total Paid Days = PR + HO + (HD × 0.5) + PL - Late Sets - (AB × 2) - LE
+    const totalPaidDays = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - (formData.absent_days * 2) - formData.sick_leaves;
     
-    const paidDayUnits = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - formData.absent_days - formData.sick_leaves;
-    const grossEarned = paidDayUnits * perDayRate;
+    // Gross Earned = Per Day Rate × Total Paid Days
+    const grossEarned = totalPaidDays * perDayRate;
     
     // Fixed components
     const basicEarned = grossEarned * (formData.basic_percentage / 100);
@@ -651,7 +662,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     const totalCTC = netPayable + totalEmployerBenefit;
     
     // Debug logging
-    console.log("CTC Calculation Debug:", {
+    console.log("CTC Calculation Debug (NEW FORMULA):", {
+      payrollDays,
+      perDayRate,
+      totalPaidDays,
+      grossEarned,
       totalGrossEarnings,
       totalDeductions,
       netPayable,
@@ -660,16 +675,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       totalEmployerBenefit,
       totalCTC,
       lateSets,
-      lateSetDeduction,
-      absentDeduction,
-      formula: `${netPayable} + ${totalEmployerBenefit} = ${totalCTC}`
+      formula: `Per Day Rate (${perDayRate}) × Total Paid Days (${totalPaidDays}) = Gross Earned (${grossEarned})`
     });
     
     return {
       perDayRate: Math.round(perDayRate * 100) / 100,
       lateSets: lateSets,
-      lateSetDeduction: Math.round(lateSetDeduction * 100) / 100,
-      absentDeduction: Math.round(absentDeduction * 100) / 100,
       grossEarned: Math.round(grossEarned * 100) / 100,
       basicEarned: Math.round(basicEarned * 100) / 100,
       hraEarned: Math.round(hraEarned * 100) / 100,
@@ -685,7 +696,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       totalEmployerBenefit: Math.round(totalEmployerBenefit * 100) / 100,
       totalCTC: Math.round(totalCTC * 100) / 100,
     };
-  }, [formData]);
+  }, [formData, selectedYear, selectedMonth]);
 
   const generateMonthlySalaries = async () => {
     setGenerating(true);
@@ -704,6 +715,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         description: `Created ${result.created} new records, ${result.skipped} already existed. Working days: ${result.working_days}`,
       });
       
+      // After generating salaries, populate attendance details for all records
+      await populateAttendanceDetailsForMonth();
+      
+      // Save attendance summary to attendance_summary table for all employees
+      await saveAttendanceSummaryForAllEmployees();
+      
       fetchData();
     } catch (error) {
       console.error("Error generating salaries:", error);
@@ -714,6 +731,282 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const populateAttendanceDetailsForMonth = async () => {
+    try {
+      // Fetch all salary records for the month
+      const { data: salaries, error: salaryError } = await supabase
+        .from("salaries")
+        .select("id, user_id")
+        .eq("month", selectedMonth)
+        .eq("year", selectedYear);
+
+      if (salaryError) throw salaryError;
+
+      if (!salaries || salaries.length === 0) {
+        console.log("No salary records found for this month");
+        return;
+      }
+
+      // For each salary record, fetch attendance data from attendance_summary table
+      for (const salary of salaries) {
+        try {
+          // Fetch attendance summary data from attendance_summary table
+          const { data: attendanceSummaryData, error: summaryError } = await supabase
+            .from("attendance_summary")
+            .select("*")
+            .eq("user_id", salary.user_id)
+            .eq("year", selectedYear)
+            .eq("month", selectedMonth)
+            .maybeSingle();
+
+          if (summaryError) {
+            console.warn(`Warning: Could not fetch attendance summary for user ${salary.user_id}:`, summaryError);
+            continue;
+          }
+
+          if (!attendanceSummaryData) {
+            console.log(`No attendance summary found for user ${salary.user_id} - ${selectedYear}-${selectedMonth}`);
+            continue;
+          }
+
+          // Update salary record with attendance details from attendance_summary table
+          const { error: updateError } = await supabase
+            .from("salaries")
+            .update({
+              present_days: attendanceSummaryData.present_days,
+              half_days: attendanceSummaryData.half_days,
+              paid_leave_days: attendanceSummaryData.paid_leave_days,
+              sick_leaves: attendanceSummaryData.leave_days,
+              absent_days: attendanceSummaryData.absent_days,
+              late_days: attendanceSummaryData.late_days,
+              holiday_count: attendanceSummaryData.holiday_count,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", salary.id);
+
+          if (updateError) {
+            console.warn(`Warning: Could not update attendance for salary ${salary.id}:`, updateError);
+          } else {
+            console.log(`Updated salary ${salary.id} with attendance data from attendance_summary table`);
+          }
+        } catch (error) {
+          console.error(`Error processing attendance for salary ${salary.id}:`, error);
+        }
+      }
+
+      console.log(`Populated attendance details for ${salaries.length} salary records from attendance_summary table`);
+    } catch (error) {
+      console.error("Error populating attendance details:", error);
+    }
+  };
+
+  // Function to save attendance summary for a single employee to attendance_summary table
+  const saveAttendanceSummaryForEmployee = async (
+    userId: string,
+    year: number,
+    month: number,
+    attendanceSummary: any
+  ) => {
+    try {
+      const payrollDays = new Date(year, month, 0).getDate();
+      const lateSets = Math.floor(attendanceSummary.lateDays / 3);
+      
+      // Calculate total paid days using the formula
+      const totalPaidDays = attendanceSummary.presentDays + 
+                           attendanceSummary.holidayCount + 
+                           (attendanceSummary.halfDays * 0.5) + 
+                           attendanceSummary.paidLeaveDays - 
+                           lateSets - 
+                           (attendanceSummary.absentDays * 2) - 
+                           attendanceSummary.sickLeaves;
+      
+      // Calculate attendance percentage
+      const attendancePercentage = payrollDays > 0 
+        ? (totalPaidDays / payrollDays) * 100 
+        : 0;
+      
+      const { error } = await supabase
+        .from("attendance_summary")
+        .upsert({
+          user_id: userId,
+          year: year,
+          month: month,
+          payroll_days: payrollDays,
+          present_days: attendanceSummary.presentDays,
+          half_days: attendanceSummary.halfDays,
+          holiday_count: attendanceSummary.holidayCount,
+          paid_leave_days: attendanceSummary.paidLeaveDays,
+          leave_days: attendanceSummary.sickLeaves,
+          absent_days: attendanceSummary.absentDays,
+          late_days: attendanceSummary.lateDays,
+          late_sets: lateSets,
+          total_paid_days: Math.round(totalPaidDays * 100) / 100,
+          attendance_percentage: Math.round(attendancePercentage * 100) / 100,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,year,month'
+        });
+      
+      if (error) {
+        console.error(`Error saving attendance summary for user ${userId}:`, error);
+        return false;
+      }
+      
+      console.log(`Saved attendance summary for user ${userId} - ${year}-${month}`);
+      return true;
+    } catch (error) {
+      console.error(`Error in saveAttendanceSummaryForEmployee:`, error);
+      return false;
+    }
+  };
+
+  // Function to save attendance summary for all employees in a month
+  const saveAttendanceSummaryForAllEmployees = async () => {
+    try {
+      console.log(`Starting to save attendance summary for all employees - ${selectedYear}-${selectedMonth}`);
+      
+      // Fetch all active employees
+      const { data: employees, error: empError } = await supabase
+        .from("employee_profiles")
+        .select("user_id")
+        .eq("is_active", true);
+      
+      if (empError) throw empError;
+      
+      if (!employees || employees.length === 0) {
+        console.log("No active employees found");
+        return;
+      }
+      
+      let successCount = 0;
+      let failureCount = 0;
+      
+      // For each employee, calculate and save attendance summary
+      for (const emp of employees) {
+        try {
+          // Fetch attendance data for this employee
+          const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+          const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+          
+          const { data: attendanceData } = await supabase
+            .from("attendance")
+            .select("*")
+            .eq("user_id", emp.user_id)
+            .gte("date", startDate)
+            .lte("date", endDate);
+          
+          // Calculate attendance summary
+          const attendanceSummary = await calculateAttendanceSummary(emp.user_id, attendanceData || []);
+          
+          // Save to attendance_summary table
+          const saved = await saveAttendanceSummaryForEmployee(
+            emp.user_id,
+            selectedYear,
+            selectedMonth,
+            attendanceSummary
+          );
+          
+          if (saved) {
+            successCount++;
+          } else {
+            failureCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing employee ${emp.user_id}:`, error);
+          failureCount++;
+        }
+      }
+      
+      console.log(`Attendance summary save complete: ${successCount} successful, ${failureCount} failed`);
+      
+      toast({
+        title: "Attendance Summary Saved",
+        description: `Saved attendance data for ${successCount} employees. ${failureCount > 0 ? `${failureCount} failed.` : ''}`,
+      });
+      
+      return successCount;
+    } catch (error) {
+      console.error("Error in saveAttendanceSummaryForAllEmployees:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save attendance summary",
+        variant: "destructive",
+      });
+      return 0;
+    }
+  };
+
+  // Function to add holiday to all employees for a specific month
+  const addHolidayToAllEmployees = async (month: number, year: number) => {
+    try {
+      // Fetch all attendance summary records for the month
+      const { data: records, error: fetchError } = await supabase
+        .from("attendance_summary")
+        .select("*")
+        .eq("month", month)
+        .eq("year", year);
+
+      if (fetchError) throw fetchError;
+
+      if (!records || records.length === 0) {
+        toast({
+          title: "No Records Found",
+          description: `No attendance summary records found for ${month}/${year}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update each record
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const record of records) {
+        try {
+          const newTotalPaidDays = record.total_paid_days + 1;
+          const newAttendancePercentage = record.payroll_days > 0 
+            ? Math.round((newTotalPaidDays / record.payroll_days) * 100 * 100) / 100
+            : 0;
+
+          const { error: updateError } = await supabase
+            .from("attendance_summary")
+            .update({
+              holiday_count: record.holiday_count + 1,
+              total_paid_days: newTotalPaidDays,
+              attendance_percentage: newAttendancePercentage,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", record.id);
+
+          if (updateError) {
+            console.error(`Error updating record ${record.id}:`, updateError);
+            failureCount++;
+          } else {
+            successCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing record ${record.id}:`, error);
+          failureCount++;
+        }
+      }
+
+      toast({
+        title: "Holiday Added",
+        description: `Added 1 holiday to ${successCount} employees. ${failureCount > 0 ? `${failureCount} failed.` : ''}`,
+      });
+
+      // Refresh data if needed
+      fetchData();
+    } catch (error) {
+      console.error("Error adding holiday:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add holiday to attendance summary",
+        variant: "destructive",
+      });
     }
   };
 
@@ -788,10 +1081,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const perDayRate = actualWorkingDays > 0 ? fixedGrossSalary / actualWorkingDays : 0;
           
           // Late set deduction
-          const lateSets = Math.floor(attendanceSummary.lateDays / 2);
+          const lateSets = Math.floor(attendanceSummary.lateDays / 3);
           
           // Paid Day Units
-          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + (attendanceSummary.halfDays * 0.5) + attendanceSummary.paidLeaveDays - lateSets - attendanceSummary.absentDays - attendanceSummary.sickLeaves;
+          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + (attendanceSummary.halfDays * 0.5) + attendanceSummary.paidLeaveDays - lateSets - (attendanceSummary.absentDays * 2) - attendanceSummary.sickLeaves;
           
           // Gross earned
           const grossEarned = paidDayUnits * perDayRate;
@@ -906,21 +1199,61 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     });
     const stats = (statsData as any) || {};
 
-    // Holiday count: unique holidays in month minus those the user worked on
-    const uniqueHolidaysInMonth = new Set(
-      holidays
-        .filter(h => {
-          const d = new Date(h.date);
-          return d.getMonth() === selectedMonth - 1 && d.getFullYear() === selectedYear;
-        })
-        .map(h => new Date(h.date).toISOString().split('T')[0])
+    // Fetch holidays from BOTH sources
+    const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+    const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+    
+    // Source 1: Fetch from holidays table
+    const { data: holidaysTableData } = await supabase
+      .from("holidays")
+      .select("date, name")
+      .gte("date", startDate)
+      .lte("date", endDate);
+    
+    // Source 2: Fetch from attendance table (where calculated_status = 'holiday')
+    const { data: holidaysFromAttendance } = await supabase
+      .from("attendance")
+      .select("date, status, calculated_status")
+      .gte("date", startDate)
+      .lte("date", endDate);
+    
+    // Filter for holiday records from attendance table
+    const holidayRecordsFromAttendance = (holidaysFromAttendance || []).filter(r => 
+      r.calculated_status?.toLowerCase() === 'holiday'
     );
+    
+    // Combine holidays from both sources (remove duplicates)
+    const allHolidayDates = new Set<string>();
+    
+    // Add holidays from holidays table
+    (holidaysTableData || []).forEach(h => {
+      const dateStr = new Date(h.date).toISOString().split('T')[0];
+      allHolidayDates.add(dateStr);
+    });
+    
+    // Add holidays from attendance table
+    holidayRecordsFromAttendance.forEach(h => {
+      const dateStr = new Date(h.date).toISOString().split('T')[0];
+      allHolidayDates.add(dateStr);
+    });
+    
+    console.log("Fetched holidays from both sources:", {
+      startDate,
+      endDate,
+      fromHolidaysTable: holidaysTableData?.length || 0,
+      fromAttendanceTable: holidayRecordsFromAttendance.length,
+      totalUnique: allHolidayDates.size,
+      allHolidayDates: Array.from(allHolidayDates),
+    });
 
+    // Count holidays where employee actually worked (present/late/half_day/paid_leave)
     const holidaysWorked = attendanceRecords.filter(r => {
+      if (r.user_id !== userId) return false;
       if (new Date(r.date).getMonth() !== selectedMonth - 1) return false;
       if (new Date(r.date).getFullYear() !== selectedYear) return false;
+      
       const recordDate = new Date(r.date).toISOString().split('T')[0];
-      const isHolidayDate = uniqueHolidaysInMonth.has(recordDate);
+      const isHolidayDate = allHolidayDates.has(recordDate);
       const calcStatus = r.calculated_status?.toLowerCase();
       const isPresent =
         calcStatus === 'present' ||
@@ -929,12 +1262,24 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         r.is_half_day ||
         r.is_late ||
         calcStatus === 'paid_leave';
+      
       return isHolidayDate && isPresent && r.status !== 'rejected';
     });
+    
     const uniqueHolidaysWorked = new Set(
       holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
     );
-    const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
+    
+    // Holiday count = total holidays - holidays worked
+    const holidayCount = allHolidayDates.size - uniqueHolidaysWorked.size;
+
+    console.log("Holiday Calculation Debug:", {
+      totalHolidaysInMonth: allHolidayDates.size,
+      holidaysWorked: uniqueHolidaysWorked.size,
+      holidayCount,
+      holidaysList: Array.from(allHolidayDates),
+      attendanceRecordsCount: attendanceRecords.length,
+    });
 
     return {
       presentDays: Number(stats.present_days) || 0,
@@ -945,6 +1290,80 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       lateDays: Number(stats.late_days) || 0,
       holidayCount,
     };
+  };
+
+  // Function to recalculate holiday count based on current attendance data
+  const recalculateHolidayCount = async (attendanceData: any[]) => {
+    try {
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      
+      // Fetch holidays from both sources
+      const { data: holidaysTableData } = await supabase
+        .from("holidays")
+        .select("date, name")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      
+      const { data: holidaysFromAttendance } = await supabase
+        .from("attendance")
+        .select("date, status, calculated_status")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      
+      const holidayRecordsFromAttendance = (holidaysFromAttendance || []).filter(r => 
+        r.calculated_status?.toLowerCase() === 'holiday'
+      );
+      
+      // Combine holidays from both sources
+      const allHolidayDates = new Set<string>();
+      
+      (holidaysTableData || []).forEach(h => {
+        const dateStr = new Date(h.date).toISOString().split('T')[0];
+        allHolidayDates.add(dateStr);
+      });
+      
+      holidayRecordsFromAttendance.forEach(h => {
+        const dateStr = new Date(h.date).toISOString().split('T')[0];
+        allHolidayDates.add(dateStr);
+      });
+      
+      // Count holidays where employee worked
+      const holidaysWorked = attendanceData.filter(r => {
+        if (new Date(r.date).getMonth() !== selectedMonth - 1) return false;
+        if (new Date(r.date).getFullYear() !== selectedYear) return false;
+        
+        const recordDate = new Date(r.date).toISOString().split('T')[0];
+        const isHolidayDate = allHolidayDates.has(recordDate);
+        const calcStatus = r.calculated_status?.toLowerCase();
+        const isPresent =
+          calcStatus === 'present' ||
+          calcStatus === 'late' ||
+          calcStatus === 'half_day' ||
+          r.is_half_day ||
+          r.is_late ||
+          calcStatus === 'paid_leave';
+        
+        return isHolidayDate && isPresent && r.status !== 'rejected';
+      });
+      
+      const uniqueHolidaysWorked = new Set(
+        holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
+      );
+      
+      const calculatedHolidayCount = allHolidayDates.size - uniqueHolidaysWorked.size;
+      
+      console.log("Recalculated Holiday Count:", {
+        totalHolidays: allHolidayDates.size,
+        holidaysWorked: uniqueHolidaysWorked.size,
+        calculatedHolidayCount,
+      });
+      
+      return calculatedHolidayCount;
+    } catch (error) {
+      console.error("Error recalculating holiday count:", error);
+      return 0;
+    }
   };
 
   const openEditDialog = async (salary: SalaryRecord) => {
@@ -960,25 +1379,87 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .eq("is_active", true)
         .maybeSingle();
       
-      // 2. Fetch attendance data for the month
-      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // 2. Check if attendance data is already saved in salaries table
+      const hasAttendanceDataInSalaries = 
+        salary.present_days !== null && 
+        salary.absent_days !== null && 
+        salary.paid_leave_days !== null;
       
-      const { data: attendanceData } = await supabase
-        .from("attendance")
-        .select("*")
-        .eq("user_id", salary.user_id)
-        .gte("date", startDate)
-        .lte("date", endDate);
+      let attendanceSummary;
       
-      // 2.5. Fetch holidays for the month
-      const { data: holidaysData } = await supabase
-        .from("holidays")
-        .select("*")
-        .gte("date", startDate)
-        .lte("date", endDate);
+      if (hasAttendanceDataInSalaries) {
+        // Use existing data from salaries table (already saved)
+        attendanceSummary = {
+          presentDays: salary.present_days || 0,
+          halfDays: salary.half_days || 0,
+          paidLeaveDays: salary.paid_leave_days || 0,
+          sickLeaves: salary.sick_leaves || 0,
+          absentDays: salary.absent_days || 0,
+          lateDays: salary.late_days || 0,
+          holidayCount: salary.holiday_count || 0,
+        };
+      } else {
+        // First time: fetch from attendance_summary table
+        const { data: attendanceSummaryData, error: summaryError } = await supabase
+          .from("attendance_summary")
+          .select("*")
+          .eq("user_id", salary.user_id)
+          .eq("year", selectedYear)
+          .eq("month", selectedMonth)
+          .maybeSingle();
+        
+        if (summaryError) {
+          console.warn("Warning: Could not fetch attendance summary:", summaryError);
+        }
+        
+        if (attendanceSummaryData) {
+          // Use data from attendance_summary table
+          attendanceSummary = {
+            presentDays: attendanceSummaryData.present_days || 0,
+            halfDays: attendanceSummaryData.half_days || 0,
+            paidLeaveDays: attendanceSummaryData.paid_leave_days || 0,
+            sickLeaves: attendanceSummaryData.leave_days || 0,
+            absentDays: attendanceSummaryData.absent_days || 0,
+            lateDays: attendanceSummaryData.late_days || 0,
+            holidayCount: attendanceSummaryData.holiday_count || 0,
+          };
+          
+          console.log("Fetched attendance summary from attendance_summary table:", attendanceSummary);
+          
+          // Save attendance data to salaries table for future reference
+          const { error: updateError } = await supabase
+            .from("salaries")
+            .update({
+              present_days: attendanceSummary.presentDays,
+              half_days: attendanceSummary.halfDays,
+              paid_leave_days: attendanceSummary.paidLeaveDays,
+              sick_leaves: attendanceSummary.sickLeaves,
+              absent_days: attendanceSummary.absentDays,
+              late_days: attendanceSummary.lateDays,
+              holiday_count: attendanceSummary.holidayCount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", salary.id);
+          
+          if (updateError) {
+            console.warn("Warning: Could not save attendance data to salaries table:", updateError);
+          }
+        } else {
+          // Fallback: if no attendance_summary data, use zeros
+          console.log("No attendance summary found, using default values");
+          attendanceSummary = {
+            presentDays: 0,
+            halfDays: 0,
+            paidLeaveDays: 0,
+            sickLeaves: 0,
+            absentDays: 0,
+            lateDays: 0,
+            holidayCount: 0,
+          };
+        }
+      }
       
-      // 2.6. Calculate actual working days using RPC function
+      // 3. Calculate actual working days using RPC function
       const { data: workingDaysData } = await supabase
         .rpc('calculate_monthly_working_days', {
           p_year: selectedYear,
@@ -986,84 +1467,6 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         });
       
       const actualWorkingDays = workingDaysData || salary.working_days || 26;
-      
-      // 2.7. Auto-update absent records on holidays to paid_leave
-      if (holidaysData && holidaysData.length > 0 && attendanceData && attendanceData.length > 0) {
-        const holidayDates = new Set(
-          holidaysData.map(h => new Date(h.date).toISOString().split('T')[0])
-        );
-        
-        const recordsToUpdate = attendanceData.filter(record => {
-          const recordDate = new Date(record.date).toISOString().split('T')[0];
-          return holidayDates.has(recordDate) && (record.status === 'absent' || record.status === 'rejected');
-        });
-        
-        // Update all absent records on holidays to paid_leave
-        if (recordsToUpdate.length > 0) {
-          await Promise.all(
-            recordsToUpdate.map(record =>
-              supabase
-                .from("attendance")
-                .update({ status: 'paid_leave', remarks: 'Auto-marked as paid leave (Holiday)' })
-                .eq("id", record.id)
-            )
-          );
-          
-          // Refresh attendance data after update
-          const { data: updatedAttendanceData } = await supabase
-            .from("attendance")
-            .select("*")
-            .eq("user_id", salary.user_id)
-            .gte("date", startDate)
-            .lte("date", endDate);
-          
-          // Use updated data for calculation
-          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, updatedAttendanceData || [], holidaysData || []);
-          
-          // 4. Set form data with all values
-          setFormData({
-            // From salary_structures
-            fixed_gross_salary: (structure as any)?.fixed_gross_salary || salary.base_salary || 0,
-            basic_percentage: (structure as any)?.basic_percentage || 50,
-            hra_percentage: (structure as any)?.hra_percentage || 40,
-            other_allowance_percentage: (structure as any)?.other_allowance_percentage || 30,
-            
-            // Attendance (auto-calculated from attendance table and calendar)
-            working_days: actualWorkingDays,
-            present_days: attendanceSummary.presentDays,
-            half_days: attendanceSummary.halfDays,
-            paid_leave_days: attendanceSummary.paidLeaveDays,
-            sick_leaves: attendanceSummary.sickLeaves,
-            absent_days: attendanceSummary.absentDays,
-            late_days: attendanceSummary.lateDays,
-            holiday_count: attendanceSummary.holidayCount,
-            
-            // Variable earnings (from existing salary record)
-            variable_earnings: salary.variable_earnings_details || {},
-            
-            // Deductions
-            epf_percentage: (structure as any)?.epf_employee_rate || 12,
-            esic_percentage: (structure as any)?.esic_employee_rate || 0.75,
-            epf_applicable: (structure as any)?.epf_applicable ?? true,
-            esic_applicable: (structure as any)?.esic_applicable ?? true,
-            manual_deduction: salary.manual_deduction || 0,
-            tds_deduction: salary.tds_deduction || 0,
-            professional_tax: salary.professional_tax || 0,
-            other_deductions: salary.other_deductions || 0,
-            
-            // Manual override
-            net_salary_manual: salary.net_salary_manual,
-            manager_justification: salary.manager_justification || "",
-          });
-          
-          setIsAttendanceEditable(false); // Reset to read-only when opening dialog
-          setEditDialogOpen(true);
-          return;
-        }
-      }
-      
-      // 3. Calculate attendance summary with holiday checking
-      const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidaysData || []);
       
       // 4. Set form data with all values
       setFormData({
@@ -1073,7 +1476,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         hra_percentage: (structure as any)?.hra_percentage || 40,
         other_allowance_percentage: (structure as any)?.other_allowance_percentage || 30,
         
-        // Attendance (auto-calculated from attendance table and calendar)
+        // Attendance (from salaries table - not from attendance table)
         working_days: actualWorkingDays,
         present_days: attendanceSummary.presentDays,
         half_days: attendanceSummary.halfDays,
@@ -1146,6 +1549,72 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     setSelectedSalary(salary);
     setUnlockReason("");
     setUnlockDialogOpen(true);
+  };
+
+  const handleSaveAttendance = async () => {
+    if (!selectedSalary) return;
+
+    setIsSubmitting(true);
+    try {
+      const calculated = calculateSalary();
+
+      // Only update attendance-related fields (don't require unlocking)
+      const updateData: Record<string, unknown> = {
+        // Attendance - All fields that can be edited
+        working_days: formData.working_days,
+        present_days: formData.present_days,
+        paid_leave_days: formData.paid_leave_days,
+        absent_days: formData.absent_days,
+        half_days: formData.half_days,
+        holiday_count: formData.holiday_count,
+        late_days: formData.late_days,
+        sick_leaves: formData.sick_leaves,
+        
+        // Recalculate salary based on new attendance
+        per_day_salary: calculated.perDayRate,
+        
+        // Fixed components
+        basic_earned: calculated.basicEarned,
+        hra_earned: calculated.hraEarned,
+        other_allowance_earned: calculated.otherAllowanceEarned,
+        
+        // Calculated totals
+        gross_salary: calculated.totalGrossEarnings,
+        net_salary_calculated: calculated.netPayable,
+        final_salary: selectedSalary.net_salary_manual || calculated.netPayable,
+        
+        // Employer contributions
+        epf_employer: calculated.epfEmployer,
+        esic_employer: calculated.esicEmployer,
+        total_employer_contribution: calculated.totalEmployerBenefit,
+        total_ctc: calculated.totalCTC,
+        
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("salaries")
+        .update(updateData)
+        .eq("id", selectedSalary.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Attendance updated successfully",
+      });
+      setIsAttendanceEditable(false);
+      fetchData();
+    } catch (error) {
+      console.error("Error updating attendance:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update attendance",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSave = async () => {
@@ -1582,15 +2051,18 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             Generate Salaries
           </Button>
           {isAdmin && salaryRecords.length > 0 && (
-            <Button 
-              variant="outline" 
-              onClick={recalculateAllSalaries} 
-              disabled={generating}
-              className="border-orange-500 text-orange-600 hover:bg-orange-50"
-            >
-              {generating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Calculator className="h-4 w-4 mr-2" />}
-              Recalculate All
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={recalculateAllSalaries} 
+                disabled={generating}
+                className="border-orange-500 text-orange-600 hover:bg-orange-50"
+              >
+                {generating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Calculator className="h-4 w-4 mr-2" />}
+                Recalculate All
+              </Button>
+
+            </>
           )}
           <PotentialEarningDialog isAdmin={isAdmin} />
         </div>
@@ -1888,18 +2360,18 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </div>
                 
                 {/* First Row: Payroll Days, Present, Half Day, Paid Leave */}
-                <div className="grid grid-cols-4 gap-4 text-sm mb-4">
+                <div className="grid grid-cols-5 gap-4 text-sm mb-4">
                   <div>
                     <Label className="text-xs text-muted-foreground">Payroll Days</Label>
                     {isAdmin && isAttendanceEditable ? (
                       <Input
                         type="number"
-                        value={formData.working_days}
-                        onChange={(e) => setFormData(p => ({ ...p, working_days: Number(e.target.value) }))}
-                        className="mt-1 font-semibold"
+                        value={new Date(selectedYear, selectedMonth, 0).getDate()}
+                        disabled
+                        className="mt-1 font-semibold bg-muted"
                       />
                     ) : (
-                      <p className="font-semibold text-lg">{formData.working_days}</p>
+                      <p className="font-semibold text-lg">{new Date(selectedYear, selectedMonth, 0).getDate()}</p>
                     )}
                   </div>
                   <div>
@@ -1942,10 +2414,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       <p className="font-semibold text-lg text-blue-600">{formData.paid_leave_days}</p>
                     )}
                   </div>
-                </div>
-                
-                {/* Second Row: Absent, Holiday, Late Days */}
-                <div className="grid grid-cols-4 gap-4 text-sm">
+
                   <div>
                     <Label className="text-xs text-muted-foreground">Absent (AB)</Label>
                     {isAdmin && isAttendanceEditable ? (
@@ -1965,15 +2434,16 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       <Input
                         type="number"
                         value={formData.holiday_count}
-                        onChange={(e) => setFormData(p => ({ ...p, holiday_count: Number(e.target.value) }))}
-                        className="mt-1 font-semibold"
+                        disabled
+                        className="mt-1 font-semibold bg-muted"
+                        title="Holiday count is auto-calculated from attendance records"
                       />
                     ) : (
                       <p className="font-semibold text-lg text-purple-600">{formData.holiday_count}</p>
                     )}
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Late Days (LT)</Label>
+                    <Label className="text-xs text-muted-foreground">Late Days (LD)</Label>
                     {isAdmin && isAttendanceEditable ? (
                       <Input
                         type="number"
@@ -1982,68 +2452,69 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                         className="mt-1 font-semibold"
                       />
                     ) : (
-                      <p className="font-semibold text-lg text-yellow-600">{formData.late_days}</p>
+                      <p className="font-semibold text-lg text-yellow-700">{formData.late_days}</p>
                     )}
                   </div>
-                  <div>
-                    {/* Empty cell for alignment */}
+                              <div>
+                    <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
+                    {isAdmin && isAttendanceEditable ? (
+                      <Input
+                        type="number"
+                        value={formData.sick_leaves}
+                        onChange={(e) => setFormData(p => ({ ...p, sick_leaves: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-pink-600">{formData.sick_leaves}</p>
+                    )}
                   </div>
+
+                                    <div>
+                    <Label className="text-xs text-muted-foreground">Late Sets (LS)</Label>
+                    {isAdmin && isAttendanceEditable ? (
+                      <Input
+                        type="number"
+                        value={Math.floor(formData.late_days / 3)}
+                        disabled
+                        className="mt-1 font-semibold bg-muted"
+                        title="Auto-calculated: Late Days ÷ 3"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-yellow-700">{Math.floor(formData.late_days / 3)}</p>
+                    )}
+                  </div>
+
                 </div>
+                
+    
                 
                 <div className="mt-3 pt-3 border-t border-blue-200">
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-medium">Total Paid Days:</span>
                     <span className="text-lg font-bold text-primary">
-                      {(formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - Math.floor(formData.late_days / 2) - formData.absent_days - formData.sick_leaves).toFixed(1)} days
+                      {(formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - Math.floor(formData.late_days / 3) - (formData.absent_days * 2) - formData.sick_leaves).toFixed(1)} days
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 mb-2 text-right">
-                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 2)}) + AB ({formData.absent_days}) + LE ({formData.sick_leaves}))
+                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 3)}) + 2×AB ({formData.absent_days * 2}) + LE ({formData.sick_leaves}))
                   </p>
                   
-                  {/* Absent Deduction Information */}
-                  {formData.absent_days > 0 && (
-                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-950 border border-red-200 rounded text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="text-red-800 dark:text-red-200">
-                          <strong>Absent Penalty:</strong> {formData.absent_days} absent day(s)
-                        </span>
-                        <span className="font-semibold text-red-900 dark:text-red-100">
-                          - ₹{calculateSalary().absentDeduction.toFixed(2)}
-                        </span>
-                      </div>
-                      <p className="text-red-700 dark:text-red-300 mt-1">
-                        Note: 1 absent day = 1 unpaid day + 1 penalty day
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Late Sets Information */}
-                  {formData.late_days > 0 && (
-                    <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 rounded text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="text-yellow-800 dark:text-yellow-200">
-                          <strong>Late Sets:</strong> {formData.late_days} late days = {calculateSalary().lateSets} set(s)
-                        </span>
-                        <span className="font-semibold text-yellow-900 dark:text-yellow-100">
-                          - ₹{calculateSalary().lateSetDeduction.toFixed(2)}
-                        </span>
-                      </div>
-                      <p className="text-yellow-700 dark:text-yellow-300 mt-1">
-                        Note: 2 late days = 1 set, 1 set = 1 day salary deduction
-                      </p>
-                    </div>
-                  )}
-                  
-                  {/* Total Deductions Summary */}
-                  {(formData.absent_days > 0 || formData.late_days > 0) && (
-                    <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 rounded text-xs">
-                      <div className="flex justify-between items-center font-semibold">
-                        <span>Total Attendance Deductions:</span>
-                        <span className="text-red-600">
-                          - ₹{(calculateSalary().absentDeduction + calculateSalary().lateSetDeduction).toFixed(2)}
-                        </span>
-                      </div>
+                  {/* Save Button for Attendance Changes */}
+                  {isAdmin && isAttendanceEditable && (
+                    <div className="mt-4 flex gap-2">
+                      <Button 
+                        onClick={handleSaveAttendance}
+                        disabled={isSubmitting}
+                        className="gap-2"
+                      >
+                        {isSubmitting ? "Saving..." : "Save Attendance"}
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => setIsAttendanceEditable(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   )}
                 </div>
