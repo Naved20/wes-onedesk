@@ -791,7 +791,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const lateSets = Math.floor(attendanceSummary.lateDays / 2);
           
           // Paid Day Units
-          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + attendanceSummary.halfDays + attendanceSummary.paidLeaveDays - lateSets - attendanceSummary.absentDays;
+          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + (attendanceSummary.halfDays * 0.5) + attendanceSummary.paidLeaveDays - lateSets - attendanceSummary.absentDays - attendanceSummary.sickLeaves;
           
           // Gross earned
           const grossEarned = paidDayUnits * perDayRate;
