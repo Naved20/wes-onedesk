@@ -608,7 +608,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     // Calculate absent penalty: 1 absent = 1 unpaid + 1 penalty day deduction
     const absentDeduction = formData.absent_days * perDayRate;
     
-    const paidDayUnits = formData.present_days + formData.holiday_count + formData.half_days + formData.paid_leave_days - lateSets - formData.absent_days;
+    const paidDayUnits = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - formData.absent_days - formData.sick_leaves;
     const grossEarned = paidDayUnits * perDayRate;
     
     // Fixed components
