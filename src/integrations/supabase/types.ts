@@ -376,6 +376,42 @@ export type Database = {
         }
         Relationships: []
       }
+      deduction_types: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          deduction_code: string
+          deduction_name: string
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          is_statutory: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          deduction_code: string
+          deduction_name: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_statutory?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          deduction_code?: string
+          deduction_name?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          is_statutory?: boolean | null
+        }
+        Relationships: []
+      }
       document_types: {
         Row: {
           created_at: string | null
@@ -478,6 +514,42 @@ export type Database = {
         }
         Relationships: []
       }
+      earning_types: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          display_order: number | null
+          earning_code: string
+          earning_name: string
+          id: string
+          is_active: boolean | null
+          is_taxable: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          display_order?: number | null
+          earning_code: string
+          earning_name: string
+          id?: string
+          is_active?: boolean | null
+          is_taxable?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          display_order?: number | null
+          earning_code?: string
+          earning_name?: string
+          id?: string
+          is_active?: boolean | null
+          is_taxable?: boolean | null
+        }
+        Relationships: []
+      }
       employee_profiles: {
         Row: {
           aadhar_number: string | null
@@ -538,6 +610,7 @@ export type Database = {
           probation_end_date: string | null
           professional_qualification_teaching: string | null
           profile_photo_url: string | null
+          program: string | null
           project_program: string | null
           race: string | null
           religion: string | null
@@ -614,6 +687,7 @@ export type Database = {
           probation_end_date?: string | null
           professional_qualification_teaching?: string | null
           profile_photo_url?: string | null
+          program?: string | null
           project_program?: string | null
           race?: string | null
           religion?: string | null
@@ -690,6 +764,7 @@ export type Database = {
           probation_end_date?: string | null
           professional_qualification_teaching?: string | null
           profile_photo_url?: string | null
+          program?: string | null
           project_program?: string | null
           race?: string | null
           religion?: string | null
@@ -1122,6 +1197,56 @@ export type Database = {
         }
         Relationships: []
       }
+      manual_deductions: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          deduction_type_id: string
+          id: string
+          payroll_month: string
+          reference_id: string | null
+          remarks: string | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          deduction_type_id: string
+          id?: string
+          payroll_month: string
+          reference_id?: string | null
+          remarks?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          deduction_type_id?: string
+          id?: string
+          payroll_month?: string
+          reference_id?: string | null
+          remarks?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_deductions_deduction_type_id_fkey"
+            columns: ["deduction_type_id"]
+            isOneToOne: false
+            referencedRelation: "deduction_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -1152,6 +1277,153 @@ export type Database = {
           title?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      payroll_register: {
+        Row: {
+          absents: number | null
+          approved_at: string | null
+          approved_by: string | null
+          basic_earned: number
+          created_at: string | null
+          created_by: string | null
+          daily_rate: number | null
+          employment_status: string | null
+          engagement_type: string | null
+          epf_employee: number | null
+          epf_employer: number | null
+          esic_employee: number | null
+          esic_employer: number | null
+          fixed_gross_earned: number
+          half_days: number | null
+          holidays: number | null
+          hra_earned: number
+          id: string
+          lates: number | null
+          manual_deductions_details: Json | null
+          manual_deductions_total: number | null
+          net_payable: number
+          other_allowance_earned: number
+          paid_date: string | null
+          paid_days: number
+          paid_leaves: number | null
+          payment_mode: string | null
+          payment_reference: string | null
+          payroll_days: number
+          payroll_month: string
+          payslip_number: string
+          payslip_remarks: string | null
+          present_days: number | null
+          program: string | null
+          remarks: string | null
+          status: string | null
+          total_ctc: number
+          total_deductions: number
+          total_employer_contribution: number | null
+          total_gross_earnings: number
+          unpaid_leaves: number | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string
+          variable_earnings_details: Json | null
+          variable_earnings_total: number | null
+        }
+        Insert: {
+          absents?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          basic_earned: number
+          created_at?: string | null
+          created_by?: string | null
+          daily_rate?: number | null
+          employment_status?: string | null
+          engagement_type?: string | null
+          epf_employee?: number | null
+          epf_employer?: number | null
+          esic_employee?: number | null
+          esic_employer?: number | null
+          fixed_gross_earned: number
+          half_days?: number | null
+          holidays?: number | null
+          hra_earned: number
+          id?: string
+          lates?: number | null
+          manual_deductions_details?: Json | null
+          manual_deductions_total?: number | null
+          net_payable: number
+          other_allowance_earned: number
+          paid_date?: string | null
+          paid_days: number
+          paid_leaves?: number | null
+          payment_mode?: string | null
+          payment_reference?: string | null
+          payroll_days: number
+          payroll_month: string
+          payslip_number: string
+          payslip_remarks?: string | null
+          present_days?: number | null
+          program?: string | null
+          remarks?: string | null
+          status?: string | null
+          total_ctc: number
+          total_deductions: number
+          total_employer_contribution?: number | null
+          total_gross_earnings: number
+          unpaid_leaves?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id: string
+          variable_earnings_details?: Json | null
+          variable_earnings_total?: number | null
+        }
+        Update: {
+          absents?: number | null
+          approved_at?: string | null
+          approved_by?: string | null
+          basic_earned?: number
+          created_at?: string | null
+          created_by?: string | null
+          daily_rate?: number | null
+          employment_status?: string | null
+          engagement_type?: string | null
+          epf_employee?: number | null
+          epf_employer?: number | null
+          esic_employee?: number | null
+          esic_employer?: number | null
+          fixed_gross_earned?: number
+          half_days?: number | null
+          holidays?: number | null
+          hra_earned?: number
+          id?: string
+          lates?: number | null
+          manual_deductions_details?: Json | null
+          manual_deductions_total?: number | null
+          net_payable?: number
+          other_allowance_earned?: number
+          paid_date?: string | null
+          paid_days?: number
+          paid_leaves?: number | null
+          payment_mode?: string | null
+          payment_reference?: string | null
+          payroll_days?: number
+          payroll_month?: string
+          payslip_number?: string
+          payslip_remarks?: string | null
+          present_days?: number | null
+          program?: string | null
+          remarks?: string | null
+          status?: string | null
+          total_ctc?: number
+          total_deductions?: number
+          total_employer_contribution?: number | null
+          total_gross_earnings?: number
+          unpaid_leaves?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string
+          variable_earnings_details?: Json | null
+          variable_earnings_total?: number | null
         }
         Relationships: []
       }
@@ -1300,10 +1572,16 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           base_salary: number
+          basic_earned: number | null
           created_at: string
+          epf_employee: number | null
+          epf_employer: number | null
+          esic_employee: number | null
+          esic_employer: number | null
           final_salary: number | null
           gross_salary: number | null
           hra_amount: number | null
+          hra_earned: number | null
           id: string
           is_locked: boolean | null
           locked_at: string | null
@@ -1312,9 +1590,11 @@ export type Database = {
           manager_proposed_at: string | null
           manager_proposed_by: string | null
           manager_proposed_salary: number | null
+          manual_deduction: number | null
           month: number
           net_salary_calculated: number | null
           net_salary_manual: number | null
+          other_allowance_earned: number | null
           other_deductions: number | null
           paid_leave_days: number | null
           per_day_salary: number | null
@@ -1324,9 +1604,14 @@ export type Database = {
           professional_tax: number | null
           special_bonus: number | null
           tds_deduction: number | null
+          total_ctc: number | null
+          total_deductions: number | null
+          total_employer_contribution: number | null
           travel_allowance: number | null
           updated_at: string
           user_id: string
+          variable_earnings_details: Json | null
+          variable_earnings_total: number | null
           working_days: number
           year: number
         }
@@ -1337,10 +1622,16 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           base_salary: number
+          basic_earned?: number | null
           created_at?: string
+          epf_employee?: number | null
+          epf_employer?: number | null
+          esic_employee?: number | null
+          esic_employer?: number | null
           final_salary?: number | null
           gross_salary?: number | null
           hra_amount?: number | null
+          hra_earned?: number | null
           id?: string
           is_locked?: boolean | null
           locked_at?: string | null
@@ -1349,9 +1640,11 @@ export type Database = {
           manager_proposed_at?: string | null
           manager_proposed_by?: string | null
           manager_proposed_salary?: number | null
+          manual_deduction?: number | null
           month: number
           net_salary_calculated?: number | null
           net_salary_manual?: number | null
+          other_allowance_earned?: number | null
           other_deductions?: number | null
           paid_leave_days?: number | null
           per_day_salary?: number | null
@@ -1361,9 +1654,14 @@ export type Database = {
           professional_tax?: number | null
           special_bonus?: number | null
           tds_deduction?: number | null
+          total_ctc?: number | null
+          total_deductions?: number | null
+          total_employer_contribution?: number | null
           travel_allowance?: number | null
           updated_at?: string
           user_id: string
+          variable_earnings_details?: Json | null
+          variable_earnings_total?: number | null
           working_days: number
           year: number
         }
@@ -1374,10 +1672,16 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           base_salary?: number
+          basic_earned?: number | null
           created_at?: string
+          epf_employee?: number | null
+          epf_employer?: number | null
+          esic_employee?: number | null
+          esic_employer?: number | null
           final_salary?: number | null
           gross_salary?: number | null
           hra_amount?: number | null
+          hra_earned?: number | null
           id?: string
           is_locked?: boolean | null
           locked_at?: string | null
@@ -1386,9 +1690,11 @@ export type Database = {
           manager_proposed_at?: string | null
           manager_proposed_by?: string | null
           manager_proposed_salary?: number | null
+          manual_deduction?: number | null
           month?: number
           net_salary_calculated?: number | null
           net_salary_manual?: number | null
+          other_allowance_earned?: number | null
           other_deductions?: number | null
           paid_leave_days?: number | null
           per_day_salary?: number | null
@@ -1398,9 +1704,14 @@ export type Database = {
           professional_tax?: number | null
           special_bonus?: number | null
           tds_deduction?: number | null
+          total_ctc?: number | null
+          total_deductions?: number | null
+          total_employer_contribution?: number | null
           travel_allowance?: number | null
           updated_at?: string
           user_id?: string
+          variable_earnings_details?: Json | null
+          variable_earnings_total?: number | null
           working_days?: number
           year?: number
         }
@@ -1436,6 +1747,99 @@ export type Database = {
           new_data?: Json | null
           old_data?: Json | null
           salary_id?: string
+        }
+        Relationships: []
+      }
+      salary_structures: {
+        Row: {
+          bank_account_number: string | null
+          bank_branch: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
+          basic_percentage: number | null
+          basic_salary: number | null
+          created_at: string | null
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          epf_applicable: boolean | null
+          epf_employee_rate: number | null
+          epf_employer_rate: number | null
+          esic_applicable: boolean | null
+          esic_employee_rate: number | null
+          esic_employer_rate: number | null
+          esic_ip_number: string | null
+          fixed_gross_salary: number
+          hra_amount: number | null
+          hra_percentage: number | null
+          id: string
+          is_active: boolean | null
+          other_allowance: number | null
+          other_allowance_percentage: number | null
+          pf_uan_number: string | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          basic_percentage?: number | null
+          basic_salary?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          effective_from: string
+          effective_to?: string | null
+          epf_applicable?: boolean | null
+          epf_employee_rate?: number | null
+          epf_employer_rate?: number | null
+          esic_applicable?: boolean | null
+          esic_employee_rate?: number | null
+          esic_employer_rate?: number | null
+          esic_ip_number?: string | null
+          fixed_gross_salary: number
+          hra_amount?: number | null
+          hra_percentage?: number | null
+          id?: string
+          is_active?: boolean | null
+          other_allowance?: number | null
+          other_allowance_percentage?: number | null
+          pf_uan_number?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          bank_account_number?: string | null
+          bank_branch?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
+          basic_percentage?: number | null
+          basic_salary?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          epf_applicable?: boolean | null
+          epf_employee_rate?: number | null
+          epf_employer_rate?: number | null
+          esic_applicable?: boolean | null
+          esic_employee_rate?: number | null
+          esic_employer_rate?: number | null
+          esic_ip_number?: string | null
+          fixed_gross_salary?: number
+          hra_amount?: number | null
+          hra_percentage?: number | null
+          id?: string
+          is_active?: boolean | null
+          other_allowance?: number | null
+          other_allowance_percentage?: number | null
+          pf_uan_number?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -1936,9 +2340,107 @@ export type Database = {
         }
         Relationships: []
       }
+      variable_earnings: {
+        Row: {
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          earning_type_id: string
+          id: string
+          payroll_month: string
+          quantity: number | null
+          rate: number | null
+          reference_id: string | null
+          remarks: string | null
+          updated_at: string | null
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          created_by?: string | null
+          earning_type_id: string
+          id?: string
+          payroll_month: string
+          quantity?: number | null
+          rate?: number | null
+          reference_id?: string | null
+          remarks?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          earning_type_id?: string
+          id?: string
+          payroll_month?: string
+          quantity?: number | null
+          rate?: number | null
+          reference_id?: string | null
+          remarks?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "variable_earnings_earning_type_id_fkey"
+            columns: ["earning_type_id"]
+            isOneToOne: false
+            referencedRelation: "earning_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      payroll_register_view: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          basic_earned: number | null
+          daily_rate: number | null
+          department: string | null
+          designation: string | null
+          employee_id: string | null
+          employee_name: string | null
+          employer_total_cost: number | null
+          engagement_type: string | null
+          epf_eligible: boolean | null
+          epf_employee: number | null
+          epf_employer: number | null
+          epf_wage_base: number | null
+          esic_eligible: boolean | null
+          esic_employee: number | null
+          esic_employer: number | null
+          gross_deductions: number | null
+          gross_earned: number | null
+          gross_monthly_salary: number | null
+          hra_earned: number | null
+          id: string | null
+          manual_deductions_details: Json | null
+          manual_deductions_total: number | null
+          net_payable: number | null
+          other_allowance_earned: number | null
+          paid_date: string | null
+          paid_day_units: number | null
+          payroll_days: number | null
+          payroll_month: string | null
+          payroll_month_display: string | null
+          payroll_status: string | null
+          program: string | null
+          record_key: string | null
+          remarks: string | null
+          status: string | null
+          variable_earnings_details: Json | null
+          variable_earnings_total: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_attendance_stats: {
@@ -1968,6 +2470,39 @@ export type Database = {
           p_working_days: number
         }
         Returns: Json
+      }
+      calculate_salary_components: {
+        Args: {
+          p_basic_percentage?: number
+          p_gross_monthly_salary: number
+          p_hra_percentage?: number
+          p_paid_days: number
+          p_payroll_days: number
+        }
+        Returns: {
+          basic_earned: number
+          daily_rate: number
+          gross_earned: number
+          hra_earned: number
+          other_allowance_earned: number
+        }[]
+      }
+      calculate_statutory_deductions: {
+        Args: {
+          p_basic_earned: number
+          p_epf_applicable?: boolean
+          p_epf_rate?: number
+          p_esic_applicable?: boolean
+          p_esic_employee_rate?: number
+          p_esic_employer_rate?: number
+          p_gross_earned: number
+        }
+        Returns: {
+          epf_employee: number
+          epf_employer: number
+          esic_employee: number
+          esic_employer: number
+        }[]
       }
       calculate_working_days: {
         Args: { p_end_date: string; p_start_date: string }
@@ -2006,6 +2541,12 @@ export type Database = {
       generate_monthly_salaries: {
         Args: { p_month: number; p_year: number }
         Returns: Json
+      }
+      generate_sundays_for_year: {
+        Args: { p_year: number }
+        Returns: {
+          sunday_date: string
+        }[]
       }
       get_assignment_group_members: {
         Args: { p_group_id: string }
@@ -2096,10 +2637,21 @@ export type Database = {
           records_created: number
         }[]
       }
+      update_user_email_and_profile: {
+        Args: { p_new_email: string; p_user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "employee"
-      attendance_status: "pending" | "approved" | "rejected"
+      attendance_status:
+        | "present"
+        | "approved"
+        | "absent"
+        | "paid_leave"
+        | "leave"
+        | "pending"
+        | "rejected"
       leave_status: "pending" | "approved" | "rejected"
       leave_type: "casual" | "sick" | "unplanned" | "emergency"
     }
@@ -2230,7 +2782,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "employee"],
-      attendance_status: ["pending", "approved", "rejected"],
+      attendance_status: [
+        "present",
+        "approved",
+        "absent",
+        "paid_leave",
+        "leave",
+        "pending",
+        "rejected",
+      ],
       leave_status: ["pending", "approved", "rejected"],
       leave_type: ["casual", "sick", "unplanned", "emergency"],
     },
