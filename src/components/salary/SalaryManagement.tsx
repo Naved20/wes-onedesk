@@ -1881,10 +1881,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   )}
                 </div>
                 
-                {/* First Row: Working Days, Present, Half Day, Paid Leave */}
+                {/* First Row: Payroll Days, Present, Half Day, Paid Leave */}
                 <div className="grid grid-cols-4 gap-4 text-sm mb-4">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Working Days</Label>
+                    <Label className="text-xs text-muted-foreground">Payroll Days</Label>
                     {isAdmin && isAttendanceEditable ? (
                       <Input
                         type="number"
