@@ -604,11 +604,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     const lateSets = Math.floor(formData.late_days / 2);
     const lateSetDeduction = lateSets * perDayRate;
     
-    // Calculate absent deduction: 1 absent = 2 days salary deduction
-    const absentDeduction = formData.absent_days * 2 * perDayRate;
+    // Calculate absent penalty: 1 absent = 1 unpaid + 1 penalty day deduction
+    const absentDeduction = formData.absent_days * perDayRate;
     
-    const effectiveDays = formData.present_days + formData.half_days + formData.paid_leave_days;
-    const grossEarned = (perDayRate * effectiveDays) - lateSetDeduction - absentDeduction;
+    const paidDayUnits = formData.present_days + formData.holiday_count + formData.half_days + formData.paid_leave_days - lateSets - formData.absent_days;
+    const grossEarned = paidDayUnits * perDayRate;
     
     // Fixed components
     const basicEarned = grossEarned * (formData.basic_percentage / 100);
@@ -788,14 +788,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           
           // Late set deduction
           const lateSets = Math.floor(attendanceSummary.lateDays / 2);
-          const lateSetDeduction = lateSets * perDayRate;
           
-          // Absent deduction (2x penalty)
-          const absentDeduction = attendanceSummary.absentDays * 2 * perDayRate;
+          // Paid Day Units
+          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + attendanceSummary.halfDays + attendanceSummary.paidLeaveDays - lateSets - attendanceSummary.absentDays;
           
           // Gross earned
-          const effectiveDays = attendanceSummary.presentDays + attendanceSummary.halfDays + attendanceSummary.paidLeaveDays;
-          const grossEarned = (perDayRate * effectiveDays) - lateSetDeduction - absentDeduction;
+          const grossEarned = paidDayUnits * perDayRate;
           
           // Fixed components
           const basicEarned = grossEarned * (basicPercentage / 100);
@@ -1987,26 +1985,29 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </div>
                 
                 <div className="mt-3 pt-3 border-t border-blue-200">
-                  <div className="flex justify-between items-center mb-2">
+                  <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-medium">Total Paid Days:</span>
                     <span className="text-lg font-bold text-primary">
-                      {(formData.present_days + formData.half_days + formData.paid_leave_days).toFixed(1)} days
+                      {(formData.present_days + formData.holiday_count + formData.half_days + formData.paid_leave_days - Math.floor(formData.late_days / 2) - formData.absent_days).toFixed(1)} days
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2 text-right">
+                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({formData.half_days}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 2)}) + AB ({formData.absent_days}))
+                  </p>
                   
                   {/* Absent Deduction Information */}
                   {formData.absent_days > 0 && (
                     <div className="mt-2 p-2 bg-red-50 dark:bg-red-950 border border-red-200 rounded text-xs">
                       <div className="flex justify-between items-center">
                         <span className="text-red-800 dark:text-red-200">
-                          <strong>Absent Penalty:</strong> {formData.absent_days} absent day(s) × 2
+                          <strong>Absent Penalty:</strong> {formData.absent_days} absent day(s)
                         </span>
                         <span className="font-semibold text-red-900 dark:text-red-100">
                           - ₹{calculateSalary().absentDeduction.toFixed(2)}
                         </span>
                       </div>
                       <p className="text-red-700 dark:text-red-300 mt-1">
-                        Note: 1 absent day = 2 days salary deduction
+                        Note: 1 absent day = 1 unpaid day + 1 penalty day
                       </p>
                     </div>
                   )}

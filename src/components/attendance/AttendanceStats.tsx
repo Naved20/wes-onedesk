@@ -146,6 +146,39 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     return "text-red-600 dark:text-red-400";
   };
 
+  // Use a Set to ensure unique holiday dates (preventing double counting if a date exists twice in DB)
+  const uniqueHolidaysInMonth = new Set(
+    holidays
+      .filter(h => {
+        const hDate = new Date(h.date);
+        return hDate.getMonth() === month - 1 && hDate.getFullYear() === year;
+      })
+      .map(h => new Date(h.date).toISOString().split('T')[0])
+  );
+  
+  const holidaysWorked = attendanceRecords.filter(r => {
+    if (r.user_id !== userId) return false;
+    if (new Date(r.date).getMonth() !== month - 1) return false;
+    if (new Date(r.date).getFullYear() !== year) return false;
+    
+    const recordDate = new Date(r.date).toISOString().split('T')[0];
+    const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
+    
+    const calcStatus = r.calculated_status?.toLowerCase();
+    const isPresent = calcStatus === 'present' || calcStatus === 'late' || calcStatus === 'half_day' || r.is_half_day || r.is_late || calcStatus === 'paid_leave';
+    
+    return isHolidayDate && isPresent && r.status !== 'rejected';
+  });
+  
+  // Ensure holidaysWorked are unique by date
+  const uniqueHolidaysWorked = new Set(
+    holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
+  );
+  
+  const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
+  const lateSets = Math.floor(stats.late_days / 2);
+  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days + stats.sick_leaves);
+
   return (
     <div className="space-y-4">
       {/* Stats Grid - New Design */}
@@ -198,31 +231,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <span className="text-xs text-muted-foreground">Holiday (HO)</span>
             </div>
             <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {(() => {
-                // Get all holidays in this month
-                const holidaysInMonth = holidays.filter(h => {
-                  const hDate = new Date(h.date);
-                  return hDate.getMonth() === month - 1 && hDate.getFullYear() === year;
-                });
-                
-                // Find holidays where the user was present
-                const holidaysWorked = attendanceRecords.filter(r => {
-                  if (r.user_id !== userId) return false;
-                  if (new Date(r.date).getMonth() !== month - 1) return false;
-                  if (new Date(r.date).getFullYear() !== year) return false;
-                  
-                  const recordDate = new Date(r.date).toISOString().split('T')[0];
-                  const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
-                  
-                  const calcStatus = r.calculated_status?.toLowerCase();
-                  const isPresent = calcStatus === 'present' || calcStatus === 'late' || calcStatus === 'half_day' || r.is_half_day || r.is_late || calcStatus === 'paid_leave';
-                  
-                  return isHolidayDate && isPresent && r.status !== 'rejected';
-                });
-                
-                // Return total holidays minus holidays worked
-                return holidaysInMonth.length - holidaysWorked.length;
-              })()}
+              {holidayCount}
             </p>
           </CardContent>
         </Card>
@@ -429,7 +438,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <span className="text-xs text-muted-foreground">Late Sets</span>
             </div>
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {Math.floor(stats.late_days / 2)}
+              {lateSets}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               2 lates = 1 set
@@ -445,25 +454,25 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
             <div>
               <p className="text-sm text-muted-foreground mb-1">Paid Day Units</p>
               <p className="text-4xl font-bold text-primary">
-                {(stats.present_days + stats.half_days + stats.casual_leaves).toFixed(1)}
+                {paidDayUnits.toFixed(1)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Present ({stats.present_days}) + Half Day ({stats.half_days}) + Paid Leave ({stats.casual_leaves})
+                PR ({stats.present_days}) + HO ({holidayCount}) + HD ({stats.half_days * 0.5}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + AB ({stats.absent_days}) + LE ({stats.sick_leaves}))
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground mb-1">Payroll Utilization</p>
               <p className={`text-3xl font-bold ${getPercentageColor(
-                ((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100
+                (paidDayUnits / (stats.total_days_in_month || 31)) * 100
               )}`}>
-                {(((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100).toFixed(1)}%
+                {((paidDayUnits / (stats.total_days_in_month || 31)) * 100).toFixed(1)}%
               </p>
               <Progress 
-                value={((stats.present_days + stats.half_days + stats.casual_leaves) / (stats.total_days_in_month || 31)) * 100} 
+                value={(paidDayUnits / (stats.total_days_in_month || 31)) * 100} 
                 className="h-2 w-32 mt-2"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {(stats.present_days + stats.half_days + stats.casual_leaves).toFixed(1)} / {stats.total_days_in_month || 31} days
+                {paidDayUnits.toFixed(1)} / {stats.total_days_in_month || 31} days
               </p>
             </div>
           </div>

@@ -645,6 +645,26 @@ export default function Attendance() {
     };
   }, [attendanceRecords, selectedDate, selectedInstitution, allEmployees]);
 
+  // Unique holidays for the selected month to prevent double counting
+  const uniqueHolidaysInMonth = useMemo(() => {
+    const monthHolidays = holidays.filter(h => {
+      const hDate = new Date(h.date);
+      return hDate.getFullYear() === selectedMonth.getFullYear() && 
+             hDate.getMonth() === selectedMonth.getMonth();
+    });
+    
+    // Deduplicate by date
+    const uniqueDates = new Set();
+    const deduplicated = [];
+    for (const h of monthHolidays) {
+      if (!uniqueDates.has(h.date)) {
+        uniqueDates.add(h.date);
+        deduplicated.push(h);
+      }
+    }
+    return deduplicated;
+  }, [holidays, selectedMonth]);
+
   // Pending records for manager approval
   const pendingRecords = useMemo(() => {
     return attendanceRecords.filter(r => r.status === "pending");
@@ -696,32 +716,19 @@ export default function Attendance() {
                   <div className="space-y-0.5">
                     <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {holidays.filter(h => {
-                        const hDate = new Date(h.date);
-                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                               hDate.getMonth() === selectedMonth.getMonth() &&
-                               h.name === 'Sunday';
-                      }).length}
+                      {uniqueHolidaysInMonth.filter(h => h.name === 'Sunday').length}
                     </p>
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs text-slate-600 dark:text-slate-400">Holidays</p>
                     <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {holidays.filter(h => {
-                        const hDate = new Date(h.date);
-                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                               hDate.getMonth() === selectedMonth.getMonth();
-                      }).length}
+                      {uniqueHolidaysInMonth.length}
                     </p>
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
                     <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {31 - holidays.filter(h => {
-                        const hDate = new Date(h.date);
-                        return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                               hDate.getMonth() === selectedMonth.getMonth();
-                      }).length}
+                      {31 - uniqueHolidaysInMonth.length}
                     </p>
                   </div>
                 </div>
@@ -729,11 +736,7 @@ export default function Attendance() {
             </Card>
 
             {/* Holidays List */}
-            {holidays.filter(h => {
-              const hDate = new Date(h.date);
-              return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                     hDate.getMonth() === selectedMonth.getMonth();
-            }).length > 0 && (
+            {uniqueHolidaysInMonth.length > 0 && (
               <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base text-purple-900 dark:text-purple-100">
@@ -742,11 +745,7 @@ export default function Attendance() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {holidays.filter(h => {
-                      const hDate = new Date(h.date);
-                      return hDate.getFullYear() === selectedMonth.getFullYear() && 
-                             hDate.getMonth() === selectedMonth.getMonth();
-                    }).map(holiday => (
+                    {uniqueHolidaysInMonth.map(holiday => (
                       <div key={holiday.date} className="flex justify-between items-center p-1.5 bg-white dark:bg-slate-800 rounded border border-purple-200 dark:border-purple-700 hover:shadow-sm transition-shadow">
                         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{holiday.name}</span>
                         <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-2 flex-shrink-0">{format(new Date(holiday.date), "MMM dd")}</span>
