@@ -1018,7 +1018,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             .lte("date", endDate);
           
           // Use updated data for calculation
-          const attendanceSummary = calculateAttendanceSummary(updatedAttendanceData || [], holidaysData || []);
+          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, updatedAttendanceData || [], holidaysData || []);
           
           // 4. Set form data with all values
           setFormData({
@@ -1033,6 +1033,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             present_days: attendanceSummary.presentDays,
             half_days: attendanceSummary.halfDays,
             paid_leave_days: attendanceSummary.paidLeaveDays,
+            sick_leaves: attendanceSummary.sickLeaves,
             absent_days: attendanceSummary.absentDays,
             late_days: attendanceSummary.lateDays,
             holiday_count: attendanceSummary.holidayCount,
