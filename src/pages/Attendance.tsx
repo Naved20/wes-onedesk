@@ -691,6 +691,7 @@ export default function Attendance() {
             month={currentMonth}
             attendanceRecords={attendanceRecords}
             holidays={holidays}
+            compactView={true}
           />
         )}
 
@@ -698,64 +699,7 @@ export default function Attendance() {
         {(role === "admin" || role === "manager") ? (
           <>
 
-                    {/* Month Summary - Top Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Summary Stats */}
-            <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200 dark:border-slate-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">
-                  {format(selectedMonth, "MMM yyyy")} Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Total Days</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">31</p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {uniqueHolidaysInMonth.filter(h => h.name === 'Sunday').length}
-                    </p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Holidays</p>
-                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {uniqueHolidaysInMonth.length}
-                    </p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {31 - uniqueHolidaysInMonth.length}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Holidays List */}
-            {uniqueHolidaysInMonth.length > 0 && (
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base text-purple-900 dark:text-purple-100">
-                    Holidays in {format(selectedMonth, "MMM")}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {uniqueHolidaysInMonth.map(holiday => (
-                      <div key={holiday.date} className="flex justify-between items-center p-1.5 bg-white dark:bg-slate-800 rounded border border-purple-200 dark:border-purple-700 hover:shadow-sm transition-shadow">
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{holiday.name}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-2 flex-shrink-0">{format(new Date(holiday.date), "MMM dd")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
             {/* Institution Filter */}
             {institutions.length > 0 && (
               <Card>
@@ -836,20 +780,83 @@ export default function Attendance() {
                       Attendance Calendar
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      month={selectedMonth}
-                      onMonthChange={setSelectedMonth}
-                      modifiers={{
-                        holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)),
-                      }}
-                      modifiersStyles={modifiersStyles}
-                      className="pointer-events-auto"
-                    />
-                    <div className="mt-4 space-y-2">
+                  <CardContent className="space-y-4">
+                    {/* Month and Year Filters */}
+                    <div className="flex gap-3">
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Month</Label>
+                        <Select 
+                          value={String(currentMonth)} 
+                          onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[
+                              { value: 1, label: 'January' },
+                              { value: 2, label: 'February' },
+                              { value: 3, label: 'March' },
+                              { value: 4, label: 'April' },
+                              { value: 5, label: 'May' },
+                              { value: 6, label: 'June' },
+                              { value: 7, label: 'July' },
+                              { value: 8, label: 'August' },
+                              { value: 9, label: 'September' },
+                              { value: 10, label: 'October' },
+                              { value: 11, label: 'November' },
+                              { value: 12, label: 'December' },
+                            ].map((month) => (
+                              <SelectItem key={month.value} value={String(month.value)}>
+                                {month.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Year</Label>
+                        <Select 
+                          value={String(currentYear)} 
+                          onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[
+                              new Date().getFullYear() - 1,
+                              new Date().getFullYear(),
+                              new Date().getFullYear() + 1,
+                            ].map((year) => (
+                              <SelectItem key={year} value={String(year)}>
+                                {year}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Calendar */}
+                    <div>
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        month={selectedMonth}
+                        onMonthChange={setSelectedMonth}
+                        modifiers={{
+                          holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)),
+                        }}
+                        modifiersStyles={modifiersStyles}
+                        className="pointer-events-auto"
+                      />
+                    </div>
+
+                    {/* Legend and Info */}
+                    <div className="space-y-2">
                       {selectedDate && (
                         <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
                           <span className="text-sm font-medium">
@@ -881,92 +888,34 @@ export default function Attendance() {
                     <CardTitle>Attendance Records</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Daily Stats - Compact and Clickable */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                      <div 
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                          selectedStatusFilter === 'all' 
-                            ? 'bg-blue-50 dark:bg-blue-950/20 ring-2 ring-blue-500' 
-                            : 'bg-blue-50 dark:bg-blue-950/20'
-                        }`}
-                        onClick={() => setSelectedStatusFilter('all')}
-                      >
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                          <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    {/* Compact Stats Grid - Like Salary Edit Dialog */}
+                    <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800">
+                      <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4" />
+                        Daily Attendance Summary - {selectedDate ? format(selectedDate, "MMM dd, yyyy") : format(new Date(), "MMM dd, yyyy")}
+                      </h4>
+                      
+                      {/* First Row: Total, Present, Paid Leave, Leave, Absent */}
+                      <div className="grid grid-cols-5 gap-5 mx-5 text-sm mb-4">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Total</Label>
+                          <p className="font-semibold text-lg text-blue-600">{dailyStats.total}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Total</p>
-                          <p className="text-2xl font-bold">{dailyStats.total}</p>
-                        </div>
-                      </div>
-
-                      <div 
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                          selectedStatusFilter === 'present' 
-                            ? 'bg-green-50 dark:bg-green-950/20 ring-2 ring-green-500' 
-                            : 'bg-green-50 dark:bg-green-950/20'
-                        }`}
-                        onClick={() => setSelectedStatusFilter('present')}
-                      >
-                        <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-full">
-                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <Label className="text-xs text-muted-foreground">Present (PR)</Label>
+                          <p className="font-semibold text-lg text-green-600">{dailyStats.present}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Present</p>
-                          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{dailyStats.present}</p>
-                        </div>
-                      </div>
-
-                      <div 
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                          selectedStatusFilter === 'paid_leave' 
-                            ? 'bg-blue-50 dark:bg-blue-950/20 ring-2 ring-blue-500' 
-                            : 'bg-blue-50 dark:bg-blue-950/20'
-                        }`}
-                        onClick={() => setSelectedStatusFilter('paid_leave')}
-                      >
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                          <Gift className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <Label className="text-xs text-muted-foreground">Paid Leave (PL)</Label>
+                          <p className="font-semibold text-lg text-blue-500">{dailyStats.paidLeave}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Paid Leave</p>
-                          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{dailyStats.paidLeave}</p>
-                        </div>
-                      </div>
-
-                      <div 
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                          selectedStatusFilter === 'leave' 
-                            ? 'bg-cyan-50 dark:bg-cyan-950/20 ring-2 ring-cyan-500' 
-                            : 'bg-cyan-50 dark:bg-cyan-950/20'
-                        }`}
-                        onClick={() => setSelectedStatusFilter('leave')}
-                      >
-                        <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-full">
-                          <Palmtree className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                          <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
+                          <p className="font-semibold text-lg text-cyan-600">{dailyStats.leave}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">Leave</p>
-                          <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{dailyStats.leave}</p>
-                        </div>
-                      </div>
-
-                      <div 
-                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                          selectedStatusFilter === 'absent' 
-                            ? 'bg-red-50 dark:bg-red-950/20 ring-2 ring-red-500' 
-                            : 'bg-red-50 dark:bg-red-950/20'
-                        }`}
-                        onClick={() => !dailyStats.isHoliday && setSelectedStatusFilter('absent')}
-                      >
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-full">
-                          <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">
-                            {dailyStats.isHoliday ? "Holiday" : "Absent"}
-                          </p>
-                          <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          <Label className="text-xs text-muted-foreground">{dailyStats.isHoliday ? "Holiday (HO)" : "Absent (AB)"}</Label>
+                          <p className={`font-semibold text-lg ${dailyStats.isHoliday ? 'text-purple-600' : 'text-red-600'}`}>
                             {dailyStats.isHoliday ? "-" : dailyStats.absent}
                           </p>
                         </div>
@@ -1314,6 +1263,70 @@ export default function Attendance() {
             </Card>
           </div>
         )}
+
+
+
+                            {/* Month Summary - Top Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Summary Stats */}
+            <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200 dark:border-slate-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">
+                  {format(selectedMonth, "MMM yyyy")} Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Total Days</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">31</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      {uniqueHolidaysInMonth.filter(h => h.name === 'Sunday').length}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Holidays</p>
+                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {uniqueHolidaysInMonth.length}
+                    </p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {31 - uniqueHolidaysInMonth.length}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Holidays List */}
+            {uniqueHolidaysInMonth.length > 0 && (
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-purple-900 dark:text-purple-100">
+                    Holidays in {format(selectedMonth, "MMM")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                    {uniqueHolidaysInMonth.map(holiday => (
+                      <div key={holiday.date} className="flex justify-between items-center p-1.5 bg-white dark:bg-slate-800 rounded border border-purple-200 dark:border-purple-700 hover:shadow-sm transition-shadow">
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{holiday.name}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-2 flex-shrink-0">{format(new Date(holiday.date), "MMM dd")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+
+            
+          </div>
       </div>
 
       {/* Approval Dialog */}
@@ -1406,6 +1419,7 @@ export default function Attendance() {
                 month={employeeDialogMonth.getMonth() + 1}
                 attendanceRecords={attendanceRecords as any}
                 holidays={holidays}
+                compactView={true}
               />
               
               {/* Attendance Records - Calendar View */}

@@ -374,103 +374,63 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
             </div>
           </div>
 
-          {/* Attendance Section - Updated with all attendance details */}
+          {/* Attendance Section - Compact Stats Grid */}
           <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <h3 className="font-bold text-sm text-gray-600 mb-4 uppercase">Attendance Details (From Salary Table)</h3>
-            
-            {/* First Row: Main Attendance Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
-              <div className="p-3 bg-blue-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Payroll Days</p>
-                <p className="text-2xl font-bold text-blue-600">{new Date(selectedYear, selectedMonth, 0).getDate()}</p>
+            <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                📅 Attendance Summary (Auto-fetched)
+              </h4>
+              
+              {/* First Row: Payroll Days, Present, Half Day, Paid Leave, Absent */}
+              <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Payroll Days</p>
+                  <p className="font-semibold text-lg">{new Date(selectedYear, selectedMonth, 0).getDate()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Present (PR)</p>
+                  <p className="font-semibold text-lg text-green-600">{salary.present_days}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Half Day (HD)</p>
+                  <p className="font-semibold text-lg text-orange-600">{salary.half_days}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Paid Leave (PL)</p>
+                  <p className="font-semibold text-lg text-blue-600">{salary.paid_leave_days}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Absent (AB)</p>
+                  <p className="font-semibold text-lg text-red-600">{salary.absent_days}</p>
+                </div>
               </div>
-              <div className="p-3 bg-green-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Present (PR)</p>
-                <p className="text-2xl font-bold text-green-600">{salary.present_days}</p>
-              </div>
-              <div className="p-3 bg-orange-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Half Day (HD)</p>
-                <p className="text-2xl font-bold text-orange-600">{salary.half_days}</p>
-              </div>
-              <div className="p-3 bg-purple-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Holiday (HO)</p>
-                <p className="text-2xl font-bold text-purple-600">{salary.holiday_count}</p>
-              </div>
-            </div>
-            
-            {/* Second Row: Other Attendance Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
-              <div className="p-3 bg-blue-100 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Paid Leave (PL)</p>
-                <p className="text-2xl font-bold text-blue-600">{salary.paid_leave_days}</p>
-              </div>
-              <div className="p-3 bg-red-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Absent (AB)</p>
-                <p className="text-2xl font-bold text-red-600">{salary.absent_days}</p>
-              </div>
-              <div className="p-3 bg-yellow-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Late Days (LT)</p>
-                <p className="text-2xl font-bold text-yellow-600">{salary.late_days}</p>
-              </div>
-              <div className="p-3 bg-pink-50 rounded-lg text-center">
-                <p className="text-xs text-gray-600 font-semibold">Leave (LE)</p>
-                <p className="text-2xl font-bold text-pink-600">{salary.sick_leaves}</p>
-              </div>
-            </div>
-            
-            {/* Formula and Calculation */}
-            <div className="mt-4 p-4 bg-gray-100 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-semibold text-lg">Total Paid Days Calculation:</span>
-                <span className="font-bold text-xl text-primary">
-                  {(
-                    salary.present_days + 
-                    salary.holiday_count + 
-                    (salary.half_days * 0.5) + 
-                    salary.paid_leave_days - 
-                    Math.floor(salary.late_days / 3) - 
-                    salary.absent_days
-                  ).toFixed(1)} days
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 text-right">
-                Formula: PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - 
-                Late Sets ({Math.floor(salary.late_days / 3)}) - AB ({salary.absent_days})
-              </p>
-            </div>
-          </div>
 
-          {/* Earnings Section - Updated with New Formula */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <h3 className="font-bold text-sm text-gray-600 mb-4 uppercase">Earnings (New Formula)</h3>
-            
-            {/* Fixed Salary Structure - NEW FORMULA */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-500 mb-2">Fixed Salary Structure (NEW FORMULA)</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span>Fixed Gross Salary (Monthly)</span>
-                  <span className="font-semibold">₹{salary.base_salary.toLocaleString()}</span>
+              {/* Second Row: Holidays, Late Days, Leave, Late Sets */}
+              <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Holidays (HO)</p>
+                  <p className="font-semibold text-lg text-purple-600">{salary.holiday_count}</p>
                 </div>
-                
-                {/* NEW: Payroll Days (Total days in month) */}
-                <div className="flex justify-between p-2">
-                  <span>Payroll Days (Total days in month)</span>
-                  <span className="font-semibold">{new Date(selectedYear, selectedMonth, 0).getDate()} days</span>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Late Days (LD)</p>
+                  <p className="font-semibold text-lg text-yellow-700">{salary.late_days}</p>
                 </div>
-                
-                {/* NEW: Per Day Rate = Fixed Gross Salary / Payroll Days */}
-                <div className="flex justify-between p-2">
-                  <span>Per Day Rate (₹{salary.base_salary.toLocaleString()} ÷ {new Date(selectedYear, selectedMonth, 0).getDate()} days)</span>
-                  <span className="font-semibold">
-                    ₹{(salary.base_salary / new Date(selectedYear, selectedMonth, 0).getDate()).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </span>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Leave (LE)</p>
+                  <p className="font-semibold text-lg text-pink-600">{salary.sick_leaves}</p>
                 </div>
-                
-                {/* NEW: Total Paid Days (from attendance calculation) */}
-                <div className="flex justify-between p-2">
-                  <span>Total Paid Days (from attendance calculation)</span>
-                  <span className="font-semibold">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Late Sets (LS)</p>
+                  <p className="font-semibold text-lg text-yellow-700">{Math.floor(salary.late_days / 3)}</p>
+                </div>
+                <div></div>
+              </div>
+
+              {/* Total Paid Days */}
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-medium">Total Paid Days:</span>
+                  <span className="text-lg font-bold text-primary">
                     {(
                       salary.present_days + 
                       salary.holiday_count + 
@@ -481,113 +441,98 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                     ).toFixed(1)} days
                   </span>
                 </div>
-                
-                {/* NEW: Gross Earned = Per Day Rate × Total Paid Days */}
-                <div className="flex justify-between p-2 bg-blue-50 rounded font-semibold">
-                  <span>Gross Earned (Per Day Rate × Total Paid Days)</span>
-                  <span>₹{salary.gross_salary.toLocaleString()}</span>
-                </div>
-                
-                {/* Formula Indicator */}
-                <div className="mt-2 p-2 bg-yellow-50 border-l-4 border-yellow-500 rounded">
-                  <p className="text-xs font-semibold text-yellow-700">NEW FORMULA:</p>
-                  <p className="text-xs text-yellow-600">
-                    Per Day Rate = Fixed Gross Salary ÷ Payroll Days (Total days in month)
-                  </p>
-                  <p className="text-xs text-yellow-600">
-                    Gross Earned = Per Day Rate × Total Paid Days
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Fixed Components */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-500 mb-2">Fixed Components</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between p-2 border-l-4 border-blue-500">
-                  <span>Basic Salary (Earned)</span>
-                  <span className="font-semibold">₹{salary.basic_earned.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between p-2 border-l-4 border-green-500">
-                  <span>HRA (Earned)</span>
-                  <span className="font-semibold">₹{salary.hra_earned.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between p-2 border-l-4 border-purple-500">
-                  <span>Other Allowance (Earned)</span>
-                  <span className="font-semibold">₹{salary.other_allowance_earned.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Performance Based Earnings */}
-            {salary.variable_earnings_total > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-semibold text-gray-500 mb-2">Performance Based Earnings</p>
-                <div className="space-y-2 text-sm">
-                  {Object.entries(salary.variable_earnings_details || {}).map(([key, value]) => (
-                    <div key={key} className="flex justify-between p-2 border-l-4 border-green-400">
-                      <span className="capitalize">{key.replace(/_/g, " ")}</span>
-                      <span className="font-semibold">₹{Number(value).toLocaleString()}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between p-2 bg-green-50 rounded font-semibold">
-                    <span>Total Performance Based Earnings</span>
-                    <span>₹{salary.variable_earnings_total.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Total Gross */}
-            <div className="p-3 bg-gradient-to-r from-green-100 to-green-50 rounded-lg border-2 border-green-500">
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-lg">TOTAL GROSS EARNINGS</span>
-                <span className="text-2xl font-bold text-green-600">₹{salary.gross_salary.toLocaleString()}</span>
+                <p className="text-xs text-muted-foreground text-right">
+                  PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - (Late Sets ({Math.floor(salary.late_days / 3)}) + AB ({salary.absent_days}))
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Deductions Section */}
+          {/* Earnings Section - Compact Grid Layout */}
           <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <h3 className="font-bold text-sm text-gray-600 mb-4 uppercase">Deductions</h3>
-            
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between p-2 border-l-4 border-red-500">
-                <span>EPF (Employee Provident Fund)</span>
-                <span className="font-semibold text-red-600">-₹{salary.epf_employee.toLocaleString()}</span>
+            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
+              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                💰 Earnings Summary (Compact View)
+              </h4>
+              
+              {/* First Row: Basic, HRA, Other Allowance, Variable Earnings */}
+              <div className="grid grid-cols-4 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Basic Salary (Earned)</p>
+                  <p className="font-semibold text-lg text-blue-600">₹{salary.basic_earned.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">HRA (Earned)</p>
+                  <p className="font-semibold text-lg text-green-600">₹{salary.hra_earned.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Other Allowance (Earned)</p>
+                  <p className="font-semibold text-lg text-purple-600">₹{salary.other_allowance_earned.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Variable Earnings</p>
+                  <p className="font-semibold text-lg text-green-700">₹{salary.variable_earnings_total.toLocaleString()}</p>
+                </div>
               </div>
-              <div className="flex justify-between p-2 border-l-4 border-red-500">
-                <span>ESIC (Employee State Insurance)</span>
-                <span className="font-semibold text-red-600">-₹{salary.esic_employee.toLocaleString()}</span>
+
+              {/* Total Gross - Full Width */}
+              <div className="mt-4 pt-3 border-t border-green-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold">Total Gross Earnings:</span>
+                  <span className="text-2xl font-bold text-green-600">₹{salary.gross_salary.toLocaleString()}</span>
+                </div>
               </div>
-              {salary.manual_deduction > 0 && (
-                <div className="flex justify-between p-2 border-l-4 border-red-500">
-                  <span>Manual Deduction</span>
-                  <span className="font-semibold text-red-600">-₹{salary.manual_deduction.toLocaleString()}</span>
+
+              {/* Formula breakdown in smaller text */}
+              <div className="mt-3 p-2 bg-yellow-50 rounded border-l-2 border-yellow-500">
+                <p className="text-xs text-gray-600">
+                  <span className="font-semibold">Formula:</span> Per Day Rate = Fixed Gross ÷ Payroll Days | Gross Earned = Per Day Rate × Total Paid Days
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Deductions Section - Compact Grid Layout */}
+          <div className="mb-8 pb-6 border-b-2 border-gray-300">
+            <div className="p-4 rounded-lg border bg-red-50 border-red-200">
+              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                🚫 Deductions Summary (Compact View)
+              </h4>
+              
+              {/* First Row: EPF, ESIC, Manual, TDS */}
+              <div className="grid grid-cols-4 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">EPF (Employee)</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.epf_employee.toLocaleString()}</p>
                 </div>
-              )}
-              {salary.tds_deduction > 0 && (
-                <div className="flex justify-between p-2 border-l-4 border-red-500">
-                  <span>TDS (Tax Deducted at Source)</span>
-                  <span className="font-semibold text-red-600">-₹{salary.tds_deduction.toLocaleString()}</span>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">ESIC (Employee)</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.esic_employee.toLocaleString()}</p>
                 </div>
-              )}
-              {salary.professional_tax > 0 && (
-                <div className="flex justify-between p-2 border-l-4 border-red-500">
-                  <span>Professional Tax</span>
-                  <span className="font-semibold text-red-600">-₹{salary.professional_tax.toLocaleString()}</span>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Manual Deduction</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.manual_deduction.toLocaleString()}</p>
                 </div>
-              )}
-              {salary.other_deductions > 0 && (
-                <div className="flex justify-between p-2 border-l-4 border-red-500">
-                  <span>Other Deductions</span>
-                  <span className="font-semibold text-red-600">-₹{salary.other_deductions.toLocaleString()}</span>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">TDS</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.tds_deduction.toLocaleString()}</p>
                 </div>
-              )}
-              <div className="flex justify-between p-3 bg-red-50 rounded-lg font-bold border-2 border-red-300">
-                <span>TOTAL DEDUCTIONS</span>
-                <span className="text-red-600">-₹{salary.total_deductions.toLocaleString()}</span>
+              </div>
+
+              {/* Second Row: Professional Tax, Other Deductions, Total Deductions */}
+              <div className="grid grid-cols-3 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Professional Tax</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.professional_tax.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Other Deductions</p>
+                  <p className="font-semibold text-lg text-red-600">₹{salary.other_deductions.toLocaleString()}</p>
+                </div>
+                <div className="bg-red-100 rounded p-2">
+                  <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
+                  <p className="font-bold text-lg text-red-700">₹{salary.total_deductions.toLocaleString()}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -613,23 +558,32 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
             </div>
           </div>
 
-          {/* Employer Contributions Section */}
+          {/* Employer Contributions Section - Compact */}
           <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <h3 className="font-bold text-sm text-gray-600 mb-4 uppercase">Employer Contributions (Not Deducted from Your Salary)</h3>
-            <p className="text-xs text-gray-500 mb-3">These are benefits provided by the company on your behalf</p>
-            
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between p-2 border-l-4 border-green-500">
-                <span>EPF Employer Contribution</span>
-                <span className="font-semibold text-green-600">+₹{salary.epf_employer.toLocaleString()}</span>
+            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
+              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                🏢 Employer Contributions (Not Deducted from Your Salary)
+              </h4>
+              
+              {/* Contributions Grid */}
+              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">EPF Employer</p>
+                  <p className="font-semibold text-lg text-green-600">₹{salary.epf_employer.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">ESIC Employer</p>
+                  <p className="font-semibold text-lg text-green-600">₹{salary.esic_employer.toLocaleString()}</p>
+                </div>
               </div>
-              <div className="flex justify-between p-2 border-l-4 border-green-500">
-                <span>ESIC Employer Contribution</span>
-                <span className="font-semibold text-green-600">+₹{salary.esic_employer.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between p-3 bg-green-50 rounded-lg font-bold border-2 border-green-300">
-                <span>TOTAL EMPLOYER CONTRIBUTION</span>
-                <span className="text-green-600">+₹{salary.total_employer_contribution.toLocaleString()}</span>
+
+              {/* Total Employer Contribution */}
+              <div className="pt-2 border-t border-green-200">
+                <p className="text-xs text-gray-500 mb-2">These are benefits provided by the company on your behalf</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold">Total Employer Contribution:</span>
+                  <span className="text-xl font-bold text-green-600">₹{salary.total_employer_contribution.toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>

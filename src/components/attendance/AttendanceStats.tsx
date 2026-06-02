@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { 
   CheckCircle, 
   Clock, 
@@ -23,6 +24,7 @@ interface AttendanceStatsProps {
   month: number;
   attendanceRecords?: Attendance[];
   holidays?: Array<{ date: string; name: string }>;
+  compactView?: boolean; // New prop to show compact summary view
 }
 
 interface LeaveRecord {
@@ -51,7 +53,7 @@ interface Stats {
   total_days_in_month?: number; // Added for payroll days (total days in month)
 }
 
-export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [] }: AttendanceStatsProps) {
+export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [], compactView = false }: AttendanceStatsProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
@@ -122,6 +124,9 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
   // No separate holiday fetch needed anymore
 
   if (loading) {
+    if (compactView) {
+      return <div className="animate-pulse h-32 bg-muted rounded-lg"></div>;
+    }
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[...Array(6)].map((_, i) => (
@@ -179,6 +184,79 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
   const lateSets = Math.floor(stats.late_days / 3);
   const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
 
+  // COMPACT VIEW - Like salary edit dialog
+  if (compactView) {
+    return (
+      <div className="p-4 rounded-lg border bg-blue-50 dark:bg-blue-950 border-blue-200">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="font-semibold text-sm flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Attendance Summary
+          </h4>
+        </div>
+        
+        {/* First Row: Payroll Days, Present, Half Day, Paid Leave */}
+        <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">Payroll Days</Label>
+            <p className="font-semibold text-lg">{stats.total_days_in_month || 31}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Present (PR)</Label>
+            <p className="font-semibold text-lg text-green-600">{stats.present_days}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Half Day (HD)</Label>
+            <p className="font-semibold text-lg text-orange-600">{stats.half_days}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Paid Leave (PL)</Label>
+            <p className="font-semibold text-lg text-blue-600">{stats.casual_leaves}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Absent (AB)</Label>
+            <p className="font-semibold text-lg text-red-600">{stats.absent_days}</p>
+          </div>
+        </div>
+
+        {/* Second Row: Holidays, Late Days, Leave, Late Sets */}
+        <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+          <div>
+            <Label className="text-xs text-muted-foreground">Holidays (HO)</Label>
+            <p className="font-semibold text-lg text-purple-600">{holidayCount}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Late Days (LD)</Label>
+            <p className="font-semibold text-lg text-yellow-700">{stats.late_days}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
+            <p className="font-semibold text-lg text-pink-600">{stats.sick_leaves}</p>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Late Sets (LS)</Label>
+            <p className="font-semibold text-lg text-yellow-700">{lateSets}</p>
+          </div>
+          <div></div>
+        </div>
+
+        {/* Total Paid Days */}
+        <div className="mt-3 pt-3 border-t border-blue-200">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-sm font-medium">Total Paid Days:</span>
+            <span className="text-lg font-bold text-primary">
+              {paidDayUnits.toFixed(1)} days
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 text-right">
+            PR ({stats.present_days}) + HO ({holidayCount}) + HD ({(stats.half_days * 0.5).toFixed(1)}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + AB ({stats.absent_days}))
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ORIGINAL GRID VIEW
   return (
     <div className="space-y-4">
       {/* Stats Grid - New Design */}
