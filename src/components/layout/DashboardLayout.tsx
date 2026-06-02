@@ -147,9 +147,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main content */}
       <main className={cn(
-        "lg:ml-64 min-h-screen",
+        "lg:ml-64 min-h-screen relative",
         "pt-16 lg:pt-0"
       )}>
+        {/* Desktop floating notification bell */}
+        <div className="hidden lg:flex absolute top-4 right-6 z-30">
+          <NotificationBell />
+        </div>
         <div className="p-6">
           {children}
         </div>
