@@ -51,6 +51,7 @@ interface SalaryDetail {
   total_employer_contribution: number;
   total_ctc: number;
   
+  
   // Status
   approval_status: string;
   is_locked: boolean;
