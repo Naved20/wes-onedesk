@@ -79,7 +79,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <img src={wesLogo} alt="WES Foundation" className="h-8 w-8 rounded-full object-cover" />
           <h1 className="font-semibold text-lg">WES OneDesk</h1>
         </div>
-        <div className="w-10" />
+        <NotificationBell />
       </header>
 
       {/* Sidebar overlay for mobile */}
