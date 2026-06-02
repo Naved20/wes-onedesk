@@ -814,14 +814,13 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       const payrollDays = new Date(year, month, 0).getDate();
       const lateSets = Math.floor(attendanceSummary.lateDays / 3);
       
-      // Calculate total paid days using the formula
+      // Calculate total paid days using NEW FORMULA (no 2x on AB, no LE)
       const totalPaidDays = attendanceSummary.presentDays + 
                            attendanceSummary.holidayCount + 
                            (attendanceSummary.halfDays * 0.5) + 
                            attendanceSummary.paidLeaveDays - 
                            lateSets - 
-                           (attendanceSummary.absentDays * 2) - 
-                           attendanceSummary.sickLeaves;
+                           attendanceSummary.absentDays;
       
       // Calculate attendance percentage
       const attendancePercentage = payrollDays > 0 
@@ -1036,6 +1035,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     let errorCount = 0;
 
     try {
+      // STEP 1: Update attendance_summary table for all employees
+      console.log("Step 1: Updating attendance summary table...");
       for (const salary of unlockedSalaries) {
         try {
           // Fetch attendance data
@@ -1055,6 +1056,34 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             .gte("date", startDate)
             .lte("date", endDate);
           
+          // Calculate attendance summary
+          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidaysData || []);
+          
+          // Save to attendance_summary table
+          await saveAttendanceSummaryForEmployee(
+            salary.user_id,
+            selectedYear,
+            selectedMonth,
+            attendanceSummary
+          );
+        } catch (err) {
+          console.error(`Error updating attendance summary for ${salary.employee_name}:`, err);
+        }
+      }
+      
+      // STEP 2: Update salaries using attendance_summary table data
+      console.log("Step 2: Updating salary calculations...");
+      for (const salary of unlockedSalaries) {
+        try {
+          // Fetch attendance summary from table
+          const { data: summaryData } = await supabase
+            .from("attendance_summary")
+            .select("*")
+            .eq("user_id", salary.user_id)
+            .eq("year", selectedYear)
+            .eq("month", selectedMonth)
+            .maybeSingle();
+          
           const { data: workingDaysData } = await supabase
             .rpc('calculate_monthly_working_days', {
               p_year: selectedYear,
@@ -1062,7 +1091,16 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             });
           
           const actualWorkingDays = workingDaysData || salary.working_days || 26;
-          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidaysData || []);
+          
+          // Use attendance_summary data
+          const payrollDays = (summaryData as any)?.payroll_days || new Date(selectedYear, selectedMonth, 0).getDate();
+          const presentDays = (summaryData as any)?.present_days || 0;
+          const halfDays = (summaryData as any)?.half_days || 0;
+          const holidayCount = (summaryData as any)?.holiday_count || 0;
+          const paidLeaveDays = (summaryData as any)?.paid_leave_days || 0;
+          const absentDays = (summaryData as any)?.absent_days || 0;
+          const lateDays = (summaryData as any)?.late_days || 0;
+          const sickLeaves = (summaryData as any)?.leave_days || 0;
           
           // Fetch salary structure
           const { data: structure } = await supabase
@@ -1077,14 +1115,14 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const hraPercentage = (structure as any)?.hra_percentage || 40;
           const otherAllowancePercentage = (structure as any)?.other_allowance_percentage || 30;
           
-          // Calculate with new logic
-          const perDayRate = actualWorkingDays > 0 ? fixedGrossSalary / actualWorkingDays : 0;
+          // Calculate with payroll days (total days in month)
+          const perDayRate = payrollDays > 0 ? fixedGrossSalary / payrollDays : 0;
           
-          // Late set deduction
-          const lateSets = Math.floor(attendanceSummary.lateDays / 3);
+          // Late set deduction: 3 lates = 1 set
+          const lateSets = Math.floor(lateDays / 3);
           
-          // Paid Day Units
-          const paidDayUnits = attendanceSummary.presentDays + attendanceSummary.holidayCount + (attendanceSummary.halfDays * 0.5) + attendanceSummary.paidLeaveDays - lateSets - (attendanceSummary.absentDays * 2) - attendanceSummary.sickLeaves;
+          // Paid Day Units (NEW FORMULA - no 2x multiplier on AB, no sick leaves)
+          const paidDayUnits = presentDays + holidayCount + (halfDays * 0.5) + paidLeaveDays - lateSets - absentDays;
           
           // Gross earned
           const grossEarned = paidDayUnits * perDayRate;
@@ -1130,9 +1168,16 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             .from("salaries")
             .update({
               working_days: actualWorkingDays,
-              present_days: attendanceSummary.presentDays,
-              absent_days: attendanceSummary.absentDays,
-              paid_leave_days: attendanceSummary.paidLeaveDays,
+              present_days: presentDays,
+              absent_days: absentDays,
+              paid_leave_days: paidLeaveDays,
+              half_days: halfDays,
+              holiday_count: holidayCount,
+              late_days: lateDays,
+              sick_leaves: sickLeaves,
+              
+              per_day_salary: Math.round(perDayRate * 100) / 100,
+              late_sets: lateSets,
               
               basic_earned: Math.round(basicEarned * 100) / 100,
               hra_earned: Math.round(hraEarned * 100) / 100,
