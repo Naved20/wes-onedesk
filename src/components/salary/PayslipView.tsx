@@ -429,14 +429,13 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                     (salary.half_days * 0.5) + 
                     salary.paid_leave_days - 
                     Math.floor(salary.late_days / 3) - 
-                    (salary.absent_days * 2) - 
-                    salary.sick_leaves
+                    salary.absent_days
                   ).toFixed(1)} days
                 </span>
               </div>
               <p className="text-sm text-gray-600 text-right">
                 Formula: PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - 
-                Late Sets ({Math.floor(salary.late_days / 3)}) - 2×AB ({salary.absent_days * 2}) - LE ({salary.sick_leaves})
+                Late Sets ({Math.floor(salary.late_days / 3)}) - AB ({salary.absent_days})
               </p>
             </div>
           </div>
@@ -478,8 +477,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                       (salary.half_days * 0.5) + 
                       salary.paid_leave_days - 
                       Math.floor(salary.late_days / 3) - 
-                      (salary.absent_days * 2) - 
-                      salary.sick_leaves
+                      salary.absent_days
                     ).toFixed(1)} days
                   </span>
                 </div>

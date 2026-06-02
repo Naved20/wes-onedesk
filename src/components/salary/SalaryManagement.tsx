@@ -616,8 +616,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     // Calculate late sets: 3 late = 1 set
     const lateSets = Math.floor(formData.late_days / 3);
     
-    // Total Paid Days = PR + HO + (HD × 0.5) + PL - Late Sets - (AB × 2) - LE
-    const totalPaidDays = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - (formData.absent_days * 2) - formData.sick_leaves;
+    // Total Paid Days = PR + HO + (HD × 0.5) + PL - Late Sets - AB
+    const totalPaidDays = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - formData.absent_days;
     
     // Gross Earned = Per Day Rate × Total Paid Days
     const grossEarned = totalPaidDays * perDayRate;
@@ -2492,11 +2492,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-medium">Total Paid Days:</span>
                     <span className="text-lg font-bold text-primary">
-                      {(formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - Math.floor(formData.late_days / 3) - (formData.absent_days * 2) - formData.sick_leaves).toFixed(1)} days
+                      {(formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - Math.floor(formData.late_days / 3) - formData.absent_days).toFixed(1)} days
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 mb-2 text-right">
-                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 3)}) + 2×AB ({formData.absent_days * 2}) + LE ({formData.sick_leaves}))
+                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 3)}) + AB ({formData.absent_days}))
                   </p>
                   
                   {/* Save Button for Attendance Changes */}
