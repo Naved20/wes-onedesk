@@ -340,6 +340,66 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_summary: {
+        Row: {
+          absent_days: number | null
+          attendance_percentage: number | null
+          created_at: string | null
+          half_days: number | null
+          holiday_count: number | null
+          id: string
+          late_days: number | null
+          late_sets: number | null
+          leave_days: number | null
+          month: number
+          paid_leave_days: number | null
+          payroll_days: number | null
+          present_days: number | null
+          total_paid_days: number | null
+          updated_at: string | null
+          user_id: string
+          year: number
+        }
+        Insert: {
+          absent_days?: number | null
+          attendance_percentage?: number | null
+          created_at?: string | null
+          half_days?: number | null
+          holiday_count?: number | null
+          id?: string
+          late_days?: number | null
+          late_sets?: number | null
+          leave_days?: number | null
+          month: number
+          paid_leave_days?: number | null
+          payroll_days?: number | null
+          present_days?: number | null
+          total_paid_days?: number | null
+          updated_at?: string | null
+          user_id: string
+          year: number
+        }
+        Update: {
+          absent_days?: number | null
+          attendance_percentage?: number | null
+          created_at?: string | null
+          half_days?: number | null
+          holiday_count?: number | null
+          id?: string
+          late_days?: number | null
+          late_sets?: number | null
+          leave_days?: number | null
+          month?: number
+          paid_leave_days?: number | null
+          payroll_days?: number | null
+          present_days?: number | null
+          total_paid_days?: number | null
+          updated_at?: string | null
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       company_documents: {
         Row: {
           created_at: string | null
@@ -1580,10 +1640,13 @@ export type Database = {
           esic_employer: number | null
           final_salary: number | null
           gross_salary: number | null
+          half_days: number | null
+          holiday_count: number | null
           hra_amount: number | null
           hra_earned: number | null
           id: string
           is_locked: boolean | null
+          late_days: number | null
           locked_at: string | null
           locked_by: string | null
           manager_justification: string | null
@@ -1602,6 +1665,7 @@ export type Database = {
           present_days: number | null
           processed_at: string | null
           professional_tax: number | null
+          sick_leaves: number | null
           special_bonus: number | null
           tds_deduction: number | null
           total_ctc: number | null
@@ -1630,10 +1694,13 @@ export type Database = {
           esic_employer?: number | null
           final_salary?: number | null
           gross_salary?: number | null
+          half_days?: number | null
+          holiday_count?: number | null
           hra_amount?: number | null
           hra_earned?: number | null
           id?: string
           is_locked?: boolean | null
+          late_days?: number | null
           locked_at?: string | null
           locked_by?: string | null
           manager_justification?: string | null
@@ -1652,6 +1719,7 @@ export type Database = {
           present_days?: number | null
           processed_at?: string | null
           professional_tax?: number | null
+          sick_leaves?: number | null
           special_bonus?: number | null
           tds_deduction?: number | null
           total_ctc?: number | null
@@ -1680,10 +1748,13 @@ export type Database = {
           esic_employer?: number | null
           final_salary?: number | null
           gross_salary?: number | null
+          half_days?: number | null
+          holiday_count?: number | null
           hra_amount?: number | null
           hra_earned?: number | null
           id?: string
           is_locked?: boolean | null
+          late_days?: number | null
           locked_at?: string | null
           locked_by?: string | null
           manager_justification?: string | null
@@ -1702,6 +1773,7 @@ export type Database = {
           present_days?: number | null
           processed_at?: string | null
           professional_tax?: number | null
+          sick_leaves?: number | null
           special_bonus?: number | null
           tds_deduction?: number | null
           total_ctc?: number | null
