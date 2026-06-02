@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import wesLogo from "@/assets/wes-logo.jpg";
+import { NotificationBell } from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   Users,
@@ -78,7 +79,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <img src={wesLogo} alt="WES Foundation" className="h-8 w-8 rounded-full object-cover" />
           <h1 className="font-semibold text-lg">WES OneDesk</h1>
         </div>
-        <div className="w-10" />
+        <NotificationBell />
       </header>
 
       {/* Sidebar overlay for mobile */}
@@ -146,9 +147,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main content */}
       <main className={cn(
-        "lg:ml-64 min-h-screen",
+        "lg:ml-64 min-h-screen relative",
         "pt-16 lg:pt-0"
       )}>
+        {/* Desktop floating notification bell */}
+        <div className="hidden lg:flex absolute top-4 right-6 z-30">
+          <NotificationBell />
+        </div>
         <div className="p-6">
           {children}
         </div>

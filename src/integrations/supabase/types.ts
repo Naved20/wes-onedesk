@@ -1307,6 +1307,48 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          announcements: boolean
+          attendance: boolean
+          created_at: string
+          documents: boolean
+          enabled: boolean
+          leaves: boolean
+          salary: boolean
+          support: boolean
+          tasks: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          announcements?: boolean
+          attendance?: boolean
+          created_at?: string
+          documents?: boolean
+          enabled?: boolean
+          leaves?: boolean
+          salary?: boolean
+          support?: boolean
+          tasks?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          announcements?: boolean
+          attendance?: boolean
+          created_at?: string
+          documents?: boolean
+          enabled?: boolean
+          leaves?: boolean
+          salary?: boolean
+          support?: boolean
+          tasks?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -2701,6 +2743,16 @@ export type Database = {
         Returns: boolean
       }
       is_within_checkin_window: { Args: never; Returns: boolean }
+      notify_user: {
+        Args: {
+          p_message: string
+          p_related_id?: string
+          p_title: string
+          p_type: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       trigger_absent_records_now: {
         Args: never
         Returns: {
