@@ -31,8 +31,8 @@ DROP POLICY IF EXISTS "Manage holidays" ON public.holidays;
 CREATE POLICY "Manage holidays"
   ON public.holidays
   FOR ALL
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin')
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 -- Create index for performance
 CREATE INDEX IF NOT EXISTS idx_holidays_date ON public.holidays(date);
@@ -58,7 +58,7 @@ BEGIN
     is_national, institution_name, calculated_status
   )
   SELECT
-    ep.user_id, p_date, 'holiday'::attendance_status, p_name, p_description,
+    ep.user_id, p_date, 'holiday'::text, p_name, p_description,
     p_is_national, p_institution, 'holiday'
   FROM public.employee_profiles ep
   WHERE ep.is_active = true
@@ -67,19 +67,17 @@ BEGIN
       SELECT 1 FROM public.attendance a
       WHERE a.user_id = ep.user_id
         AND a.date = p_date
-        AND (a.status::text IN ('approved', 'present', 'half_day', 'late', 'paid_leave', 'leave')
-             OR a.calculated_status IN ('present', 'half_day', 'late', 'paid_leave', 'leave'))
+        AND a.status IN ('approved', 'present', 'half_day', 'late', 'paid_leave', 'leave')
     )
   ON CONFLICT (user_id, date) DO UPDATE
-  SET status = 'holiday'::attendance_status,
+  SET status = 'holiday'::text,
       holiday_name = EXCLUDED.holiday_name,
       holiday_description = EXCLUDED.holiday_description,
       is_national = EXCLUDED.is_national,
       institution_name = EXCLUDED.institution_name,
       calculated_status = 'holiday',
       updated_at = now()
-  WHERE public.attendance.status::text = 'holiday'
-    AND COALESCE(public.attendance.calculated_status, '') NOT IN ('present', 'half_day', 'late', 'paid_leave', 'leave');
+  WHERE public.attendance.status = 'holiday';
 END;
 $$;
 
@@ -99,17 +97,14 @@ BEGIN
       COALESCE(NEW.is_national, false),
       NEW.institution_name
     );
+    RETURN NEW;
   ELSIF TG_OP = 'DELETE' THEN
     -- Delete from attendance when holiday is deleted
     DELETE FROM public.attendance
     WHERE date = OLD.date
-      AND status::text = 'holiday'
-      AND institution_name IS NOT DISTINCT FROM OLD.institution_name;
-  END IF;
-  
-  IF TG_OP IN ('INSERT', 'UPDATE') THEN
-    RETURN NEW;
-  ELSE
+      AND status = 'holiday'
+      AND (institution_name IS NULL AND OLD.institution_name IS NULL
+           OR institution_name = OLD.institution_name);
     RETURN OLD;
   END IF;
 END;
@@ -129,7 +124,7 @@ BEGIN
       is_national, institution_name, calculated_status
     )
     SELECT
-      ep.user_id, h.date, 'holiday'::attendance_status, h.name, h.description,
+      ep.user_id, h.date, 'holiday'::text, h.name, h.description,
       COALESCE(h.is_national, false), h.institution_name, 'holiday'
     FROM public.holidays h
     CROSS JOIN public.employee_profiles ep
