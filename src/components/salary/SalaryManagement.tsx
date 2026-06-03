@@ -1289,9 +1289,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
     const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
     
-    // Source 1: Fetch from holidays table
+    // Source 1: holidays_view (derived from attendance with status='holiday')
     const { data: holidaysTableData } = await supabase
-      .from("holidays")
+      .from("holidays_view")
       .select("date, name")
       .gte("date", startDate)
       .lte("date", endDate);
@@ -1384,9 +1384,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
       
-      // Fetch holidays from both sources
+      // Fetch holidays from holidays_view
       const { data: holidaysTableData } = await supabase
-        .from("holidays")
+        .from("holidays_view")
         .select("date, name")
         .gte("date", startDate)
         .lte("date", endDate);
