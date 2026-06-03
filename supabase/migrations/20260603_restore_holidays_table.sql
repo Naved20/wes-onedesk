@@ -9,9 +9,12 @@ CREATE TABLE IF NOT EXISTS public.holidays (
   description text,
   is_national boolean DEFAULT false,
   institution_name text,
-  created_at timestamp with time zone DEFAULT now(),
-  UNIQUE(date, COALESCE(institution_name, ''))
+  created_at timestamp with time zone DEFAULT now()
 );
+
+-- Create unique constraint using expression index
+CREATE UNIQUE INDEX IF NOT EXISTS idx_holidays_date_institution 
+ON public.holidays(date, COALESCE(institution_name, ''));
 
 -- Enable RLS
 ALTER TABLE public.holidays ENABLE ROW LEVEL SECURITY;
