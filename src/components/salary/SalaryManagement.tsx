@@ -1019,6 +1019,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       return;
     }
 
+    // Filter: only unlocked salaries ko recalculate karunga
     const unlockedSalaries = salaryRecords.filter(s => !s.is_locked);
     
     if (unlockedSalaries.length === 0) {
@@ -1031,52 +1032,73 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     }
 
     setGenerating(true);
-    let successCount = 0;
-    let errorCount = 0;
+    let attendanceSummarySuccessCount = 0;
+    let attendanceSummaryErrorCount = 0;
+    let salarySuccessCount = 0;
+    let salaryErrorCount = 0;
+    let salarySkippedCount = 0;
 
     try {
-      // STEP 1: Update attendance_summary table for all employees
-      console.log("Step 1: Updating attendance summary table...");
-      for (const salary of unlockedSalaries) {
+      // STEP 1: Update attendance_summary table for ALL employees (including locked ones - because attendance data is independent)
+      console.log(`Step 1: Updating attendance summary table for all employees...`);
+      
+      for (const salary of salaryRecords) {
         try {
-          // Fetch attendance data
+          // Fetch attendance data for this employee
           const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
           const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
           
-          const { data: attendanceData } = await supabase
+          const { data: attendanceData, error: attendanceError } = await supabase
             .from("attendance")
             .select("*")
             .eq("user_id", salary.user_id)
             .gte("date", startDate)
             .lte("date", endDate);
           
-          const { data: holidaysData } = await supabase
-            .from("holidays")
-            .select("*")
-            .gte("date", startDate)
-            .lte("date", endDate);
+          if (attendanceError) {
+            console.warn(`Warning: Could not fetch attendance data for ${salary.employee_name}:`, attendanceError);
+            attendanceSummaryErrorCount++;
+            continue;
+          }
           
           // Calculate attendance summary
-          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidaysData || []);
+          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || []);
           
           // Save to attendance_summary table
-          await saveAttendanceSummaryForEmployee(
+          const saved = await saveAttendanceSummaryForEmployee(
             salary.user_id,
             selectedYear,
             selectedMonth,
             attendanceSummary
           );
+          
+          if (saved) {
+            attendanceSummarySuccessCount++;
+          } else {
+            attendanceSummaryErrorCount++;
+          }
         } catch (err) {
           console.error(`Error updating attendance summary for ${salary.employee_name}:`, err);
+          attendanceSummaryErrorCount++;
         }
       }
       
-      // STEP 2: Update salaries using attendance_summary table data
-      console.log("Step 2: Updating salary calculations...");
+      console.log(`Step 1 Complete: ${attendanceSummarySuccessCount} attendance summaries updated, ${attendanceSummaryErrorCount} errors`);
+      
+      // STEP 2: Update ONLY unlocked salaries using attendance_summary table data
+      console.log(`Step 2: Recalculating ${unlockedSalaries.length} unlocked salary records...`);
+      
       for (const salary of unlockedSalaries) {
         try {
-          // Fetch attendance summary from table
-          const { data: summaryData } = await supabase
+          // Double-check that salary is still unlocked (in case it changed)
+          if (salary.is_locked) {
+            console.log(`Skipping locked salary for ${salary.employee_name}`);
+            salarySkippedCount++;
+            continue;
+          }
+          
+          // Fetch latest attendance summary from table
+          const { data: summaryData, error: summaryError } = await supabase
             .from("attendance_summary")
             .select("*")
             .eq("user_id", salary.user_id)
@@ -1084,6 +1106,13 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             .eq("month", selectedMonth)
             .maybeSingle();
           
+          if (summaryError) {
+            console.warn(`Warning: Could not fetch attendance summary for ${salary.employee_name}:`, summaryError);
+            salaryErrorCount++;
+            continue;
+          }
+          
+          // Get working days
           const { data: workingDaysData } = await supabase
             .rpc('calculate_monthly_working_days', {
               p_year: selectedYear,
@@ -1092,7 +1121,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           
           const actualWorkingDays = workingDaysData || salary.working_days || 26;
           
-          // Use attendance_summary data
+          // Use attendance_summary data (or defaults)
           const payrollDays = (summaryData as any)?.payroll_days || new Date(selectedYear, selectedMonth, 0).getDate();
           const presentDays = (summaryData as any)?.present_days || 0;
           const halfDays = (summaryData as any)?.half_days || 0;
@@ -1103,12 +1132,18 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const sickLeaves = (summaryData as any)?.leave_days || 0;
           
           // Fetch salary structure
-          const { data: structure } = await supabase
+          const { data: structure, error: structureError } = await supabase
             .from("salary_structures" as any)
             .select("*")
             .eq("user_id", salary.user_id)
             .eq("is_active", true)
             .maybeSingle();
+          
+          if (structureError) {
+            console.warn(`Warning: Could not fetch salary structure for ${salary.employee_name}:`, structureError);
+            salaryErrorCount++;
+            continue;
+          }
           
           const fixedGrossSalary = (structure as any)?.fixed_gross_salary || salary.base_salary || 0;
           const basicPercentage = (structure as any)?.basic_percentage || 50;
@@ -1121,7 +1156,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           // Late set deduction: 3 lates = 1 set
           const lateSets = Math.floor(lateDays / 3);
           
-          // Paid Day Units (NEW FORMULA - no 2x multiplier on AB, no sick leaves)
+          // Paid Day Units (NEW FORMULA)
+          // = PR + HO + (HD × 0.5) + PL - Late Sets - AB
           const paidDayUnits = presentDays + holidayCount + (halfDays * 0.5) + paidLeaveDays - lateSets - absentDays;
           
           // Gross earned
@@ -1177,7 +1213,6 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
               sick_leaves: sickLeaves,
               
               per_day_salary: Math.round(perDayRate * 100) / 100,
-              late_sets: lateSets,
               
               basic_earned: Math.round(basicEarned * 100) / 100,
               hra_earned: Math.round(hraEarned * 100) / 100,
@@ -1198,29 +1233,35 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
               esic_employer: Math.round(esicEmployer * 100) / 100,
               total_employer_contribution: Math.round(totalEmployerBenefit * 100) / 100,
               total_ctc: Math.round((netPayable + totalEmployerBenefit) * 100) / 100,
+              
+              updated_at: new Date().toISOString(),
             })
             .eq("id", salary.id);
           
           if (updateError) {
             console.error(`Error updating salary for ${salary.employee_name}:`, updateError);
-            errorCount++;
+            salaryErrorCount++;
           } else {
-            successCount++;
+            console.log(`Successfully recalculated salary for ${salary.employee_name}`);
+            salarySuccessCount++;
           }
         } catch (err) {
           console.error(`Error processing salary for ${salary.employee_name}:`, err);
-          errorCount++;
+          salaryErrorCount++;
         }
       }
       
+      console.log(`Step 2 Complete: ${salarySuccessCount} salaries updated, ${salarySkippedCount} skipped (locked), ${salaryErrorCount} errors`);
+      
+      // Toast with detailed summary
       toast({
         title: "Recalculation Complete",
-        description: `Successfully recalculated ${successCount} salaries. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
+        description: `✓ Attendance: ${attendanceSummarySuccessCount} updated | Salary: ${salarySuccessCount} recalculated, ${salarySkippedCount} locked, ${salaryErrorCount} errors`,
       });
       
       fetchData();
     } catch (error) {
-      console.error("Error recalculating salaries:", error);
+      console.error("Error in recalculation process:", error);
       toast({
         title: "Error",
         description: "Failed to recalculate salaries",
