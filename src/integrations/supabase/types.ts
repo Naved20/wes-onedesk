@@ -2776,6 +2776,7 @@ export type Database = {
         | "leave"
         | "pending"
         | "rejected"
+        | "holiday"
       leave_status: "pending" | "approved" | "rejected"
       leave_type: "casual" | "sick" | "unplanned" | "emergency"
     }
@@ -2914,6 +2915,7 @@ export const Constants = {
         "leave",
         "pending",
         "rejected",
+        "holiday",
       ],
       leave_status: ["pending", "approved", "rejected"],
       leave_type: ["casual", "sick", "unplanned", "emergency"],
