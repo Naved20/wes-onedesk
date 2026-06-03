@@ -58,8 +58,8 @@ BEGIN
     is_national, institution_name, calculated_status
   )
   SELECT
-    ep.user_id, p_date, 'holiday'::text, p_name, p_description,
-    p_is_national, p_institution, 'holiday'
+    ep.user_id, p_date, 'holiday'::attendance_status, p_name, p_description,
+    p_is_national, p_institution, 'holiday'::attendance_status
   FROM public.employee_profiles ep
   WHERE ep.is_active = true
     AND (p_institution IS NULL OR ep.institution_assignment = p_institution)
@@ -67,17 +67,17 @@ BEGIN
       SELECT 1 FROM public.attendance a
       WHERE a.user_id = ep.user_id
         AND a.date = p_date
-        AND a.status IN ('approved', 'present', 'half_day', 'late', 'paid_leave', 'leave')
+        AND a.status IN ('approved'::attendance_status, 'present'::attendance_status, 'half_day'::attendance_status, 'late'::attendance_status, 'paid_leave'::attendance_status, 'leave'::attendance_status)
     )
   ON CONFLICT (user_id, date) DO UPDATE
-  SET status = 'holiday'::text,
+  SET status = 'holiday'::attendance_status,
       holiday_name = EXCLUDED.holiday_name,
       holiday_description = EXCLUDED.holiday_description,
       is_national = EXCLUDED.is_national,
       institution_name = EXCLUDED.institution_name,
-      calculated_status = 'holiday',
+      calculated_status = 'holiday'::attendance_status,
       updated_at = now()
-  WHERE public.attendance.status = 'holiday';
+  WHERE public.attendance.status = 'holiday'::attendance_status;
 END;
 $$;
 
@@ -102,7 +102,7 @@ BEGIN
     -- Delete from attendance when holiday is deleted
     DELETE FROM public.attendance
     WHERE date = OLD.date
-      AND status = 'holiday'
+      AND status = 'holiday'::attendance_status
       AND (institution_name IS NULL AND OLD.institution_name IS NULL
            OR institution_name = OLD.institution_name);
     RETURN OLD;
@@ -124,8 +124,8 @@ BEGIN
       is_national, institution_name, calculated_status
     )
     SELECT
-      ep.user_id, h.date, 'holiday'::text, h.name, h.description,
-      COALESCE(h.is_national, false), h.institution_name, 'holiday'
+      ep.user_id, h.date, 'holiday'::attendance_status, h.name, h.description,
+      COALESCE(h.is_national, false), h.institution_name, 'holiday'::attendance_status
     FROM public.holidays h
     CROSS JOIN public.employee_profiles ep
     WHERE ep.is_active = true
