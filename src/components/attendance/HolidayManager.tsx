@@ -74,12 +74,12 @@ export function HolidayManager() {
   const fetchHolidays = async () => {
     try {
       const { data, error } = await supabase
-        .from("holidays")
+        .from("holidays_view")
         .select("*")
         .order("date", { ascending: true });
 
       if (error) throw error;
-      setHolidays(data || []);
+      setHolidays((data || []) as unknown as Holiday[]);
     } catch (error) {
       console.error("Error fetching holidays:", error);
     } finally {
