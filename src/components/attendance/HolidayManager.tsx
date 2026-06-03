@@ -122,27 +122,29 @@ export function HolidayManager() {
 
     setSubmitting(true);
     try {
-      const holidayData = {
-        date: format(selectedDate, "yyyy-MM-dd"),
-        name: name.trim(),
-        description: description.trim() || null,
-        is_national: isNational,
-        institution_name: selectedInstitution === "all" ? null : selectedInstitution,
-      };
+      const newDate = format(selectedDate, "yyyy-MM-dd");
+      const newInstitution = selectedInstitution === "all" ? null : selectedInstitution;
 
       if (editingHoliday) {
-        const { error } = await supabase
-          .from("holidays")
-          .update(holidayData)
-          .eq("id", editingHoliday.id);
-
+        const { error } = await supabase.rpc("update_holiday", {
+          p_old_date: editingHoliday.date,
+          p_old_institution: editingHoliday.institution_name,
+          p_new_date: newDate,
+          p_new_name: name.trim(),
+          p_new_description: description.trim() || null,
+          p_new_is_national: isNational,
+          p_new_institution: newInstitution,
+        });
         if (error) throw error;
         toast({ title: "Updated", description: "Holiday updated successfully" });
       } else {
-        const { error } = await supabase
-          .from("holidays")
-          .insert(holidayData);
-
+        const { error } = await supabase.rpc("add_holiday", {
+          p_date: newDate,
+          p_name: name.trim(),
+          p_description: description.trim() || null,
+          p_is_national: isNational,
+          p_institution: newInstitution,
+        });
         if (error) throw error;
         toast({ title: "Added", description: "Holiday added successfully" });
       }
@@ -162,12 +164,12 @@ export function HolidayManager() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (holiday: Holiday) => {
     try {
-      const { error } = await supabase
-        .from("holidays")
-        .delete()
-        .eq("id", id);
+      const { error } = await supabase.rpc("delete_holiday", {
+        p_date: holiday.date,
+        p_institution: holiday.institution_name,
+      });
 
       if (error) throw error;
       toast({ title: "Deleted", description: "Holiday removed successfully" });
