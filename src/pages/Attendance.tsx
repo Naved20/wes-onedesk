@@ -135,8 +135,8 @@ export default function Attendance() {
         })));
       }
 
-      // For managers and admins, fetch employee names and institutions
-      if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
+      // Fetch employee names and institutions for ALL users (not just admin/manager)
+      if (attendanceData && attendanceData.length > 0) {
         const userIds = [...new Set(attendanceData.map(a => a.user_id))];
         const { data: profiles } = await supabase
           .from("employee_profiles")
