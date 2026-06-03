@@ -199,37 +199,21 @@ export default function Attendance() {
 
   const fetchHolidays = async () => {
     try {
-      // Fetch holidays from the holidays table to get names
-      const { data: holidaysData, error: holidaysError } = await supabase
-        .from("holidays")
+      const { data, error } = await supabase
+        .from("holidays_view")
         .select("date, name")
         .order("date");
 
-      if (holidaysError) {
-        console.warn("Error fetching from holidays table:", holidaysError);
-        // Fallback: fetch from attendance table
-        const { data: attendanceData } = await supabase
-          .from("attendance")
-          .select("date")
-          .eq("status", "holiday")
-          .order("date");
-        
-        const uniqueDates = new Set(attendanceData?.map(d => d.date) || []);
-        const holidays: Holiday[] = Array.from(uniqueDates).map(date => ({
-          date: date as string,
-          name: "Holiday"
-        }));
-        
-        setHolidays(holidays);
-        return;
-      }
+      if (error) throw error;
 
-      // Transform holidays table data to Holiday format
-      const holidays: Holiday[] = (holidaysData || []).map(h => ({
-        date: h.date,
-        name: h.name
-      }));
-      
+      const seen = new Set<string>();
+      const holidays: Holiday[] = [];
+      (data || []).forEach((h: any) => {
+        if (!h?.date || seen.has(h.date)) return;
+        seen.add(h.date);
+        holidays.push({ date: h.date, name: h.name || "Holiday" });
+      });
+
       setHolidays(holidays);
     } catch (error) {
       console.error("Error fetching holidays:", error);
