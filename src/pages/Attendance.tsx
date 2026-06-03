@@ -119,24 +119,37 @@ export default function Attendance() {
         .from("attendance")
         .select("*")
         .gte("date", format(yearStart, "yyyy-MM-dd"))
+        .neq("status", "holiday")  // EXCLUDE holiday records - they're fetched separately
         .order("date", { ascending: false });
 
       if (error) throw error;
 
-      console.log("Fetched attendance data:", attendanceData?.slice(0, 3)); // Log first 3 records
+      console.log("📊 Fetched attendance data (excluding holidays):");
+      console.log("  Total records:", attendanceData?.length || 0);
+      console.log("  Year filter:", format(yearStart, "yyyy-MM-dd"));
       
-      // Debug: Log calculated_status values
       if (attendanceData && attendanceData.length > 0) {
-        console.log("Sample record statuses:", attendanceData.slice(0, 3).map((r: any) => ({
-          id: r.id,
-          status: r.status,
-          calculated_status: r.calculated_status,
-          is_late: r.is_late
-        })));
+        console.log("  First 3 records:", attendanceData.slice(0, 3));
+        
+        // Count by status
+        const statusCounts = attendanceData.reduce((acc: any, r: any) => {
+          acc[r.status] = (acc[r.status] || 0) + 1;
+          return acc;
+        }, {});
+        console.log("  Status breakdown:", statusCounts);
+        
+        // Show date range
+        const dates = attendanceData.map((r: any) => r.date).sort();
+        console.log("  Date range:", dates[0], "to", dates[dates.length - 1]);
+      } else {
+        console.warn("⚠️ No attendance records found! Check if:");
+        console.warn("  1. Employees have checked in");
+        console.warn("  2. Year filter is correct:", format(yearStart, "yyyy-MM-dd"));
+        console.warn("  3. All records might have status='holiday'");
       }
 
-      // Fetch employee names and institutions for ALL users (not just admin/manager)
-      if (attendanceData && attendanceData.length > 0) {
+      // For managers and admins, fetch employee names and institutions
+      if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
         const userIds = [...new Set(attendanceData.map(a => a.user_id))];
         const { data: profiles } = await supabase
           .from("employee_profiles")
@@ -198,25 +211,99 @@ export default function Attendance() {
   };
 
   const fetchHolidays = async () => {
+    console.log("🔍 Fetching holidays...");
     try {
-      const { data, error } = await supabase
+      // METHOD 1: Try holidays_view first (recommended after merge)
+      const { data: viewData, error: viewError } = await supabase
         .from("holidays_view")
+        .select("date, name")  // ← FIXED: column is 'name', not 'holiday_name'
+        .order("date");
+
+      console.log("holidays_view attempt:", { 
+        success: !viewError, 
+        recordCount: viewData?.length || 0,
+        error: viewError?.message 
+      });
+
+      if (!viewError && viewData && viewData.length > 0) {
+        console.log("✅ Using holidays_view for holiday data");
+        console.log("Sample holidays:", viewData.slice(0, 3));
+        
+        const holidays: Holiday[] = viewData.map((h: any) => ({
+          date: h.date,
+          name: h.name || "Holiday"  // ← FIXED: use 'name' field
+        }));
+        
+        setHolidays(holidays);
+        console.log("Total holidays set:", holidays.length);
+        return;
+      }
+
+      // METHOD 2: Try old holidays table
+      const { data: holidaysData, error: holidaysError } = await supabase
+        .from("holidays")
         .select("date, name")
         .order("date");
 
-      if (error) throw error;
-
-      const seen = new Set<string>();
-      const holidays: Holiday[] = [];
-      (data || []).forEach((h: any) => {
-        if (!h?.date || seen.has(h.date)) return;
-        seen.add(h.date);
-        holidays.push({ date: h.date, name: h.name || "Holiday" });
+      console.log("holidays table attempt:", { 
+        success: !holidaysError, 
+        recordCount: holidaysData?.length || 0,
+        error: holidaysError?.message 
       });
 
-      setHolidays(holidays);
+      if (!holidaysError && holidaysData) {
+        console.log("✅ Using holidays table for holiday data");
+        console.log("Sample holidays:", holidaysData.slice(0, 3));
+        
+        const holidays: Holiday[] = holidaysData.map(h => ({
+          date: h.date,
+          name: h.name
+        }));
+        
+        setHolidays(holidays);
+        console.log("Total holidays set:", holidays.length);
+        return;
+      }
+
+      // METHOD 3: Fallback to attendance table with status='holiday'
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from("attendance")
+        .select("date, holiday_name")
+        .eq("status", "holiday")
+        .order("date");
+
+      console.log("attendance (status=holiday) attempt:", { 
+        success: !attendanceError, 
+        recordCount: attendanceData?.length || 0,
+        error: attendanceError?.message 
+      });
+
+      if (attendanceData && attendanceData.length > 0) {
+        console.log("✅ Using attendance table for holiday data");
+        
+        // Get unique holidays by date
+        const uniqueHolidaysMap = new Map<string, string>();
+        attendanceData.forEach((h: any) => {
+          if (!uniqueHolidaysMap.has(h.date)) {
+            uniqueHolidaysMap.set(h.date, h.holiday_name || "Holiday");
+          }
+        });
+
+        const holidays: Holiday[] = Array.from(uniqueHolidaysMap.entries()).map(([date, name]) => ({
+          date,
+          name
+        }));
+        
+        console.log("Sample holidays:", holidays.slice(0, 3));
+        setHolidays(holidays);
+        console.log("Total holidays set:", holidays.length);
+        return;
+      }
+
+      console.warn("⚠️ No holidays found in any table/view");
+      setHolidays([]);
     } catch (error) {
-      console.error("Error fetching holidays:", error);
+      console.error("❌ Error fetching holidays:", error);
       setHolidays([]);
     }
   };
@@ -483,28 +570,67 @@ export default function Attendance() {
   const monthRecords = useMemo(() => {
     let filtered = attendanceRecords;
 
+    console.log("Total attendance records:", attendanceRecords.length);
+    
+    if (attendanceRecords.length > 0) {
+      const firstRecord = attendanceRecords[0];
+      console.log("FIRST RECORD FULL:", firstRecord);
+      console.log("First record date:", firstRecord.date, "Type:", typeof firstRecord.date);
+    }
+    
+    console.log("Sample records:", attendanceRecords.slice(0, 5).map(r => ({
+      date: r.date,
+      dateType: typeof r.date,
+      status: r.status,
+      calculated_status: r.calculated_status,
+      employee: r.employee_name,
+      check_in: r.check_in_time
+    })));
+    console.log("Selected month:", selectedMonth);
+    console.log("Month start:", startOfMonth(selectedMonth));
+    console.log("Month end:", endOfMonth(selectedMonth));
+
     // If a specific date is selected, show only that date's records
     if (selectedDate) {
+      const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+      console.log("Filtering by specific date:", selectedDateStr);
       filtered = filtered.filter(record => {
-        const recordDate = new Date(record.date);
-        return isSameDay(recordDate, selectedDate);
+        const matches = record.date === selectedDateStr;
+        if (!matches && Math.random() < 0.01) { // Log 1% of mismatches
+          console.log("Date mismatch:", record.date, "!==", selectedDateStr);
+        }
+        return matches;
       });
     } else {
       // Otherwise show all records for the current month
       const monthStart = startOfMonth(selectedMonth);
       const monthEnd = endOfMonth(selectedMonth);
+      const monthStartStr = format(monthStart, "yyyy-MM-dd");
+      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
+      
+      console.log("Filtering by month range:", monthStartStr, "to", monthEndStr);
+      console.log("First 3 record dates:", attendanceRecords.slice(0, 3).map(r => r.date));
       
       filtered = filtered.filter(record => {
-        const recordDate = new Date(record.date);
-        return recordDate >= monthStart && recordDate <= monthEnd;
+        const matches = record.date >= monthStartStr && record.date <= monthEndStr;
+        if (!matches && Math.random() < 0.01) { // Log 1% of mismatches
+          console.log("Range mismatch:", record.date, "not in range", monthStartStr, "to", monthEndStr);
+        }
+        return matches;
       });
     }
+
+    console.log("After date filter:", filtered.length);
+
+    // Note: Holiday records are already excluded in the fetchAttendance query
+    // No need to filter them here again
 
     // Apply institution filter
     if (selectedInstitution !== "all") {
       filtered = filtered.filter(record => 
         record.institution === selectedInstitution
       );
+      console.log("After institution filter:", filtered.length);
     }
 
     // Check if target date is a holiday (now includes Sundays from database)
@@ -517,6 +643,8 @@ export default function Attendance() {
       const targetDate = selectedDate || new Date();
       const targetDateStr = format(targetDate, "yyyy-MM-dd");
       const isHoliday = isTargetDateHoliday(targetDateStr);
+      
+      console.log("Status filter active:", selectedStatusFilter);
       
       if (selectedStatusFilter === "present") {
         filtered = filtered.filter(record => {
@@ -556,8 +684,11 @@ export default function Attendance() {
         
         filtered = filtered.filter(record => record.date === targetDateStr);
       }
+      
+      console.log("After status filter:", filtered.length);
     }
 
+    console.log("Final filtered records:", filtered.length);
     return filtered;
   }, [attendanceRecords, selectedMonth, selectedDate, selectedInstitution, selectedStatusFilter, holidays]);
 
