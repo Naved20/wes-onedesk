@@ -388,7 +388,7 @@ export function HolidayManager() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
-                                  onClick={() => handleDelete(holiday.id)}
+                                  onClick={() => handleDelete(holiday)}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
