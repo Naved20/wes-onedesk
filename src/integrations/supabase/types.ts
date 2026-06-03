@@ -188,10 +188,14 @@ export type Database = {
           created_at: string
           date: string
           half_day_type: string | null
+          holiday_description: string | null
+          holiday_name: string | null
           id: string
+          institution_name: string | null
           is_half_day: boolean | null
           is_late: boolean | null
           is_manual_override: boolean | null
+          is_national: boolean | null
           modified_at: string | null
           modified_by: string | null
           notes: string | null
@@ -213,10 +217,14 @@ export type Database = {
           created_at?: string
           date: string
           half_day_type?: string | null
+          holiday_description?: string | null
+          holiday_name?: string | null
           id?: string
+          institution_name?: string | null
           is_half_day?: boolean | null
           is_late?: boolean | null
           is_manual_override?: boolean | null
+          is_national?: boolean | null
           modified_at?: string | null
           modified_by?: string | null
           notes?: string | null
@@ -238,10 +246,14 @@ export type Database = {
           created_at?: string
           date?: string
           half_day_type?: string | null
+          holiday_description?: string | null
+          holiday_name?: string | null
           id?: string
+          institution_name?: string | null
           is_half_day?: boolean | null
           is_late?: boolean | null
           is_manual_override?: boolean | null
+          is_national?: boolean | null
           modified_at?: string | null
           modified_by?: string | null
           notes?: string | null
@@ -1024,36 +1036,6 @@ export type Database = {
           photo_url?: string | null
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      holidays: {
-        Row: {
-          created_at: string
-          date: string
-          description: string | null
-          id: string
-          institution_name: string | null
-          is_national: boolean | null
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          date: string
-          description?: string | null
-          id?: string
-          institution_name?: string | null
-          is_national?: boolean | null
-          name: string
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          description?: string | null
-          id?: string
-          institution_name?: string | null
-          is_national?: boolean | null
-          name?: string
         }
         Relationships: []
       }
@@ -2512,6 +2494,17 @@ export type Database = {
       }
     }
     Views: {
+      holidays_view: {
+        Row: {
+          date: string | null
+          description: string | null
+          id: string | null
+          institution_name: string | null
+          is_national: boolean | null
+          name: string | null
+        }
+        Relationships: []
+      }
       payroll_register_view: {
         Row: {
           approved_at: string | null
@@ -2557,6 +2550,16 @@ export type Database = {
       }
     }
     Functions: {
+      add_holiday: {
+        Args: {
+          p_date: string
+          p_description?: string
+          p_institution?: string
+          p_is_national?: boolean
+          p_name: string
+        }
+        Returns: undefined
+      }
       calculate_attendance_stats: {
         Args: { p_month: number; p_user_id: string; p_year: number }
         Returns: Json
@@ -2651,6 +2654,10 @@ export type Database = {
           date: string
           records_created: number
         }[]
+      }
+      delete_holiday: {
+        Args: { p_date: string; p_institution?: string }
+        Returns: undefined
       }
       generate_monthly_salaries: {
         Args: { p_month: number; p_year: number }
@@ -2760,6 +2767,18 @@ export type Database = {
           message: string
           records_created: number
         }[]
+      }
+      update_holiday: {
+        Args: {
+          p_new_date: string
+          p_new_description: string
+          p_new_institution: string
+          p_new_is_national: boolean
+          p_new_name: string
+          p_old_date: string
+          p_old_institution: string
+        }
+        Returns: undefined
       }
       update_user_email_and_profile: {
         Args: { p_new_email: string; p_user_id: string }
