@@ -341,7 +341,7 @@ export default function Documents() {
               <DialogTrigger asChild>
                 <Button onClick={() => {
                   setEditingDocument(null);
-                  setFormData({ title: "", description: "" });
+                  setFormData({ title: "", description: "", document_type: "Policy Documents", document_link: "", custom_type: "" });
                   setOpen(true);
                 }}>
                   <Plus className="mr-2 h-4 w-4" />

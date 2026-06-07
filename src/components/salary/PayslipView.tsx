@@ -212,7 +212,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
       if (salaryError) throw salaryError;
 
       if (salaryData) {
-        setSalary(salaryData as SalaryDetail);
+        setSalary(salaryData as unknown as SalaryDetail);
       } else {
         setSalary(null);
       }
