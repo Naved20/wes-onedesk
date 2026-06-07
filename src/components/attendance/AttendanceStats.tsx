@@ -53,6 +53,8 @@ interface Stats {
   total_days_in_month?: number; // Added for payroll days (total days in month)
 }
 
+type SummaryStatus = "present" | "late" | "half_day" | "paid_leave" | "leave" | "absent" | "holiday" | "pending";
+
 export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [], compactView = false }: AttendanceStatsProps) {
   const [rpcStats, setRpcStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     return attendanceRecords.filter((record) => record.user_id === userId && record.date.startsWith(monthPrefix));
   }, [attendanceRecords, userId, year, month]);
 
-  const getRecordSummaryStatus = (record: Attendance) => {
+  const getRecordSummaryStatus = (record: Attendance): SummaryStatus => {
     const calculatedStatus = record.calculated_status?.toLowerCase();
 
     if (record.status === "rejected" || calculatedStatus === "absent") return "absent";
@@ -195,6 +197,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
       </div>
     );
   }
+
+  const stats = attendanceRecords.length > 0 ? derivedStats : rpcStats;
 
   if (!stats) return null;
 
