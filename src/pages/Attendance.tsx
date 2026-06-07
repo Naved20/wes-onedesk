@@ -1552,26 +1552,18 @@ export default function Attendance() {
                                recordDate.getFullYear() === employeeDialogMonth.getFullYear();
                       });
 
-                    // Filter leaves for this month and employee
-                    const monthLeaves = leaves.filter(leave => {
-                      if (leave.user_id !== selectedEmployeeId) return false;
-                      const leaveStart = new Date(leave.start_date);
-                      const leaveEnd = new Date(leave.end_date);
-                      const monthStart = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), 1);
-                      const monthEnd = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth() + 1, 0);
-                      
-                      // Check if leave overlaps with this month
-                      return (leaveStart <= monthEnd && leaveEnd >= monthStart);
-                    });
+                    // Single source of truth: attendance table only.
+                    // Approved leaves are auto-synced into attendance via DB trigger,
+                    // so we no longer overlay the leaves table on the calendar.
 
-                    // Show calendar if there are either attendance records OR leaves
-                    if (monthRecords.length === 0 && monthLeaves.length === 0) {
+                    if (monthRecords.length === 0) {
                       return (
                         <p className="text-center text-muted-foreground py-8">
-                          No attendance records or leaves for this month
+                          No attendance records for this month
                         </p>
                       );
                     }
+
 
                     // Create a map of date -> record for quick lookup
                     const recordMap = new Map(monthRecords.map(r => [r.date, r]));
@@ -1618,13 +1610,11 @@ export default function Attendance() {
                             // Check if it's a holiday
                             const isHoliday = holidays.some(h => h.date === dateStr);
 
-                            // Check if there's an approved leave for this date
-                            const leaveOnDate = leaves.find(leave => {
-                              if (leave.user_id !== selectedEmployeeId) return false;
-                              const leaveStart = new Date(leave.start_date);
-                              const leaveEnd = new Date(leave.end_date);
-                              return currentDate >= leaveStart && currentDate <= leaveEnd;
-                            });
+                            // NOTE: leaves overlay removed — attendance table is the
+                            // single source of truth. Approved leaves are auto-synced
+                            // into attendance by DB trigger sync_leave_to_attendance.
+
+
 
                             // Determine display info
                             let displayInfo = '';
@@ -1693,23 +1683,8 @@ export default function Attendance() {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }
                             }
-                            // Priority 3: If there's an approved leave
-                            else if (leaveOnDate) {
-                              const leaveType = leaveOnDate.leave_type;
-                              if (leaveType === 'casual' || leaveType === 'emergency') {
-                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
-                                statusTag = 'CL';
-                              } else if (leaveType === 'sick') {
-                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
-                                statusTag = 'SL';
-                              } else if (leaveType === 'unplanned') {
-                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                                statusTag = 'UL';
-                              } else {
-                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
-                                statusTag = 'LE';
-                              }
-                            }
+                            // (Leaves overlay removed — attendance is the single source of truth.)
+
                             // Priority 4: If it's a Sunday (weekend) with no attendance
                             else if (isSunday) {
                               displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
