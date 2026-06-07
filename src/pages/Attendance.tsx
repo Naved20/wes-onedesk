@@ -1610,13 +1610,11 @@ export default function Attendance() {
                             // Check if it's a holiday
                             const isHoliday = holidays.some(h => h.date === dateStr);
 
-                            // Check if there's an approved leave for this date
-                            const leaveOnDate = leaves.find(leave => {
-                              if (leave.user_id !== selectedEmployeeId) return false;
-                              const leaveStart = new Date(leave.start_date);
-                              const leaveEnd = new Date(leave.end_date);
-                              return currentDate >= leaveStart && currentDate <= leaveEnd;
-                            });
+                            // NOTE: leaves overlay removed — attendance table is the
+                            // single source of truth. Approved leaves are auto-synced
+                            // into attendance by DB trigger sync_leave_to_attendance.
+
+
 
                             // Determine display info
                             let displayInfo = '';
