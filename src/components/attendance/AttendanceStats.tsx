@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,9 +54,62 @@ interface Stats {
 }
 
 export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [], compactView = false }: AttendanceStatsProps) {
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [rpcStats, setRpcStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
+
+  const monthAttendanceRecords = useMemo(() => {
+    const monthPrefix = `${year}-${String(month).padStart(2, "0")}-`;
+    return attendanceRecords.filter((record) => record.user_id === userId && record.date.startsWith(monthPrefix));
+  }, [attendanceRecords, userId, year, month]);
+
+  const getRecordSummaryStatus = (record: Attendance) => {
+    const calculatedStatus = record.calculated_status?.toLowerCase();
+
+    if (record.status === "rejected" || calculatedStatus === "absent") return "absent";
+    if (calculatedStatus === "paid_leave") return "paid_leave";
+    if (calculatedStatus === "leave") return "leave";
+    if (calculatedStatus === "holiday") return "holiday";
+    if (calculatedStatus === "half_day" || record.is_half_day) return "half_day";
+    if (record.is_late || calculatedStatus === "late") return "late";
+    if (record.check_in_time || calculatedStatus === "present" || record.status === "approved") return "present";
+
+    return "pending";
+  };
+
+  const derivedStats = useMemo<Stats>(() => {
+    const totalDaysInMonth = new Date(year, month, 0).getDate();
+    const counts = monthAttendanceRecords.reduce(
+      (acc, record) => {
+        const summaryStatus = getRecordSummaryStatus(record);
+        acc[summaryStatus] += 1;
+        if (record.status === "pending") acc.pending += 1;
+        if (record.status === "rejected") acc.rejected += 1;
+        return acc;
+      },
+      { present: 0, late: 0, half_day: 0, paid_leave: 0, leave: 0, absent: 0, holiday: 0, pending: 0, rejected: 0 }
+    );
+
+    const effectivePresent = counts.present + counts.late + counts.paid_leave + (counts.half_day * 0.5);
+    const countedDays = counts.present + counts.late + counts.half_day + counts.paid_leave + counts.leave + counts.absent;
+
+    return {
+      working_days: totalDaysInMonth,
+      present_days: counts.present,
+      half_days: counts.half_day,
+      late_days: counts.late,
+      pending_days: counts.pending,
+      rejected_days: counts.rejected,
+      casual_leaves: counts.paid_leave,
+      sick_leaves: counts.leave,
+      unplanned_leaves: 0,
+      absent_days: counts.absent,
+      effective_present: effectivePresent,
+      attendance_percentage: countedDays > 0 ? Math.min((effectivePresent / countedDays) * 100, 100) : 0,
+      present_on_time: counts.present,
+      total_days_in_month: totalDaysInMonth,
+    };
+  }, [monthAttendanceRecords, year, month]);
 
   useEffect(() => {
     fetchStats();
@@ -108,7 +161,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
       // Calculate total days in month
       const totalDaysInMonth = new Date(year, month, 0).getDate();
       
-      setStats({
+      setRpcStats({
         ...(data as unknown as Stats),
         total_days_in_month: totalDaysInMonth
       });
