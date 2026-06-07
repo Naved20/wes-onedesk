@@ -1039,6 +1039,36 @@ export type Database = {
         }
         Relationships: []
       }
+      holidays: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string | null
+          id: string
+          institution_name: string | null
+          is_national: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description?: string | null
+          id?: string
+          institution_name?: string | null
+          is_national?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+          institution_name?: string | null
+          is_national?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
       individual_peer_reviewers: {
         Row: {
           assigned_at: string | null
@@ -2757,6 +2787,16 @@ export type Database = {
           p_title: string
           p_type: string
           p_user_id: string
+        }
+        Returns: undefined
+      }
+      sync_holiday_to_attendance: {
+        Args: {
+          p_date: string
+          p_description: string
+          p_institution: string
+          p_is_national: boolean
+          p_name: string
         }
         Returns: undefined
       }
