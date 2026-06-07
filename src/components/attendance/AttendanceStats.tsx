@@ -97,7 +97,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
 
     return {
       working_days: totalDaysInMonth,
-      present_days: counts.present,
+      // Count late days as present as well
+      present_days: counts.present + counts.late,
       half_days: counts.half_day,
       late_days: counts.late,
       pending_days: counts.pending,
@@ -239,7 +240,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
   
   const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
   const lateSets = Math.floor(stats.late_days / 3);
-  const paidDayUnits = stats.present_days + stats.late_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
+  // Since late days are already included in `present_days`, don't add `late_days` again
+  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
 
   // COMPACT VIEW - Like salary edit dialog
   if (compactView) {
