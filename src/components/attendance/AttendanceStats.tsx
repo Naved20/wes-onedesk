@@ -239,7 +239,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
   
   const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
   const lateSets = Math.floor(stats.late_days / 3);
-  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
+  const paidDayUnits = stats.present_days + stats.late_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
 
   // COMPACT VIEW - Like salary edit dialog
   if (compactView) {
@@ -306,7 +306,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1 text-right">
-            PR ({stats.present_days}) + HO ({holidayCount}) + HD ({(stats.half_days * 0.5).toFixed(1)}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + AB ({stats.absent_days}))
+            PR ({stats.present_days}) + LD ({stats.late_days}) + HO ({holidayCount}) + HD ({(stats.half_days * 0.5).toFixed(1)}) + PL ({stats.casual_leaves}) - (Late Sets ({lateSets}) + AB ({stats.absent_days}))
           </p>
         </div>
       </div>
