@@ -1552,26 +1552,18 @@ export default function Attendance() {
                                recordDate.getFullYear() === employeeDialogMonth.getFullYear();
                       });
 
-                    // Filter leaves for this month and employee
-                    const monthLeaves = leaves.filter(leave => {
-                      if (leave.user_id !== selectedEmployeeId) return false;
-                      const leaveStart = new Date(leave.start_date);
-                      const leaveEnd = new Date(leave.end_date);
-                      const monthStart = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), 1);
-                      const monthEnd = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth() + 1, 0);
-                      
-                      // Check if leave overlaps with this month
-                      return (leaveStart <= monthEnd && leaveEnd >= monthStart);
-                    });
+                    // Single source of truth: attendance table only.
+                    // Approved leaves are auto-synced into attendance via DB trigger,
+                    // so we no longer overlay the leaves table on the calendar.
 
-                    // Show calendar if there are either attendance records OR leaves
-                    if (monthRecords.length === 0 && monthLeaves.length === 0) {
+                    if (monthRecords.length === 0) {
                       return (
                         <p className="text-center text-muted-foreground py-8">
-                          No attendance records or leaves for this month
+                          No attendance records for this month
                         </p>
                       );
                     }
+
 
                     // Create a map of date -> record for quick lookup
                     const recordMap = new Map(monthRecords.map(r => [r.date, r]));
