@@ -308,9 +308,9 @@ export default function Salaries() {
         other_allowance_percentage: parseFloat(formData.other_allowance_percentage),
         epf_applicable: formData.epf_applicable,
         esic_applicable: formData.esic_applicable,
-        epf_employee_rate: parseFloat(formData.epf_percentage),
-        epf_employer_rate: parseFloat(formData.epf_percentage),
-        esic_employee_rate: parseFloat(formData.esic_percentage),
+        epf_employee_rate: parseFloat(formData.pf_deduction_percentage),
+        epf_employer_rate: parseFloat(formData.pf_deduction_percentage),
+        esic_employee_rate: parseFloat(formData.esic_employee_rate),
         esic_employer_rate: 3.25, // Fixed employer rate
         bank_account_number: formData.bank_account_number || null,
         pf_uan_number: formData.pf_uan_number || null,

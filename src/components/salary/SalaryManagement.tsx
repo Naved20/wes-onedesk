@@ -497,7 +497,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .eq("is_active", true)
         .order("display_order");
       
-      setEarningTypes(data || []);
+      setEarningTypes((data as any) || []);
     };
     
     fetchEarningTypes();
@@ -569,7 +569,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         };
       });
 
-      setSalaryRecords(recordsWithNames);
+      setSalaryRecords(recordsWithNames as unknown as SalaryRecord[]);
     } catch (error) {
       console.error("Error fetching salary data:", error);
       toast({

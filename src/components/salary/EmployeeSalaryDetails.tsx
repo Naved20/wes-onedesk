@@ -103,7 +103,7 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
       if (error) throw error;
 
       if (data) {
-        setSalary(data as SalaryDetail);
+        setSalary(data as unknown as SalaryDetail);
       } else {
         setSalary(null);
         toast({

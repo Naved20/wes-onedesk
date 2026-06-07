@@ -312,13 +312,14 @@ export default function Employees() {
           throw new Error(`Email update failed: ${emailUpdateError.message}`);
         }
         
-        if (emailUpdateData && !emailUpdateData.success) {
+        const emailResult = emailUpdateData as any;
+        if (emailResult && !emailResult.success) {
           toast({
             title: "Email Update Failed",
-            description: emailUpdateData.error || "Failed to update email",
+            description: emailResult.error || "Failed to update email",
             variant: "destructive",
           });
-          throw new Error(emailUpdateData.error);
+          throw new Error(emailResult.error);
         }
         
         console.log("Email updated successfully:", emailUpdateData);

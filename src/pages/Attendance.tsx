@@ -804,7 +804,7 @@ export default function Attendance() {
             userId={user.id} 
             year={currentYear} 
             month={currentMonth}
-            attendanceRecords={attendanceRecords}
+            attendanceRecords={attendanceRecords as any}
             holidays={holidays}
             compactView={true}
           />
@@ -1125,7 +1125,7 @@ export default function Attendance() {
 
             <TabsContent value="pending">
               <BulkAttendanceApproval
-                records={pendingRecords}
+                records={pendingRecords as any}
                 onUpdate={fetchAttendance}
                 userId={user?.id || ""}
               />
