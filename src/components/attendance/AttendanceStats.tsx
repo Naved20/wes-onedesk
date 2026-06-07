@@ -289,7 +289,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
             <p className="font-semibold text-lg text-pink-600">{stats.sick_leaves}</p>
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Late Days (LD)</Label>
+            <Label className="text-xs text-muted-foreground">Late Days (LT)</Label>
             <p className="font-semibold text-lg text-yellow-700">{stats.late_days}</p>
           </div>
           <div>

@@ -798,6 +798,68 @@ export default function Attendance() {
           <p className="text-muted-foreground">Track and manage attendance records</p>
         </div>
 
+        {/* Month/Year Selector - For all users */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex gap-3 w-full md:w-auto">
+              <div className="flex-1 md:flex-none">
+                <Label className="text-xs text-muted-foreground mb-1 block">Month</Label>
+                <Select 
+                  value={String(currentMonth)} 
+                  onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      { value: 1, label: 'January' },
+                      { value: 2, label: 'February' },
+                      { value: 3, label: 'March' },
+                      { value: 4, label: 'April' },
+                      { value: 5, label: 'May' },
+                      { value: 6, label: 'June' },
+                      { value: 7, label: 'July' },
+                      { value: 8, label: 'August' },
+                      { value: 9, label: 'September' },
+                      { value: 10, label: 'October' },
+                      { value: 11, label: 'November' },
+                      { value: 12, label: 'December' },
+                    ].map((month) => (
+                      <SelectItem key={month.value} value={String(month.value)}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex-1 md:flex-none">
+                <Label className="text-xs text-muted-foreground mb-1 block">Year</Label>
+                <Select 
+                  value={String(currentYear)} 
+                  onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      new Date().getFullYear() - 1,
+                      new Date().getFullYear(),
+                      new Date().getFullYear() + 1,
+                    ].map((year) => (
+                      <SelectItem key={year} value={String(year)}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Attendance Stats - Show for employee viewing their own stats */}
         {user && role === "employee" && (
           <AttendanceStats 
@@ -1196,252 +1258,144 @@ export default function Attendance() {
           </Tabs>
           </>
         ) : (
-          /* Employee View - Calendar and Records */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5" />
-                  My Attendance
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  month={selectedMonth}
-                  onMonthChange={setSelectedMonth}
-                  modifiers={{
-                    holiday: (date) => calendarModifiers.holiday.some(d => isSameDay(d, date)) || isSunday(date),
-                  }}
-                  modifiersStyles={modifiersStyles}
-                  className="pointer-events-auto"
-                />
-                <div className="mt-4 space-y-2">
-                  {selectedDate && (
-                    <div className="flex items-center justify-between p-2 bg-primary/10 rounded-lg">
-                      <span className="text-sm font-medium">
-                        Showing: {format(selectedDate, "MMM dd, yyyy")}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedDate(undefined)}
-                        className="h-7 text-xs"
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "hsl(var(--chart-5))" }} />
-                      <span>Holiday</span>
-                    </div>
-                  </div>
+          /* Employee View - Calendar Grid */
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                Attendance Records
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>My Attendance Records</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Day headers */}
+                  <div className="grid grid-cols-7 gap-2 mb-2">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="text-center font-semibold text-sm text-muted-foreground p-2">
+                        {day}
+                      </div>
+                    ))}
                   </div>
-                ) : searchFilteredRecords.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    {employeeSearchQuery ? "No employees match your search" : "No attendance records for this month"}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16">S.No.</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Check-in Time</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Details</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {searchFilteredRecords.map((record, index) => {
-                          // If half day, show HD as main status
-                          if (record.is_half_day) {
-                            return (
-                              <TableRow 
-                                key={record.id}
-                                className="cursor-pointer hover:bg-muted/50 transition-colors"
-                                onClick={() => {
-                                  setSelectedAttendance(record);
-                                  setApprovalDialogOpen(true);
-                                }}
-                              >
-                                <TableCell className="font-medium text-muted-foreground">
-                                  {index + 1}
-                                </TableCell>
-                                <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
-                                <TableCell>
-                                  {record.check_in_time
-                                    ? format(new Date(record.check_in_time), "hh:mm a")
-                                    : "-"}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary" className="font-mono">
-                                    HD
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex gap-1 flex-wrap">
-                                    {record.is_late && (
-                                      <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
-                                        LT
-                                      </Badge>
-                                    )}
-                                    {record.status === "pending" && (
-                                      <Badge variant="outline" className="text-xs">Pending</Badge>
-                                    )}
-                                    {record.status === "approved" && (
-                                      <Badge className="bg-green-500 text-xs">Approved</Badge>
-                                    )}
-                                    {record.status === "rejected" && (
-                                      <Badge variant="destructive" className="text-xs">Rejected</Badge>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          }
+                  
+                  {/* Calendar grid */}
+                  <div className="grid grid-cols-7 gap-2">
+                    {(() => {
+                      const monthRecords = attendanceRecords.filter(r => {
+                        if (r.user_id !== user?.id) return false;
+                        const recordDate = new Date(r.date);
+                        return recordDate.getMonth() === currentMonth - 1 &&
+                               recordDate.getFullYear() === currentYear;
+                      });
 
-                          // Regular attendance display
-                          const displayStatus = getAttendanceDisplayStatus(
-                            record.status,
-                            record.calculated_status,
-                            record.is_late
-                          );
-                          const statusBadge = getAttendanceStatusBadge(displayStatus, true);
+                      const recordMap = new Map(monthRecords.map(r => [r.date, r]));
+                      
+                      const firstDay = new Date(currentYear, currentMonth - 1, 1);
+                      const lastDay = new Date(currentYear, currentMonth, 0);
+                      const daysInMonth = lastDay.getDate();
+                      const startingDayOfWeek = firstDay.getDay();
+                      
+                      const days = [];
+                      for (let i = 0; i < startingDayOfWeek; i++) {
+                        days.push(null);
+                      }
+                      for (let i = 1; i <= daysInMonth; i++) {
+                        days.push(i);
+                      }
+
+                      return days.map((day, index) => {
+                        if (day === null) {
+                          return <div key={`empty-${index}`} className="aspect-square" />;
+                        }
+
+                        const currentDate = new Date(currentYear, currentMonth - 1, day);
+                        const dateStr = format(currentDate, "yyyy-MM-dd");
+                        const record = recordMap.get(dateStr);
+                        
+                        // Check if it's a holiday
+                        const isHoliday = holidays.some(h => h.date === dateStr);
+                        
+                        // Determine status and color
+                        let statusTag = '';
+                        let bgColor = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700';
+                        let textColor = 'text-slate-700 dark:text-slate-200';
+
+                        if (isHoliday && !record?.check_in_time) {
+                          statusTag = 'HO';
+                          bgColor = 'bg-purple-50 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-700';
+                          textColor = 'text-purple-700 dark:text-purple-300';
+                        } else if (record) {
+                          const calcStatus = record.calculated_status?.toLowerCase();
                           
-                          return (
-                            <TableRow 
-                              key={record.id}
-                              className="cursor-pointer hover:bg-muted/50 transition-colors"
-                              onClick={() => {
+                          if (calcStatus === 'paid_leave') {
+                            statusTag = 'PL';
+                            bgColor = 'bg-blue-50 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-700';
+                            textColor = 'text-blue-700 dark:text-blue-300';
+                          } else if (calcStatus === 'leave') {
+                            statusTag = 'LE';
+                            bgColor = 'bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-300 dark:border-cyan-700';
+                            textColor = 'text-cyan-700 dark:text-cyan-300';
+                          } else if (calcStatus === 'absent' || record.status === 'rejected') {
+                            statusTag = 'AB';
+                            bgColor = 'bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-700';
+                            textColor = 'text-red-700 dark:text-red-300';
+                          } else if (record.is_late || calcStatus === 'late') {
+                            statusTag = 'LT';
+                            bgColor = 'bg-orange-50 dark:bg-orange-950/30 border border-orange-300 dark:border-orange-700';
+                            textColor = 'text-orange-700 dark:text-orange-300';
+                          } else if (record.is_half_day || calcStatus === 'half_day') {
+                            statusTag = 'HD';
+                            bgColor = 'bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700';
+                            textColor = 'text-amber-700 dark:text-amber-300';
+                          } else if (record.check_in_time || calcStatus === 'present') {
+                            statusTag = 'PR';
+                            bgColor = 'bg-green-50 dark:bg-green-950/30 border border-green-300 dark:border-green-700';
+                            textColor = 'text-green-700 dark:text-green-300';
+                          }
+                        }
+
+                        const checkInTime = record?.check_in_time 
+                          ? format(new Date(record.check_in_time), "hh:mm a")
+                          : '';
+
+                        return (
+                          <button
+                            key={`${dateStr}-${index}`}
+                            onClick={() => {
+                              if (record) {
                                 setSelectedAttendance(record);
                                 setApprovalDialogOpen(true);
-                              }}
-                            >
-                              <TableCell className="font-medium text-muted-foreground">
-                                {index + 1}
-                              </TableCell>
-                              <TableCell>{format(new Date(record.date), "MMM dd, yyyy")}</TableCell>
-                              <TableCell>
-                                {record.check_in_time
-                                  ? format(new Date(record.check_in_time), "hh:mm a")
-                                  : "-"}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={statusBadge.variant} className="font-mono">
-                                  {statusBadge.label}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-1 flex-wrap">
-                                  {record.is_late && displayStatus === "present" && (
-                                    <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-700">
-                                      LT
-                                    </Badge>
-                                  )}
-                                  {record.status === "pending" && (
-                                    <Badge variant="outline" className="text-xs">Pending</Badge>
-                                  )}
-                                  {record.status === "approved" && (
-                                    <Badge className="bg-green-500 text-xs">Approved</Badge>
-                                  )}
-                                  {record.status === "rejected" && (
-                                    <Badge variant="destructive" className="text-xs">Rejected</Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                              }
+                            }}
+                            className={`aspect-square p-2 rounded-lg ${bgColor} ${textColor} hover:shadow-md transition-shadow cursor-pointer flex flex-col items-center justify-center text-center`}
+                          >
+                            <div className="font-semibold text-sm">{day}</div>
+                            {statusTag && (
+                              <>
+                                <div className="font-bold text-lg mt-1">{statusTag}</div>
+                                {checkInTime && (
+                                  <div className="text-xs opacity-75 mt-1">{checkInTime}</div>
+                                )}
+                              </>
+                            )}
+                          </button>
+                        );
+                      });
+                    })()}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
 
 
-                            {/* Month Summary - Top Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Summary Stats */}
-            <Card className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/50 dark:to-slate-800/50 border-slate-200 dark:border-slate-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">
-                  {format(selectedMonth, "MMM yyyy")} Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Total Days</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">31</p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Sundays</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                      {uniqueHolidaysInMonth.filter(h => h.name === 'Sunday').length}
-                    </p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Holidays</p>
-                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {uniqueHolidaysInMonth.length}
-                    </p>
-                  </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">Working Days</p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {31 - uniqueHolidaysInMonth.length}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Holidays List */}
-            {uniqueHolidaysInMonth.length > 0 && (
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base text-purple-900 dark:text-purple-100">
-                    Holidays in {format(selectedMonth, "MMM")}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                    {uniqueHolidaysInMonth.map(holiday => (
-                      <div key={holiday.date} className="flex justify-between items-center p-1.5 bg-white dark:bg-slate-800 rounded border border-purple-200 dark:border-purple-700 hover:shadow-sm transition-shadow">
-                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{holiday.name}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono ml-2 flex-shrink-0">{format(new Date(holiday.date), "MMM dd")}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-
-            
-          </div>
       </div>
 
       {/* Approval Dialog */}

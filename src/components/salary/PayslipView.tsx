@@ -411,14 +411,15 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   <p className="text-xs text-muted-foreground font-medium">Holidays (HO)</p>
                   <p className="font-semibold text-lg text-purple-600">{salary.holiday_count}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Late Days (LD)</p>
-                  <p className="font-semibold text-lg text-yellow-700">{salary.late_days}</p>
-                </div>
-                <div>
+                                <div>
                   <p className="text-xs text-muted-foreground font-medium">Leave (LE)</p>
                   <p className="font-semibold text-lg text-pink-600">{salary.sick_leaves}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Late Days (LT)</p>
+                  <p className="font-semibold text-lg text-yellow-700">{salary.late_days}</p>
+                </div>
+
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Late Sets (LS)</p>
                   <p className="font-semibold text-lg text-yellow-700">{Math.floor(salary.late_days / 3)}</p>

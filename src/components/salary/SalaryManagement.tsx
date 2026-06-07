@@ -814,7 +814,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       const payrollDays = new Date(year, month, 0).getDate();
       const lateSets = Math.floor(attendanceSummary.lateDays / 3);
       
-      // Calculate total paid days using NEW FORMULA (no 2x on AB, no LE)
+      // Use EXACT SAME FORMULA as AttendanceStats component for consistency
+      // totalPaidDays = PR + HO + (HD × 0.5) + PL - LS - AB
       const totalPaidDays = attendanceSummary.presentDays + 
                            attendanceSummary.holidayCount + 
                            (attendanceSummary.halfDays * 0.5) + 
@@ -1277,104 +1278,74 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     attendanceRecords: any[],
     holidays: any[] = []
   ) => {
-    // Use the same RPC as the Attendance page so numbers match exactly
-    const { data: statsData } = await supabase.rpc('calculate_attendance_stats', {
-      p_user_id: userId,
-      p_year: selectedYear,
-      p_month: selectedMonth,
-    });
-    const stats = (statsData as any) || {};
-
-    // Fetch holidays from BOTH sources
-    const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-    const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
-    
-    // Source 1: holidays_view (derived from attendance with status='holiday')
-    const { data: holidaysTableData } = await supabase
-      .from("holidays_view")
-      .select("date, name")
-      .gte("date", startDate)
-      .lte("date", endDate);
-    
-    // Source 2: Fetch from attendance table (where calculated_status = 'holiday')
-    const { data: holidaysFromAttendance } = await supabase
-      .from("attendance")
-      .select("date, status, calculated_status")
-      .gte("date", startDate)
-      .lte("date", endDate);
-    
-    // Filter for holiday records from attendance table
-    const holidayRecordsFromAttendance = (holidaysFromAttendance || []).filter(r => 
-      r.calculated_status?.toLowerCase() === 'holiday'
+    // Use EXACT SAME LOGIC as AttendanceStats.tsx for consistency
+    const monthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-`;
+    const monthRecords = attendanceRecords.filter(
+      record => record.user_id === userId && record.date.startsWith(monthPrefix)
     );
-    
-    // Combine holidays from both sources (remove duplicates)
-    const allHolidayDates = new Set<string>();
-    
-    // Add holidays from holidays table
-    (holidaysTableData || []).forEach(h => {
-      const dateStr = new Date(h.date).toISOString().split('T')[0];
-      allHolidayDates.add(dateStr);
-    });
-    
-    // Add holidays from attendance table
-    holidayRecordsFromAttendance.forEach(h => {
-      const dateStr = new Date(h.date).toISOString().split('T')[0];
-      allHolidayDates.add(dateStr);
-    });
-    
-    console.log("Fetched holidays from both sources:", {
-      startDate,
-      endDate,
-      fromHolidaysTable: holidaysTableData?.length || 0,
-      fromAttendanceTable: holidayRecordsFromAttendance.length,
-      totalUnique: allHolidayDates.size,
-      allHolidayDates: Array.from(allHolidayDates),
-    });
 
-    // Count holidays where employee actually worked (present/late/half_day/paid_leave)
-    const holidaysWorked = attendanceRecords.filter(r => {
-      if (r.user_id !== userId) return false;
-      if (new Date(r.date).getMonth() !== selectedMonth - 1) return false;
-      if (new Date(r.date).getFullYear() !== selectedYear) return false;
-      
+    // Helper function - same as AttendanceStats
+    const getRecordSummaryStatus = (record: any) => {
+      const calculatedStatus = record.calculated_status?.toLowerCase();
+      if (record.status === "rejected" || calculatedStatus === "absent") return "absent";
+      if (calculatedStatus === "paid_leave") return "paid_leave";
+      if (calculatedStatus === "leave") return "leave";
+      if (calculatedStatus === "holiday") return "holiday";
+      if (calculatedStatus === "half_day" || record.is_half_day) return "half_day";
+      if (record.is_late || calculatedStatus === "late") return "late";
+      if (record.check_in_time || calculatedStatus === "present" || record.status === "approved") return "present";
+      return "pending";
+    };
+
+    // Count records same way as AttendanceStats
+    const counts = monthRecords.reduce(
+      (acc, record) => {
+        const summaryStatus = getRecordSummaryStatus(record);
+        acc[summaryStatus] = (acc[summaryStatus] || 0) + 1;
+        return acc;
+      },
+      { present: 0, late: 0, half_day: 0, paid_leave: 0, leave: 0, absent: 0, holiday: 0, pending: 0 }
+    );
+
+    // Get holidays worked (same logic as AttendanceStats)
+    const holidaysWorked = monthRecords.filter(r => {
       const recordDate = new Date(r.date).toISOString().split('T')[0];
-      const isHolidayDate = allHolidayDates.has(recordDate);
+      const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
       const calcStatus = r.calculated_status?.toLowerCase();
       const isPresent =
-        calcStatus === 'present' ||
-        calcStatus === 'late' ||
-        calcStatus === 'half_day' ||
+        calcStatus === "present" ||
+        calcStatus === "late" ||
+        calcStatus === "half_day" ||
         r.is_half_day ||
         r.is_late ||
-        calcStatus === 'paid_leave';
-      
-      return isHolidayDate && isPresent && r.status !== 'rejected';
+        calcStatus === "paid_leave";
+      return isHolidayDate && isPresent && r.status !== "rejected";
     });
-    
+
     const uniqueHolidaysWorked = new Set(
       holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
     );
-    
-    // Holiday count = total holidays - holidays worked
-    const holidayCount = allHolidayDates.size - uniqueHolidaysWorked.size;
 
-    console.log("Holiday Calculation Debug:", {
-      totalHolidaysInMonth: allHolidayDates.size,
-      holidaysWorked: uniqueHolidaysWorked.size,
-      holidayCount,
-      holidaysList: Array.from(allHolidayDates),
-      attendanceRecordsCount: attendanceRecords.length,
-    });
+    const uniqueHolidaysInMonth = new Set(
+      holidays
+        .filter(h => {
+          const hDate = new Date(h.date);
+          return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+        })
+        .map(h => new Date(h.date).toISOString().split('T')[0])
+    );
+
+    const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
 
     return {
-      presentDays: Number(stats.present_days) || 0,
-      halfDays: Number(stats.half_days) || 0,
-      paidLeaveDays: Number(stats.casual_leaves) || 0,
-      sickLeaves: Number(stats.sick_leaves) || 0,
-      absentDays: Number(stats.absent_days) || 0,
-      lateDays: Number(stats.late_days) || 0,
-      holidayCount,
+      // Present now includes late days
+      presentDays: counts.present + counts.late,
+      halfDays: counts.half_day,
+      paidLeaveDays: counts.paid_leave,
+      sickLeaves: counts.leave,
+      absentDays: counts.absent,
+      lateDays: counts.late,
+      holidayCount: Math.max(0, holidayCount),
     };
   };
 
@@ -2528,19 +2499,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       <p className="font-semibold text-lg text-purple-600">{formData.holiday_count}</p>
                     )}
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Late Days (LD)</Label>
-                    {isAdmin && isAttendanceEditable ? (
-                      <Input
-                        type="number"
-                        value={formData.late_days}
-                        onChange={(e) => setFormData(p => ({ ...p, late_days: Number(e.target.value) }))}
-                        className="mt-1 font-semibold"
-                      />
-                    ) : (
-                      <p className="font-semibold text-lg text-yellow-700">{formData.late_days}</p>
-                    )}
-                  </div>
+
+
                               <div>
                     <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
                     {isAdmin && isAttendanceEditable ? (
@@ -2554,6 +2514,22 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       <p className="font-semibold text-lg text-pink-600">{formData.sick_leaves}</p>
                     )}
                   </div>
+
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Late Days (LT)</Label>
+                    {isAdmin && isAttendanceEditable ? (
+                      <Input
+                        type="number"
+                        value={formData.late_days}
+                        onChange={(e) => setFormData(p => ({ ...p, late_days: Number(e.target.value) }))}
+                        className="mt-1 font-semibold"
+                      />
+                    ) : (
+                      <p className="font-semibold text-lg text-yellow-700">{formData.late_days}</p>
+                    )}
+                  </div>
+
 
                                     <div>
                     <Label className="text-xs text-muted-foreground">Late Sets (LS)</Label>

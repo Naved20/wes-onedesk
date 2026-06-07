@@ -177,7 +177,9 @@ BEGIN
   WHERE user_id = p_user_id
     AND EXTRACT(YEAR FROM date) = p_year
     AND EXTRACT(MONTH FROM date) = p_month
-    AND is_late = true;
+    -- Only count late check-ins that are approved (so late only counts when the attendance is confirmed)
+    AND is_late = true
+    AND status = 'approved';
   
   -- Count pending attendance
   SELECT COALESCE(COUNT(*), 0)
@@ -234,11 +236,12 @@ BEGIN
     AND leave_type = 'unplanned';
   
   -- Calculate effective present days
-  -- Present (full) + Half days (0.5 each) + Casual leaves (100%) + Sick leaves (50%)
-  v_effective_present := v_present_days + (v_half_days * 0.5) + v_casual_leaves + (v_sick_leaves * 0.5);
+  -- Treat late days as counted towards present (they are approved check-ins)
+  -- Effective present = Present (full) + Late (full) + Half days (0.5 each) + Casual leaves (100%) + Sick leaves (50%)
+  v_effective_present := (v_present_days + v_late_days) + (v_half_days * 0.5) + v_casual_leaves + (v_sick_leaves * 0.5);
   
-  -- Calculate absent days
-  v_absent_days := GREATEST(0, v_working_days - v_present_days - (v_half_days * 0.5) - v_casual_leaves - v_sick_leaves - v_unplanned_leaves);
+  -- Calculate absent days (account for late days as present)
+  v_absent_days := GREATEST(0, v_working_days - (v_present_days + v_late_days) - (v_half_days * 0.5) - v_casual_leaves - v_sick_leaves - v_unplanned_leaves);
   
   -- Calculate attendance percentage
   IF v_working_days > 0 THEN
@@ -249,7 +252,8 @@ BEGIN
   
   RETURN json_build_object(
     'working_days', v_working_days,
-    'present_days', v_present_days,
+    -- Return present_days including late days for consistency with frontend payroll logic
+    'present_days', (v_present_days + v_late_days),
     'half_days', v_half_days,
     'late_days', v_late_days,
     'pending_days', v_pending_days,
