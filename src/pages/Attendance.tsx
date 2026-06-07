@@ -1683,23 +1683,8 @@ export default function Attendance() {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }
                             }
-                            // Priority 3: If there's an approved leave
-                            else if (leaveOnDate) {
-                              const leaveType = leaveOnDate.leave_type;
-                              if (leaveType === 'casual' || leaveType === 'emergency') {
-                                displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
-                                statusTag = 'CL';
-                              } else if (leaveType === 'sick') {
-                                displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
-                                statusTag = 'SL';
-                              } else if (leaveType === 'unplanned') {
-                                displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                                statusTag = 'UL';
-                              } else {
-                                displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
-                                statusTag = 'LE';
-                              }
-                            }
+                            // (Leaves overlay removed — attendance is the single source of truth.)
+
                             // Priority 4: If it's a Sunday (weekend) with no attendance
                             else if (isSunday) {
                               displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
