@@ -16,16 +16,22 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const firebaseApiKey = Deno.env.get("FIREBASE_API_KEY");
-const firebaseProjectId = Deno.env.get("FIREBASE_PROJECT_ID");
+const firebaseProjectId = Deno.env.get("VITE_APP_FIREBASE_PROJECT_ID") || Deno.env.get("FIREBASE_PROJECT_ID");
+const firebaseServiceAccount = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON");
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
 interface NotificationRequest {
   userId: string;
   title: string;
   message: string;
-  type: "salary" | "leave" | "attendance" | "task" | "general";
+  type: "salary" | "leave" | "attendance" | "task" | "general" | "announcement";
   relatedId?: string;
 }
 
@@ -51,11 +57,10 @@ Deno.serve(async (req) => {
       .from("user_fcm_tokens")
       .select("fcm_token")
       .eq("user_id", payload.userId)
-      .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
-    if (tokenError || !tokenData) {
-      console.log("No active FCM token found for user:", payload.userId);
+    if (tokenError || !tokenData?.fcm_token) {
+      console.log("No FCM token found for user:", payload.userId);
       return new Response(
         JSON.stringify({ message: "No device registered for notifications" }),
         { status: 200, headers: corsHeaders }
@@ -63,8 +68,8 @@ Deno.serve(async (req) => {
     }
 
     // If Firebase not configured, just return success
-    if (!firebaseProjectId || !firebaseApiKey) {
-      console.log("Firebase not configured. Skipping FCM notification.");
+    if (!firebaseProjectId) {
+      console.log("Firebase project ID not configured. Skipping FCM notification.");
       return new Response(
         JSON.stringify({ message: "Firebase not configured" }),
         { status: 200, headers: corsHeaders }
@@ -164,25 +169,76 @@ async function sendFCMNotification(
 }
 
 /**
- * Get Firebase access token
- * In production, use service account credentials
+ * Get Firebase access token using service account credentials
  */
 async function getFirebaseAccessToken(): Promise<string | null> {
   try {
-    // This is a simplified version. In production, you would:
-    // 1. Use Firebase Admin SDK with service account credentials
-    // 2. Or use a service account key file
-    // For now, we'll use the API key approach which has limitations
+    if (!firebaseServiceAccount) {
+      console.warn("Firebase service account not configured");
+      return null;
+    }
+
+    const serviceAccount = JSON.parse(firebaseServiceAccount);
     
-    // Note: FCM v1 API requires OAuth2 token from service account
-    // You need to set up a service account and generate the token
-    // This is a placeholder implementation
-    
-    // In production, use something like:
-    // const serviceAccount = JSON.parse(Deno.env.get("FIREBASE_SERVICE_ACCOUNT"));
-    // const token = await getServiceAccountToken(serviceAccount);
-    
-    return firebaseApiKey; // This won't work for FCM v1 API, needs proper token
+    // Create JWT token for service account
+    const header = {
+      alg: "RS256",
+      typ: "JWT",
+    };
+
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/firebase.messaging",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600,
+      iat: now,
+    };
+
+    // Import crypto module for JWT signing
+    const encoder = new TextEncoder();
+    const headerEncoded = btoa(JSON.stringify(header));
+    const payloadEncoded = btoa(JSON.stringify(payload));
+
+    const signatureInput = `${headerEncoded}.${payloadEncoded}`;
+    const signatureInputBytes = encoder.encode(signatureInput);
+
+    // Sign with private key
+    const privateKey = serviceAccount.private_key;
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      new TextEncoder().encode(privateKey),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signature = await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      signatureInputBytes
+    );
+
+    const signatureEncoded = btoa(String.fromCharCode(...new Uint8Array(signature)));
+    const jwt = `${signatureInput}.${signatureEncoded}`;
+
+    // Exchange JWT for access token
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    });
+
+    const tokenData = await tokenResponse.json() as { access_token?: string; error?: string };
+
+    if (!tokenData.access_token) {
+      console.error("Failed to get access token:", tokenData.error);
+      return null;
+    }
+
+    return tokenData.access_token;
   } catch (error) {
     console.error("Error getting Firebase access token:", error);
     return null;
@@ -206,9 +262,3 @@ function getClickAction(type: string): string {
       return "default_notification";
   }
 }
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};

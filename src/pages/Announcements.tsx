@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2, Edit } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
-import { sendNotification } from "@/lib/notificationService";
+import { sendNotification, broadcastAnnouncement } from "@/lib/notificationService";
 
 // Custom styles for Quill editor
 const editorStyle = `
@@ -231,12 +231,20 @@ export default function Announcements() {
 
       // Send notification to all employees
       try {
-        await sendNotification(
-          "",
-          `New Announcement: ${formData.title}`,
-          formData.title,
-          "info"
-        );
+        // Get all employee IDs to broadcast the announcement
+        const { data: employees } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "employee");
+        
+        if (employees && employees.length > 0) {
+          const employeeIds = employees.map(emp => emp.user_id);
+          await broadcastAnnouncement(
+            formData.title,
+            formData.content.replace(/<[^>]*>/g, '').substring(0, 100), // Strip HTML and truncate
+            employeeIds
+          );
+        }
       } catch (err) {
         console.error("Error sending announcement notification:", err);
       }
@@ -281,12 +289,19 @@ export default function Announcements() {
 
       // Send notification about deleted announcement
       try {
-        await sendNotification(
-          "",
-          "Announcement Deleted",
-          "An announcement has been removed",
-          "info"
-        );
+        const { data: employees } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "employee");
+        
+        if (employees && employees.length > 0) {
+          const employeeIds = employees.map(emp => emp.user_id);
+          await broadcastAnnouncement(
+            "Announcement Removed",
+            "An announcement has been removed by admin",
+            employeeIds
+          );
+        }
       } catch (err) {
         console.error("Error sending delete announcement notification:", err);
       }
@@ -387,12 +402,19 @@ export default function Announcements() {
 
       // Send notification about updated announcement
       try {
-        await sendNotification(
-          "",
-          `Announcement Updated: ${editFormData.title}`,
-          editFormData.title,
-          "info"
-        );
+        const { data: employees } = await supabase
+          .from("user_roles")
+          .select("user_id")
+          .eq("role", "employee");
+        
+        if (employees && employees.length > 0) {
+          const employeeIds = employees.map(emp => emp.user_id);
+          await broadcastAnnouncement(
+            `Announcement Updated: ${editFormData.title}`,
+            editFormData.content.replace(/<[^>]*>/g, '').substring(0, 100),
+            employeeIds
+          );
+        }
       } catch (err) {
         console.error("Error sending update announcement notification:", err);
       }
