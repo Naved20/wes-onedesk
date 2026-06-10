@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Download, AlertCircle, DollarSign, TrendingUp } from "lucide-react";
+import { Download, AlertCircle, DollarSign, TrendingUp, Calendar } from "lucide-react";
 import { generatePayslipPDF } from "./PayslipPDF";
 
 interface SalaryDetail {
@@ -251,12 +252,48 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
   if (!salary) {
     return (
-      <Alert>
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          No salary record found for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        {/* Month/Year Selector Card */}
+        <Card className="bg-muted/50 border-dashed">
+          <CardContent className="pt-6">
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-sm font-medium text-muted-foreground">Select Period:</span>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-40">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={String(m.value)}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            No salary record found for {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
@@ -270,6 +307,45 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
   return (
     <div className="space-y-4">
+      {/* Month/Year Selector Card */}
+      <Card className="bg-muted/50 border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex gap-2 flex-wrap items-center justify-between">
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-sm font-medium text-muted-foreground">Select Period:</span>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-40">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={String(m.value)}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <span className="text-sm font-semibold text-primary">
+              {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Action Controls */}
       <div className="flex gap-2 justify-end print:hidden">
         <Button variant="outline" onClick={handleDownload} className="gap-2">

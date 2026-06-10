@@ -3,6 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { initializeFirebaseMessaging } from "@/lib/firebaseMessaging";
+import { requestNotificationPermission, setupRealtimeNotifications, stopRealtimeNotifications } from "@/lib/simpleNotificationService";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -38,9 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             initializeFirebaseMessaging().catch(err => 
               console.error("Firebase messaging setup failed:", err)
             );
+            // Setup real-time browser notifications
+            requestNotificationPermission().then(granted => {
+              if (granted) {
+                setupRealtimeNotifications(session.user.id);
+                console.log("Real-time notifications enabled");
+              }
+            });
           }, 0);
         } else {
           setRole(null);
+          // Stop listening to notifications when logged out
+          if (user?.id) {
+            stopRealtimeNotifications(user.id);
+          }
         }
       }
     );
@@ -55,12 +67,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initializeFirebaseMessaging().catch(err => 
           console.error("Firebase messaging setup failed:", err)
         );
+        // Setup real-time browser notifications
+        requestNotificationPermission().then(granted => {
+          if (granted) {
+            setupRealtimeNotifications(session.user.id);
+            console.log("Real-time notifications enabled");
+          }
+        });
       } else {
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (user?.id) {
+        stopRealtimeNotifications(user.id);
+      }
+    };
   }, []);
 
   const fetchUserRole = async (userId: string) => {

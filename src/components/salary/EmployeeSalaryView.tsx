@@ -561,37 +561,43 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
       {/* Salary Tab */}
       <TabsContent value="salary" className="space-y-6">
       {/* Month/Year Selector and Potential Earning Button */}
-      <div className="flex gap-4 flex-wrap items-center justify-between">
-        <div className="flex gap-4 flex-wrap">
-          <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Month" />
-            </SelectTrigger>
-            <SelectContent>
-              {months.map((m) => (
-                <SelectItem key={m.value} value={String(m.value)}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-            <SelectTrigger className="w-28">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent>
-              {[2024, 2025, 2026].map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {/* Potential Earning Button */}
-        <PotentialEarningDialog isAdmin={isAdmin} />
-      </div>
+      <Card className="bg-muted/50 border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex gap-4 flex-wrap items-center justify-between">
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-sm font-medium text-muted-foreground">Select Period:</span>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-40">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={String(m.value)}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Potential Earning Button */}
+            <PotentialEarningDialog isAdmin={isAdmin} />
+          </div>
+        </CardContent>
+      </Card>
 
       {!salary ? (
         <Card>

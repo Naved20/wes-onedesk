@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, TrendingUp, TrendingDown, Briefcase, Calendar, AlertCircle, Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -166,20 +167,55 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
       {/* Header with Month/Year Selection */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-6 w-6 text-primary" />
-                Salary Details - {monthLabel} {selectedYear}
-              </CardTitle>
-              <CardDescription>
-                Complete breakdown of your salary for this month
-              </CardDescription>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-6 w-6 text-primary" />
+                  Salary Details
+                </CardTitle>
+                <CardDescription>
+                  Complete breakdown of your salary
+                </CardDescription>
+              </div>
+              <Button onClick={downloadPDF} variant="outline" className="gap-2">
+                <Download className="h-4 w-4" />
+                Download Payslip
+              </Button>
             </div>
-            <Button onClick={downloadPDF} variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Download Payslip
-            </Button>
+            
+            {/* Month/Year Selectors */}
+            <div className="flex gap-3 items-center pt-2 border-t">
+              <span className="text-sm font-medium text-muted-foreground">Select Period:</span>
+              <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
+                <SelectTrigger className="w-40">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map((m) => (
+                    <SelectItem key={m.value} value={String(m.value)}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-sm font-semibold text-primary ml-auto">
+                {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              </span>
+            </div>
           </div>
         </CardHeader>
       </Card>
