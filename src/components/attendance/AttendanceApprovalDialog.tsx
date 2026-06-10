@@ -317,19 +317,7 @@ export function AttendanceApprovalDialog({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="status">Approval Status</Label>
-          <Select value={editData.status} onValueChange={(value) => setEditData({ ...editData, status: value })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+   
         <div className="space-y-2">
           <Label htmlFor="calculated_status">Attendance Status</Label>
           <Select 
@@ -337,7 +325,7 @@ export function AttendanceApprovalDialog({
             onValueChange={(value) => {
               // Auto-set approval status based on attendance status
               let newApprovalStatus = editData.status;
-              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "leave" || value === "holiday") {
+              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "leave" ) {
                 newApprovalStatus = "approved"; // Auto-approve when marking as present/half day/leave
               } else if (value === "absent") {
                 newApprovalStatus = "rejected"; // Auto-reject when marking as absent
@@ -383,8 +371,6 @@ export function AttendanceApprovalDialog({
               <SelectItem value="half_day">Half Day (HD)</SelectItem>
               <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
               <SelectItem value="leave">Leave (LE)</SelectItem>
-              <SelectItem value="holiday">Holiday (HO)</SelectItem>
-              <SelectItem value="pending">Pending (PD)</SelectItem>
             </SelectContent>
           </Select>
         </div>

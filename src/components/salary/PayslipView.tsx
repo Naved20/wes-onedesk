@@ -39,10 +39,8 @@ interface SalaryDetail {
   // Deductions
   epf_employee: number;
   esic_employee: number;
-  manual_deduction: number;
-  tds_deduction: number;
-  professional_tax: number;
-  other_deductions: number;
+  manual_deductions_details: Record<string, number>;
+  manual_deductions_total: number;
   total_deductions: number;
   
   // Totals
@@ -443,184 +441,207 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground text-right">
-                  PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - (Late Sets ({Math.floor(salary.late_days / 3)}) + AB ({salary.absent_days}))
+                  PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - Late Sets ({Math.floor(salary.late_days / 3)}) - AB ({salary.absent_days})
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Earnings Section - Compact Grid Layout */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
-              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                💰 Earnings Summary (Compact View)
-              </h4>
-              
-              {/* First Row: Basic, HRA, Other Allowance, Variable Earnings */}
-              <div className="grid grid-cols-4 gap-4 text-sm mb-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Basic Salary (Earned)</p>
-                  <p className="font-semibold text-lg text-blue-600">₹{salary.basic_earned.toLocaleString()}</p>
+          {/* Payslip as Live Calculation Format */}
+          <div className="p-6 bg-gradient-to-br from-primary/5 to-secondary/5 rounded-lg border-2 border-primary/20">
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign className="h-5 w-5 text-primary" />
+              <h4 className="font-bold text-lg">Salary Breakdown - {monthLabel} {selectedYear}</h4>
+            </div>
+            
+            <div className="space-y-3">
+              {/* A. Fixed Salary Structure */}
+              <div className="space-y-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>A. Fixed Salary Structure</span>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">HRA (Earned)</p>
-                  <p className="font-semibold text-lg text-green-600">₹{salary.hra_earned.toLocaleString()}</p>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Basic Salary (Earned)</span>
+                  <span className="font-medium">₹{salary.basic_earned.toLocaleString()}</span>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Other Allowance (Earned)</p>
-                  <p className="font-semibold text-lg text-purple-600">₹{salary.other_allowance_earned.toLocaleString()}</p>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>HRA (Earned)</span>
+                  <span className="font-medium">₹{salary.hra_earned.toLocaleString()}</span>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Variable Earnings</p>
-                  <p className="font-semibold text-lg text-green-700">₹{salary.variable_earnings_total.toLocaleString()}</p>
-                </div>
-              </div>
-
-              {/* Total Gross - Full Width */}
-              <div className="mt-4 pt-3 border-t border-green-200">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold">Total Gross Earnings:</span>
-                  <span className="text-2xl font-bold text-green-600">₹{salary.gross_salary.toLocaleString()}</span>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Other Allowance (Earned)</span>
+                  <span className="font-medium">₹{salary.other_allowance_earned.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* Formula breakdown in smaller text */}
-              <div className="mt-3 p-2 bg-yellow-50 rounded border-l-2 border-yellow-500">
-                <p className="text-xs text-gray-600">
-                  <span className="font-semibold">Formula:</span> Per Day Rate = Fixed Gross ÷ Payroll Days | Gross Earned = Per Day Rate × Total Paid Days
+              {/* B. Fixed Earnings (Gross Salary) */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>B. Fixed Earnings (Gross Salary)</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Fixed Gross (Earned based on attendance)</span>
+                  <span className="font-medium">₹{salary.gross_salary.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Fixed Earnings</span>
+                  <span className="text-primary">₹{salary.gross_salary.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* C. Employee Deductions (on Fixed Earnings) */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>C. Employee Deductions (on Fixed Earnings)</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>EPF Employee</span>
+                  <span className="font-medium">₹{salary.epf_employee.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>ESIC Employee</span>
+                  <span className="font-medium">₹{salary.esic_employee.toLocaleString()}</span>
+                </div>
+                
+                {/* Custom Manual Deductions */}
+                {salary.manual_deductions_details && Object.entries(salary.manual_deductions_details).map(([name, amount]: any) => (
+                  <div key={name} className="flex justify-between text-sm pl-4">
+                    <span>{name}</span>
+                    <span className="font-medium">₹{(parseFloat(amount) || 0).toLocaleString()}</span>
+                  </div>
+                ))}
+                
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Deductions</span>
+                  <span className="text-destructive">₹{salary.total_deductions.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* D. Performance Based Earnings */}
+              {salary.variable_earnings_total > 0 && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex justify-between font-semibold text-base border-b pb-2">
+                    <span>D. Performance Based Earnings</span>
+                  </div>
+                  <div className="flex justify-between text-sm pl-4">
+                    <span>Performance Based Earnings</span>
+                    <span className="font-medium">₹{salary.variable_earnings_total.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold pl-4 text-base">
+                    <span>Total Performance Earnings</span>
+                    <span className="text-blue-600">₹{salary.variable_earnings_total.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* E. Total Gross Earnings */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>E. Total Gross Earnings</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Fixed Earnings - Deductions</span>
+                  <span className="font-medium">₹{(salary.gross_salary - salary.total_deductions).toLocaleString()}</span>
+                </div>
+                {salary.variable_earnings_total > 0 && (
+                  <div className="flex justify-between text-sm pl-4">
+                    <span>Performance Based Earnings</span>
+                    <span className="font-medium">₹{salary.variable_earnings_total.toLocaleString()}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-xl border-b pb-2">
+                  <span>Total Gross Earnings</span>
+                  <span className="text-primary">₹{(salary.gross_salary - salary.total_deductions + salary.variable_earnings_total).toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* F. Net Payable */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-bold text-xl border-t-2 pt-3 text-green-600">
+                  <span>F. Net Payable to Employee</span>
+                  <span>₹{salary.final_salary.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* G. Employer Contributions */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>G. Employer Contributions</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>EPF Employer</span>
+                  <span className="font-medium">₹{salary.epf_employer.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>ESIC Employer</span>
+                  <span className="font-medium">₹{salary.esic_employer.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Employer Benefit</span>
+                  <span>₹{salary.total_employer_contribution.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* H. Total CTC */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-bold text-2xl border-t-2 pt-3 text-primary">
+                  <span>H. Total Cost to Company</span>
+                  <span>₹{calculatedCTC.toLocaleString()}</span>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Net Payable + Employer Contributions
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Deductions Section - Compact Grid Layout */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <div className="p-4 rounded-lg border bg-red-50 border-red-200">
-              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                🚫 Deductions Summary (Compact View)
-              </h4>
-              
-              {/* First Row: EPF, ESIC, Manual, TDS */}
-              <div className="grid grid-cols-4 gap-4 text-sm mb-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">EPF (Employee)</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.epf_employee.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">ESIC (Employee)</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.esic_employee.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Manual Deduction</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.manual_deduction.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">TDS</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.tds_deduction.toLocaleString()}</p>
-                </div>
+
+
+          {/* Notes and Signature Section */}
+          <div className="mt-8 space-y-6 border-t-4 border-yellow-400 pt-6">
+            {/* Important Notes */}
+            <div className="space-y-3">
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p className="text-sm font-semibold text-gray-800 mb-2">Note:</p>
+                <ul className="text-sm text-gray-700 space-y-2">
+                  <li>• Employee EPF contribution is deducted from monthly earnings but deposited into the employee's PF account as long-term savings.</li>
+                  <li>• Employer EPF and ESIC contributions are paid additionally by WES and are not deducted from the employee's salary.</li>
+                </ul>
               </div>
 
-              {/* Second Row: Professional Tax, Other Deductions, Total Deductions */}
-              <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Professional Tax</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.professional_tax.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Other Deductions</p>
-                  <p className="font-semibold text-lg text-red-600">₹{salary.other_deductions.toLocaleString()}</p>
-                </div>
-                <div className="bg-red-100 rounded p-2">
-                  <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
-                  <p className="font-bold text-lg text-red-700">₹{salary.total_deductions.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Net Salary Section */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <div className="p-4 bg-gradient-to-r from-blue-100 to-blue-50 rounded-lg border-2 border-blue-500">
-              <p className="text-xs font-semibold text-gray-600 mb-2">NET SALARY (Take Home Pay)</p>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Gross Earnings: <span className="font-semibold">₹{salary.gross_salary.toLocaleString()}</span>
-                  </p>
-                  <p className="text-sm text-gray-700">
-                    Less: Deductions: <span className="font-semibold">-₹{salary.total_deductions.toLocaleString()}</span>
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-600 mb-1">Amount in your bank account</p>
-                  <p className="text-3xl font-bold text-blue-600">₹{salary.final_salary.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Employer Contributions Section - Compact */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <div className="p-4 rounded-lg border bg-green-50 border-green-200">
-              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                🏢 Employer Contributions (Not Deducted from Your Salary)
-              </h4>
-              
-              {/* Contributions Grid */}
-              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">EPF Employer</p>
-                  <p className="font-semibold text-lg text-green-600">₹{salary.epf_employer.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">ESIC Employer</p>
-                  <p className="font-semibold text-lg text-green-600">₹{salary.esic_employer.toLocaleString()}</p>
-                </div>
-              </div>
-
-              {/* Total Employer Contribution */}
-              <div className="pt-2 border-t border-green-200">
-                <p className="text-xs text-gray-500 mb-2">These are benefits provided by the company on your behalf</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold">Total Employer Contribution:</span>
-                  <span className="text-xl font-bold text-green-600">₹{salary.total_employer_contribution.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* CTC Section */}
-          <div className="mb-8">
-            <div className="p-6 bg-gradient-to-r from-primary to-primary/80 text-white rounded-lg border-2 border-primary">
-              <p className="text-xs font-semibold mb-2 opacity-90">TOTAL COST TO COMPANY (CTC)</p>
-              <div className="space-y-2 mb-4 text-sm">
-                <div className="flex justify-between">
-                  <span>Net Payable to Employee</span>
-                  <span>₹{(salary.final_salary || 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>+ Employer Contributions</span>
-                  <span>+₹{(salary.total_employer_contribution || 0).toLocaleString()}</span>
-                </div>
-              </div>
-              <Separator className="bg-white/30 mb-4" />
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Your Total CTC</span>
-                <span className="text-4xl font-bold">₹{calculatedCTC.toLocaleString()}</span>
-              </div>
-              <p className="text-xs mt-3 opacity-90">
-                This is the total value of your compensation package including salary and employer benefits
+              <p className="text-sm text-gray-700">
+                This payslip is generated based on attendance, approved earnings, applicable statutory contributions, and deductions for the salary month mentioned above.
               </p>
             </div>
-          </div>
 
+            {/* Signature Section */}
+            <div className="grid grid-cols-3 gap-8 mt-8">
+              <div className="text-center">
+                <div className="border-t-2 border-gray-800 pt-4 mt-16">
+                  <p className="text-sm font-semibold text-gray-800">Prepared By</p>
+                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="border-t-2 border-gray-800 pt-4 mt-16">
+                  <p className="text-sm font-semibold text-gray-800">Checked By</p>
+                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="border-t-2 border-gray-800 pt-4 mt-16">
+                  <p className="text-sm font-semibold text-gray-800">Approved By</p>
+                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
+                </div>
+              </div>
+            </div>
 
-
-          {/* Footer */}
-          <div className="text-center text-xs text-gray-500 pt-4 border-t border-gray-300">
-            <p>This is a computer-generated payslip and does not require a signature.</p>
-            <p className="mt-2">For any queries regarding your salary, please contact the HR department.</p>
-            <p className="mt-4 text-gray-400">Generated on {format(new Date(), "dd MMM yyyy")}</p>
+            {/* Generated Footer */}
+            <div className="text-center text-xs text-gray-500 pt-8 border-t border-gray-300">
+              <p>This is a computer-generated payslip and does not require a signature.</p>
+              <p className="mt-1">For any queries regarding your salary, please contact the HR department.</p>
+              <p className="mt-3 text-gray-400">Generated on {format(new Date(), "dd MMM yyyy")}</p>
+            </div>
           </div>
         </CardContent>
       </Card>

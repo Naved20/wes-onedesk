@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1804,6 +1804,8 @@ const Tasks = () => {
     }
   };
 
+  const navigate = useNavigate();
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -1815,6 +1817,14 @@ const Tasks = () => {
           <div className="flex gap-2">
             {canCreateTask && (
               <>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/earnings-analytics")}
+                  className="flex items-center gap-2"
+                >
+                  <Coins className="h-4 w-4" />
+                  Earnings Analytics
+                </Button>
                 <Dialog open={reorderOpen} onOpenChange={handleReorderDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline">

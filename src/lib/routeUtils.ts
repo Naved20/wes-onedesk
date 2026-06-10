@@ -14,7 +14,7 @@ export const getAvailableRoutes = (): AvailableRoute[] => {
     { value: "/employees", label: "Employees", category: "Main" },
     { value: "/attendance", label: "Attendance", category: "Main" },
     { value: "/leaves", label: "Leaves", category: "Main" },
-    { value: "/tasks", label: "Training and Task", category: "Main" },
+    { value: "/tasks", label: "Training", category: "Main" },
     { value: "/salaries", label: "Salary and Earning", category: "Main" },
     { value: "/performance", label: "Performance", category: "Main" },
     { value: "/announcements", label: "Announcements", category: "Main" },

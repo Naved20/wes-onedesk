@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText, Gift } from "lucide-react";
+import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText, Gift, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
 
@@ -55,6 +55,8 @@ interface SalaryRecord {
   epf_employee: number | null;
   esic_employee: number | null;
   manual_deduction: number | null;
+  manual_deductions_details: Record<string, number> | null;
+  manual_deductions_total: number | null;
   tds_deduction: number | null;
   professional_tax: number | null;
   other_deductions: number | null;
@@ -460,6 +462,52 @@ function PotentialEarningDialog({ isAdmin = false }: { isAdmin?: boolean }) {
   );
 }
 
+// Helper component for adding custom deductions
+function AddDeductionDialog({ onAdd }: { onAdd: (name: string, amount: string) => void }) {
+  const [deductionName, setDeductionName] = useState("");
+  const [deductionAmount, setDeductionAmount] = useState("");
+
+  const handleAdd = () => {
+    if (!deductionName.trim() || !deductionAmount.trim()) {
+      return;
+    }
+
+    onAdd(deductionName, deductionAmount);
+    setDeductionName("");
+    setDeductionAmount("");
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="deduction_name">Deduction Name</Label>
+        <Input
+          id="deduction_name"
+          placeholder="e.g., Loan EMI, Insurance, etc."
+          value={deductionName}
+          onChange={(e) => setDeductionName(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleAdd()}
+        />
+      </div>
+      <div>
+        <Label htmlFor="deduction_amount">Amount</Label>
+        <Input
+          id="deduction_amount"
+          type="number"
+          step="0.01"
+          placeholder="0"
+          value={deductionAmount}
+          onChange={(e) => setDeductionAmount(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleAdd()}
+        />
+      </div>
+      <Button onClick={handleAdd} className="w-full">
+        Add Deduction
+      </Button>
+    </div>
+  );
+}
+
 export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagementProps) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([]);
@@ -487,6 +535,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     earning_code: string;
     earning_name: string;
   }>>([]);
+
+  // State for adding new earnings
+  const [newEarningTitle, setNewEarningTitle] = useState("");
+  const [newEarningAmount, setNewEarningAmount] = useState("");
 
   // Fetch earning types for variable earnings
   useEffect(() => {
@@ -529,10 +581,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     esic_percentage: 0.75,
     epf_applicable: true,
     esic_applicable: true,
-    manual_deduction: 0,
-    tds_deduction: 0,
-    professional_tax: 0,
-    other_deductions: 0,
+    manual_deductions: {} as Record<string, number>,
     
     // Manual override
     net_salary_manual: null as number | null,
@@ -635,6 +684,11 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     // Total gross
     const totalGrossEarnings = grossEarned + totalVariableEarnings;
     
+    // Manual deductions (sum of all custom deductions)
+    const totalManualDeductions = Object.values(formData.manual_deductions).reduce(
+      (sum, val) => sum + (parseFloat(val as any) || 0), 0
+    );
+    
     // Deductions
     const epfEmployee = formData.epf_applicable 
       ? (basicEarned * formData.epf_percentage / 100) 
@@ -642,9 +696,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     const esicEmployee = formData.esic_applicable 
       ? (totalGrossEarnings * formData.esic_percentage / 100) 
       : 0;
-    const totalDeductions = epfEmployee + esicEmployee + 
-      formData.manual_deduction + formData.tds_deduction + 
-      formData.professional_tax + formData.other_deductions;
+    const totalDeductions = epfEmployee + esicEmployee + totalManualDeductions;
     
     // Net payable
     const netPayable = totalGrossEarnings - totalDeductions;
@@ -720,6 +772,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       
       // Save attendance summary to attendance_summary table for all employees
       await saveAttendanceSummaryForAllEmployees();
+      
+      // Populate Performance Based Earnings for all employees
+      await populatePerformanceBasedEarningsForMonth();
       
       fetchData();
     } catch (error) {
@@ -880,6 +935,71 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         console.log("No active employees found");
         return;
       }
+
+      // Fetch holidays for this month (using same 3-method approach as Attendance.tsx)
+      console.log("🔍 Fetching holidays for month...");
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      
+      let holidays: any[] = [];
+      
+      // METHOD 1: Try holidays_view first (fetch ALL, then filter)
+      const { data: viewData, error: viewError } = await supabase
+        .from("holidays_view")
+        .select("date, name")
+        .order("date");
+
+      if (!viewError && viewData && viewData.length > 0) {
+        console.log("✅ Using holidays_view for holiday data");
+        // Filter holidays for this month
+        holidays = viewData
+          .filter((h: any) => {
+            const hDate = new Date(h.date);
+            return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+          })
+          .map((h: any) => ({ date: h.date, name: h.name || "Holiday" }));
+      } else {
+        // METHOD 2: Try old holidays table
+        const { data: holidaysData, error: holidaysError } = await supabase
+          .from("holidays")
+          .select("date, name")
+          .order("date");
+
+        if (!holidaysError && holidaysData && holidaysData.length > 0) {
+          console.log("✅ Using holidays table for holiday data");
+          // Filter holidays for this month
+          holidays = holidaysData
+            .filter((h: any) => {
+              const hDate = new Date(h.date);
+              return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+            })
+            .map(h => ({ date: h.date, name: h.name }));
+        } else {
+          // METHOD 3: Fallback to attendance table
+          const { data: attendanceData, error: attendanceError } = await supabase
+            .from("attendance")
+            .select("date, holiday_name")
+            .eq("status", "holiday")
+            .order("date");
+
+          if (attendanceData && attendanceData.length > 0) {
+            console.log("✅ Using attendance table for holiday data");
+            const uniqueHolidaysMap = new Map<string, string>();
+            attendanceData.forEach((h: any) => {
+              // Filter for this month
+              const hDate = new Date(h.date);
+              if (hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear) {
+                if (!uniqueHolidaysMap.has(h.date)) {
+                  uniqueHolidaysMap.set(h.date, h.holiday_name || "Holiday");
+                }
+              }
+            });
+            holidays = Array.from(uniqueHolidaysMap.entries()).map(([date, name]) => ({ date, name }));
+          }
+        }
+      }
+
+      console.log(`Total holidays fetched for month: ${holidays.length}`, holidays.slice(0, 3));
       
       let successCount = 0;
       let failureCount = 0;
@@ -888,9 +1008,6 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       for (const emp of employees) {
         try {
           // Fetch attendance data for this employee
-          const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-          const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
-          
           const { data: attendanceData } = await supabase
             .from("attendance")
             .select("*")
@@ -898,8 +1015,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             .gte("date", startDate)
             .lte("date", endDate);
           
-          // Calculate attendance summary
-          const attendanceSummary = await calculateAttendanceSummary(emp.user_id, attendanceData || []);
+          // Calculate attendance summary (passing holidays now)
+          const attendanceSummary = await calculateAttendanceSummary(emp.user_id, attendanceData || [], holidays);
           
           // Save to attendance_summary table
           const saved = await saveAttendanceSummaryForEmployee(
@@ -1040,15 +1157,77 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     let salarySkippedCount = 0;
 
     try {
+      // Fetch holidays for this month (using same 3-method approach as Attendance.tsx)
+      console.log("🔍 Step 0: Fetching holidays for month...");
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      
+      let holidays: any[] = [];
+      
+      // METHOD 1: Try holidays_view first (fetch ALL, then filter)
+      const { data: viewData, error: viewError } = await supabase
+        .from("holidays_view")
+        .select("date, name")
+        .order("date");
+
+      if (!viewError && viewData && viewData.length > 0) {
+        console.log("✅ Using holidays_view for holiday data");
+        // Filter holidays for this month
+        holidays = viewData
+          .filter((h: any) => {
+            const hDate = new Date(h.date);
+            return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+          })
+          .map((h: any) => ({ date: h.date, name: h.name || "Holiday" }));
+      } else {
+        // METHOD 2: Try old holidays table
+        const { data: holidaysData, error: holidaysError } = await supabase
+          .from("holidays")
+          .select("date, name")
+          .order("date");
+
+        if (!holidaysError && holidaysData && holidaysData.length > 0) {
+          console.log("✅ Using holidays table for holiday data");
+          // Filter holidays for this month
+          holidays = holidaysData
+            .filter((h: any) => {
+              const hDate = new Date(h.date);
+              return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+            })
+            .map(h => ({ date: h.date, name: h.name }));
+        } else {
+          // METHOD 3: Fallback to attendance table
+          const { data: attendanceData, error: attendanceError } = await supabase
+            .from("attendance")
+            .select("date, holiday_name")
+            .eq("status", "holiday")
+            .order("date");
+
+          if (attendanceData && attendanceData.length > 0) {
+            console.log("✅ Using attendance table for holiday data");
+            const uniqueHolidaysMap = new Map<string, string>();
+            attendanceData.forEach((h: any) => {
+              // Filter for this month
+              const hDate = new Date(h.date);
+              if (hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear) {
+                if (!uniqueHolidaysMap.has(h.date)) {
+                  uniqueHolidaysMap.set(h.date, h.holiday_name || "Holiday");
+                }
+              }
+            });
+            holidays = Array.from(uniqueHolidaysMap.entries()).map(([date, name]) => ({ date, name }));
+          }
+        }
+      }
+
+      console.log(`Total holidays fetched for month: ${holidays.length}`, holidays.slice(0, 3));
+
       // STEP 1: Update attendance_summary table for ALL employees (including locked ones - because attendance data is independent)
       console.log(`Step 1: Updating attendance summary table for all employees...`);
       
       for (const salary of salaryRecords) {
         try {
           // Fetch attendance data for this employee
-          const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-          const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
-          
           const { data: attendanceData, error: attendanceError } = await supabase
             .from("attendance")
             .select("*")
@@ -1062,8 +1241,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             continue;
           }
           
-          // Calculate attendance summary
-          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || []);
+          // Calculate attendance summary (passing holidays now)
+          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidays);
           
           // Save to attendance_summary table
           const saved = await saveAttendanceSummaryForEmployee(
@@ -1307,25 +1486,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       { present: 0, late: 0, half_day: 0, paid_leave: 0, leave: 0, absent: 0, holiday: 0, pending: 0 }
     );
 
-    // Get holidays worked (same logic as AttendanceStats)
-    const holidaysWorked = monthRecords.filter(r => {
-      const recordDate = new Date(r.date).toISOString().split('T')[0];
-      const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
-      const calcStatus = r.calculated_status?.toLowerCase();
-      const isPresent =
-        calcStatus === "present" ||
-        calcStatus === "late" ||
-        calcStatus === "half_day" ||
-        r.is_half_day ||
-        r.is_late ||
-        calcStatus === "paid_leave";
-      return isHolidayDate && isPresent && r.status !== "rejected";
-    });
-
-    const uniqueHolidaysWorked = new Set(
-      holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
-    );
-
+    // EXACT SAME LOGIC as AttendanceStats - Use a Set to ensure unique holiday dates
     const uniqueHolidaysInMonth = new Set(
       holidays
         .filter(h => {
@@ -1335,7 +1496,38 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .map(h => new Date(h.date).toISOString().split('T')[0])
     );
 
-    const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
+    // EXACT SAME LOGIC as AttendanceStats - Get holidays worked
+    const holidaysWorked = monthRecords.filter(r => {
+      const recordDate = new Date(r.date).toISOString().split('T')[0];
+      const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
+      
+      const calcStatus = r.calculated_status?.toLowerCase();
+      const isPresent = 
+        calcStatus === 'present' || 
+        calcStatus === 'late' || 
+        calcStatus === 'half_day' || 
+        r.is_half_day || 
+        r.is_late || 
+        calcStatus === 'paid_leave';
+      
+      return isHolidayDate && isPresent && r.status !== 'rejected';
+    });
+
+    // Ensure holidaysWorked are unique by date
+    const uniqueHolidaysWorked = new Set(
+      holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
+    );
+
+    const holidayCount = Math.max(0, uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size);
+
+    console.log(`calculateAttendanceSummary for user ${userId} - ${selectedYear}-${selectedMonth}:`, {
+      totalHolidaysFromTable: holidays.length,
+      uniqueHolidaysInMonth: uniqueHolidaysInMonth.size,
+      holidaysWorked: uniqueHolidaysWorked.size,
+      calculatedHolidayCount: holidayCount,
+      holidayDates: Array.from(uniqueHolidaysInMonth),
+      holidayWorkedDates: Array.from(uniqueHolidaysWorked),
+    });
 
     return {
       // Present now includes late days
@@ -1345,7 +1537,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       sickLeaves: counts.leave,
       absentDays: counts.absent,
       lateDays: counts.late,
-      holidayCount: Math.max(0, holidayCount),
+      holidayCount,
     };
   };
 
@@ -1420,6 +1612,113 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     } catch (error) {
       console.error("Error recalculating holiday count:", error);
       return 0;
+    }
+  };
+
+  // Function to populate Performance Based Earnings for all employees in a month
+  const populatePerformanceBasedEarningsForMonth = async () => {
+    try {
+      console.log(`Starting to populate Performance Based Earnings for all employees - ${selectedYear}-${selectedMonth}`);
+      
+      // Fetch all salary records for the month
+      const { data: salaries, error: salaryError } = await supabase
+        .from("salaries")
+        .select("id, user_id")
+        .eq("month", selectedMonth)
+        .eq("year", selectedYear);
+
+      if (salaryError) throw salaryError;
+
+      if (!salaries || salaries.length === 0) {
+        console.log("No salary records found for this month");
+        return;
+      }
+
+      // Map task types to earning codes
+      const taskTypeToEarningCode: Record<string, string> = {
+        'Lesson Plan & Delivery': 'LESSON_PLAN',
+        'English Reading, listening & speaking Task': 'ENG_TRAINING',
+        'Soft & Digital Skills': 'DIGITAL_TRAINING',
+      };
+
+      const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split('T')[0];
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+
+      // For each salary record, fetch task earnings
+      for (const salary of salaries) {
+        try {
+          const { data: taskEarningsData } = await supabase
+            .from("task_earnings" as any)
+            .select(`
+              amount,
+              status,
+              earned_at,
+              task_id,
+              tasks (
+                id,
+                title,
+                type
+              )
+            `)
+            .eq("user_id", salary.user_id)
+            .eq("status", "approved")
+            .gte("earned_at", startDate)
+            .lte("earned_at", endDate)
+            .order("earned_at", { ascending: false });
+
+          if (taskEarningsData && taskEarningsData.length > 0) {
+            // Sum up earnings by type
+            const earningsByType: Record<string, number> = {};
+            
+            taskEarningsData.forEach((earning: any) => {
+              const taskType = earning.tasks?.type;
+              const earningCode = taskTypeToEarningCode[taskType];
+              
+              if (earningCode) {
+                earningsByType[earningCode] = (earningsByType[earningCode] || 0) + (parseFloat(earning.amount) || 0);
+              }
+            });
+
+            console.log(`Fetched earnings for user ${salary.user_id}:`, earningsByType);
+
+            // Get existing earnings from the salary record
+            const existingEarnings = salary.variable_earnings_details || {};
+            
+            // Merge with new earnings (prefer fetched data for standard earning codes)
+            const mergedEarnings = {
+              ...existingEarnings,
+              ...earningsByType,
+            };
+
+            // Calculate total variable earnings
+            const totalVariableEarnings = Object.values(mergedEarnings).reduce(
+              (sum, val) => sum + (parseFloat(val as any) || 0), 0
+            );
+
+            // Update salary record with variable earnings
+            const { error: updateError } = await supabase
+              .from("salaries")
+              .update({
+                variable_earnings_details: mergedEarnings,
+                variable_earnings_total: totalVariableEarnings,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", salary.id);
+
+            if (updateError) {
+              console.warn(`Warning: Could not update earnings for salary ${salary.id}:`, updateError);
+            } else {
+              console.log(`Updated salary ${salary.id} with performance-based earnings`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing earnings for salary ${salary.id}:`, error);
+        }
+      }
+
+      console.log(`Populated Performance Based Earnings for ${salaries.length} salary records`);
+    } catch (error) {
+      console.error("Error populating Performance Based Earnings:", error);
     }
   };
 
@@ -1525,7 +1824,65 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       
       const actualWorkingDays = workingDaysData || salary.working_days || 26;
       
-      // 4. Set form data with all values
+      // 4. Fetch Performance Based Earnings (Task Earnings) for this user in the selected month
+      let performanceBasedEarnings: Record<string, any> = salary.variable_earnings_details || {};
+      
+      try {
+        const startDate = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split('T')[0];
+        const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+        
+        const { data: taskEarningsData } = await supabase
+          .from("task_earnings" as any)
+          .select(`
+            amount,
+            status,
+            earned_at,
+            task_id,
+            tasks (
+              id,
+              title,
+              type
+            )
+          `)
+          .eq("user_id", salary.user_id)
+          .eq("status", "approved")
+          .gte("earned_at", startDate)
+          .lte("earned_at", endDate)
+          .order("earned_at", { ascending: false });
+
+        if (taskEarningsData && taskEarningsData.length > 0) {
+          // Map task types to earning codes
+          const taskTypeToEarningCode: Record<string, string> = {
+            'Lesson Plan & Delivery': 'LESSON_PLAN',
+            'English Reading, listening & speaking Task': 'ENG_TRAINING',
+            'Soft & Digital Skills': 'DIGITAL_TRAINING',
+          };
+
+          // Sum up earnings by type
+          const earningsByType: Record<string, number> = {};
+          
+          taskEarningsData.forEach((earning: any) => {
+            const taskType = earning.tasks?.type;
+            const earningCode = taskTypeToEarningCode[taskType];
+            
+            if (earningCode) {
+              earningsByType[earningCode] = (earningsByType[earningCode] || 0) + (parseFloat(earning.amount) || 0);
+            }
+          });
+
+          console.log("✅ Fetched Performance Based Earnings:", earningsByType);
+
+          // Merge with existing earnings (prefer fetched data for this month)
+          performanceBasedEarnings = {
+            ...performanceBasedEarnings,
+            ...earningsByType,
+          };
+        }
+      } catch (error) {
+        console.warn("⚠️ Could not fetch task earnings, using existing data:", error);
+      }
+      
+      // 5. Set form data with all values
       setFormData({
         // From salary_structures
         fixed_gross_salary: (structure as any)?.fixed_gross_salary || salary.base_salary || 0,
@@ -1543,18 +1900,15 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         late_days: attendanceSummary.lateDays,
         holiday_count: attendanceSummary.holidayCount,
         
-        // Variable earnings (from existing salary record)
-        variable_earnings: salary.variable_earnings_details || {},
+        // Variable earnings (merged with fetched task earnings)
+        variable_earnings: performanceBasedEarnings,
         
         // Deductions
         epf_percentage: (structure as any)?.epf_employee_rate || 12,
         esic_percentage: (structure as any)?.esic_employee_rate || 0.75,
         epf_applicable: (structure as any)?.epf_applicable ?? true,
         esic_applicable: (structure as any)?.esic_applicable ?? true,
-        manual_deduction: salary.manual_deduction || 0,
-        tds_deduction: salary.tds_deduction || 0,
-        professional_tax: salary.professional_tax || 0,
-        other_deductions: salary.other_deductions || 0,
+        manual_deductions: salary.manual_deductions_details || {},
         
         // Manual override
         net_salary_manual: salary.net_salary_manual,
@@ -1606,6 +1960,29 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     setSelectedSalary(salary);
     setUnlockReason("");
     setUnlockDialogOpen(true);
+  };
+
+  const handleAddEarning = () => {
+    if (!newEarningTitle.trim()) return;
+
+    // Create a unique code from the title
+    const earningCode = newEarningTitle
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
+
+    // Add to variable earnings
+    setFormData(p => ({
+      ...p,
+      variable_earnings: {
+        ...p.variable_earnings,
+        [earningCode]: newEarningAmount || "0"
+      }
+    }));
+
+    // Reset inputs
+    setNewEarningTitle("");
+    setNewEarningAmount("");
   };
 
   const handleSaveAttendance = async () => {
@@ -1706,10 +2083,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         // Employee deductions
         epf_employee: calculated.epfEmployee,
         esic_employee: calculated.esicEmployee,
-        manual_deduction: formData.manual_deduction,
-        tds_deduction: formData.tds_deduction,
-        professional_tax: formData.professional_tax,
-        other_deductions: formData.other_deductions,
+        manual_deductions_details: formData.manual_deductions,
+        manual_deductions_total: Object.values(formData.manual_deductions).reduce((sum, val) => sum + (parseFloat(val as any) || 0), 0),
         total_deductions: calculated.totalDeductions,
         
         // Calculated totals
@@ -2558,7 +2933,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 mb-2 text-right">
-                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - (Late Sets ({Math.floor(formData.late_days / 3)}) + AB ({formData.absent_days}))
+                    PR ({formData.present_days}) + HO ({formData.holiday_count}) + HD ({(formData.half_days * 0.5).toFixed(1)}) + PL ({formData.paid_leave_days}) - Late Sets ({Math.floor(formData.late_days / 3)}) - AB ({formData.absent_days})
                   </p>
                   
                   {/* Save Button for Attendance Changes */}
@@ -2636,25 +3011,123 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
               {/* Performance Based Earnings */}
               <div className="space-y-4">
-                <h4 className="font-semibold border-b pb-2">Performance Based Earnings</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {earningTypes.map((earning) => (
-                    <div key={earning.earning_code}>
-                      <Label>{earning.earning_name}</Label>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        value={formData.variable_earnings[earning.earning_code] || ""}
-                        onChange={(e) => setFormData(p => ({
-                          ...p,
-                          variable_earnings: {
-                            ...p.variable_earnings,
-                            [earning.earning_code]: e.target.value
-                          }
-                        }))}
-                      />
-                    </div>
-                  ))}
+                <div className="flex justify-between items-center border-b pb-2 mb-4">
+                  <h4 className="font-semibold">Performance Based Earnings</h4>
+                  {isAdmin && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="h-8">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add Earning
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Earning</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="new-earning-title">Title</Label>
+                            <Input
+                              id="new-earning-title"
+                              placeholder="e.g., Performance Bonus"
+                              value={newEarningTitle}
+                              onChange={(e) => setNewEarningTitle(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="new-earning-amount">Amount (₹)</Label>
+                            <Input
+                              id="new-earning-amount"
+                              type="number"
+                              placeholder="0"
+                              value={newEarningAmount}
+                              onChange={(e) => setNewEarningAmount(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button onClick={handleAddEarning} disabled={!newEarningTitle.trim()}>
+                            Add
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  {/* Show only Lesson Plan, ENG Training Task, and Digital Training Task */}
+                  {earningTypes
+                    .filter(e => 
+                      e.earning_code === 'LESSON_PLAN' || 
+                      e.earning_code === 'ENG_TRAINING' ||
+                      e.earning_code === 'DIGITAL_TRAINING'
+                    )
+                    .map((earning) => (
+                      <div key={earning.earning_code}>
+                        <Label>{earning.earning_name}</Label>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={formData.variable_earnings[earning.earning_code] || ""}
+                          onChange={(e) => setFormData(p => ({
+                            ...p,
+                            variable_earnings: {
+                              ...p.variable_earnings,
+                              [earning.earning_code]: e.target.value
+                            }
+                          }))}
+                          disabled={!isAdmin || selectedSalary?.is_locked}
+                        />
+                      </div>
+                    ))}
+                  
+                  {/* Dynamically added earnings */}
+                  {Object.entries(formData.variable_earnings).map(([code, amount]) => {
+                    // Skip if it's a standard earning type
+                    if (code === 'LESSON_PLAN' || code === 'ENG_TRAINING' || code === 'DIGITAL_TRAINING') return null;
+                    
+                    return (
+                      <div key={code} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-sm">{code.replace(/_/g, ' ').toUpperCase()}</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            value={amount || ""}
+                            onChange={(e) => setFormData(p => ({
+                              ...p,
+                              variable_earnings: {
+                                ...p.variable_earnings,
+                                [code]: e.target.value
+                              }
+                            }))}
+                            disabled={!isAdmin || selectedSalary?.is_locked}
+                          />
+                        </div>
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-10 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              setFormData(p => {
+                                const newEarnings = { ...p.variable_earnings };
+                                delete newEarnings[code];
+                                return {
+                                  ...p,
+                                  variable_earnings: newEarnings
+                                };
+                              });
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </TabsContent>
@@ -2715,40 +3188,73 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
               {/* Manual Deductions */}
               <div className="space-y-4">
                 <h4 className="font-semibold border-b pb-2">Manual Deductions</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Manual Deduction</Label>
-                    <Input
-                      type="number"
-                      value={formData.manual_deduction}
-                      onChange={(e) => setFormData(p => ({ ...p, manual_deduction: Number(e.target.value) }))}
-                    />
+
+                {/* Custom Deductions Total */}
+                {Object.keys(formData.manual_deductions).length > 0 && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-blue-900 dark:text-blue-100">Total Deductions</span>
+                      <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        ₹{Object.values(formData.manual_deductions).reduce((sum, val) => sum + (parseFloat(val as any) || 0), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <Label>TDS Deduction</Label>
-                    <Input
-                      type="number"
-                      value={formData.tds_deduction}
-                      onChange={(e) => setFormData(p => ({ ...p, tds_deduction: Number(e.target.value) }))}
-                    />
+                )}
+
+                {/* Dynamically added deductions */}
+                {Object.entries(formData.manual_deductions).map(([name, amount]) => (
+                  <div key={name} className="flex items-center gap-2 p-3 bg-muted rounded-lg border">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">{name}</p>
+                      <p className="text-lg font-bold text-primary">
+                        ₹{(parseFloat(amount as any) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        setFormData(p => {
+                          const newDeductions = { ...p.manual_deductions };
+                          delete newDeductions[name];
+                          return {
+                            ...p,
+                            manual_deductions: newDeductions
+                          };
+                        });
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div>
-                    <Label>Professional Tax</Label>
-                    <Input
-                      type="number"
-                      value={formData.professional_tax}
-                      onChange={(e) => setFormData(p => ({ ...p, professional_tax: Number(e.target.value) }))}
+                ))}
+
+                {/* Add Deduction Button */}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add Deduction
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add Custom Deduction</DialogTitle>
+                      <DialogDescription>Enter the deduction name and amount</DialogDescription>
+                    </DialogHeader>
+                    <AddDeductionDialog
+                      onAdd={(name, amount) => {
+                        setFormData(p => ({
+                          ...p,
+                          manual_deductions: {
+                            ...p.manual_deductions,
+                            [name]: parseFloat(amount) || 0
+                          }
+                        }));
+                      }}
                     />
-                  </div>
-                  <div>
-                    <Label>Other Deductions</Label>
-                    <Input
-                      type="number"
-                      value={formData.other_deductions}
-                      onChange={(e) => setFormData(p => ({ ...p, other_deductions: Number(e.target.value) }))}
-                    />
-                  </div>
-                </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </TabsContent>
           </Tabs>
@@ -2787,53 +3293,92 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
               {/* B. Total Earnings */}
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>B. Total Earnings</span>
+                  <span>B. Fixed Earnings (Gross Salary)</span>
                 </div>
                 <div className="flex justify-between text-sm pl-4">
                   <span>Fixed Gross (Earned based on attendance)</span>
                   <span className="font-medium">₹{calculateSalary().grossEarned.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Performance Based Earnings</span>
-                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
-                </div>
                 <div className="flex justify-between font-semibold pl-4 text-base">
-                  <span>Total Gross Earnings</span>
-                  <span className="text-primary">₹{calculateSalary().totalGrossEarnings.toLocaleString()}</span>
+                  <span>Total Fixed Earnings</span>
+                  <span className="text-primary">₹{calculateSalary().grossEarned.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* C. Employee Deductions */}
+              {/* C. Employee Deductions (on Fixed Earnings) */}
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>C. Employee Deductions</span>
+                  <span>C. Employee Deductions (on Fixed Earnings)</span>
                 </div>
                 <div className="flex justify-between text-sm pl-4">
-                  <span>EPF Employee</span>
+                  <span>EPF Employee ({formData.epf_percentage}% of Basic)</span>
                   <span className="font-medium">₹{calculateSalary().epfEmployee.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm pl-4">
-                  <span>ESIC Employee</span>
+                  <span>ESIC Employee ({formData.esic_percentage}% of Gross)</span>
                   <span className="font-medium">₹{calculateSalary().esicEmployee.toLocaleString()}</span>
                 </div>
+                
+                {/* Custom Manual Deductions */}
+                {Object.entries(formData.manual_deductions).map(([name, amount]) => (
+                  <div key={name} className="flex justify-between text-sm pl-4">
+                    <span>{name}</span>
+                    <span className="font-medium">₹{(parseFloat(amount as any) || 0).toLocaleString()}</span>
+                  </div>
+                ))}
+                
                 <div className="flex justify-between font-semibold pl-4 text-base">
                   <span>Total Deductions</span>
                   <span className="text-destructive">₹{calculateSalary().totalDeductions.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* D. Net Payable */}
+              {/* D. Performance Based Earnings (Added after deductions) */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>D. Performance Based Earnings</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Performance Based Earnings</span>
+                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-semibold pl-4 text-base">
+                  <span>Total Performance Earnings</span>
+                  <span className="text-blue-600">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* E. Total Gross Earnings */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between font-semibold text-base border-b pb-2">
+                  <span>E. Total Gross Earnings</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Fixed Earnings - Deductions</span>
+                  <span className="font-medium">₹{(calculateSalary().grossEarned - calculateSalary().totalDeductions).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm pl-4">
+                  <span>Performance Based Earnings</span>
+                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold text-xl border-b pb-2">
+                  <span>Total Gross Earnings</span>
+                  <span className="text-primary">₹{calculateSalary().totalGrossEarnings.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* F. Net Payable */}
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between font-bold text-xl border-t-2 pt-3 text-green-600">
-                  <span>D. Net Payable to Employee</span>
+                  <span>F. Net Payable to Employee</span>
                   <span>₹{calculateSalary().netPayable.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* E. Employer Contributions */}
+              {/* G. Employer Contributions */}
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>E. Employer Contributions</span>
+                  <span>G. Employer Contributions</span>
                 </div>
                 <div className="flex justify-between text-sm pl-4">
                   <span>EPF Employer ({formData.epf_percentage}%)</span>
@@ -2849,10 +3394,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </div>
               </div>
 
-              {/* F. Total CTC */}
+              {/* H. Total CTC */}
               <div className="space-y-2 pt-2">
                 <div className="flex justify-between font-bold text-2xl border-t-2 pt-3 text-primary">
-                  <span>F. Total Cost to Company</span>
+                  <span>H. Total Cost to Company</span>
                   <span>₹{calculateSalary().totalCTC.toLocaleString()}</span>
                 </div>
                 <p className="text-xs text-muted-foreground text-center">
