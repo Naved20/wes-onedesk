@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Megaphone, Plus, FileText, Download, File, Image as ImageIcon, Trash2, Edit } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { ReactQuillWrapper } from "@/components/ui/react-quill-wrapper";
+import { sendNotification } from "@/lib/notificationService";
 
 // Custom styles for Quill editor
 const editorStyle = `
@@ -228,6 +229,18 @@ export default function Announcements() {
         description: "Announcement posted successfully",
       });
 
+      // Send notification to all employees
+      try {
+        await sendNotification(
+          "",
+          `New Announcement: ${formData.title}`,
+          formData.title,
+          "info"
+        );
+      } catch (err) {
+        console.error("Error sending announcement notification:", err);
+      }
+
       setFormData({ title: "", content: "", file: null });
       setOpen(false);
       fetchAnnouncements(true); // Reset and reload
@@ -265,6 +278,18 @@ export default function Announcements() {
         title: "Success",
         description: "Announcement deleted successfully",
       });
+
+      // Send notification about deleted announcement
+      try {
+        await sendNotification(
+          "",
+          "Announcement Deleted",
+          "An announcement has been removed",
+          "info"
+        );
+      } catch (err) {
+        console.error("Error sending delete announcement notification:", err);
+      }
 
       fetchAnnouncements(true); // Reset and reload
     } catch (error) {
@@ -359,6 +384,18 @@ export default function Announcements() {
         title: "Success",
         description: "Announcement updated successfully",
       });
+
+      // Send notification about updated announcement
+      try {
+        await sendNotification(
+          "",
+          `Announcement Updated: ${editFormData.title}`,
+          editFormData.title,
+          "info"
+        );
+      } catch (err) {
+        console.error("Error sending update announcement notification:", err);
+      }
 
       setEditOpen(false);
       setEditingAnnouncement(null);

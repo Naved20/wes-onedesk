@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { playNotificationSound } from "@/lib/audioNotification";
 
 interface Notification {
   id: string;
@@ -84,7 +85,11 @@ export function NotificationBell() {
           if (seenIds.current.has(n.id)) return;
           seenIds.current.add(n.id);
           setItems((prev) => [n, ...prev].slice(0, 50));
-          // Browser push (foreground)
+          
+          // Play notification sound
+          playNotificationSound(n.title);
+          
+          // Browser push notification (foreground)
           if (
             typeof window !== "undefined" &&
             "Notification" in window &&

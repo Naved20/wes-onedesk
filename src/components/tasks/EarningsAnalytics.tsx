@@ -350,9 +350,8 @@ export function EarningsAnalytics() {
           </CardContent>
         </Card>
       ) : (
-        <Tabs defaultValue="by-type" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="by-type">By Task Type</TabsTrigger>
+        <Tabs defaultValue="by-person" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="by-person">By Person</TabsTrigger>
             <TabsTrigger value="details">Details Table</TabsTrigger>
           </TabsList>

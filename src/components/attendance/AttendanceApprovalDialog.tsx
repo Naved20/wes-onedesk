@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
+import { attendanceNotifications } from "@/lib/notificationService";
 import { CheckCircle, XCircle, Clock, AlertTriangle, Shield, Edit } from "lucide-react";
 
 interface AttendanceRecord {
@@ -97,6 +98,9 @@ export function AttendanceApprovalDialog({
 
       if (error) throw error;
 
+      // Send approval notification
+      await attendanceNotifications.approved(attendance.user_id);
+
       toast({ title: "Approved", description: "Attendance approved successfully" });
       onClose();
       onUpdate();
@@ -135,6 +139,9 @@ export function AttendanceApprovalDialog({
         .eq("id", attendance.id);
 
       if (error) throw error;
+
+      // Send rejection notification
+      await attendanceNotifications.rejected(attendance.user_id, rejectionReason.trim());
 
       toast({ title: "Rejected", description: "Attendance rejected" });
       setRejectionReason("");

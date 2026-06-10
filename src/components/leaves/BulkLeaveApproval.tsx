@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { CheckCircle, XCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { leaveNotifications } from "@/lib/notificationService";
 
 interface LeaveRequest {
   id: string;
@@ -78,6 +79,16 @@ export function BulkLeaveApproval({
     setProcessing(true);
     try {
       await onBulkApprove(selectedIds);
+
+      // Send approval notifications to all affected employees
+      for (const leave of pendingLeaves.filter(l => selectedIds.includes(l.id))) {
+        await leaveNotifications.approved(
+          leave.user_id,
+          leave.leave_type || "leave",
+          format(new Date(leave.start_date), "MMM dd, yyyy")
+        ).catch(err => console.error("Failed to send notification:", err));
+      }
+
       onSelectionChange([]);
       toast({
         title: "Bulk Approval Complete",
@@ -100,6 +111,16 @@ export function BulkLeaveApproval({
     setProcessing(true);
     try {
       await onBulkReject(selectedIds, rejectionReason);
+
+      // Send rejection notifications to all affected employees
+      for (const leave of pendingLeaves.filter(l => selectedIds.includes(l.id))) {
+        await leaveNotifications.rejected(
+          leave.user_id,
+          leave.leave_type || "leave",
+          rejectionReason
+        ).catch(err => console.error("Failed to send notification:", err));
+      }
+
       onSelectionChange([]);
       setRejectionReason("");
       setRejectDialogOpen(false);

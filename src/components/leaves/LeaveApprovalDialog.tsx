@@ -14,6 +14,8 @@ import {
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { leaveNotifications } from "@/lib/notificationService";
 
 interface LeaveRequest {
   id: string;
@@ -97,20 +99,74 @@ export function LeaveApprovalDialog({
   const handleApprove = async () => {
     setProcessing("approve");
     try {
-      await onApprove(leave.id);
+      const { error } = await supabase
+        .from("leaves")
+        .update({ status: "approved" })
+        .eq("id", leave.id);
+
+      if (error) throw error;
+
+      // Send approval notification to employee
+      await leaveNotifications.approved(
+        leave.user_id,
+        leave.leave_type || "leave",
+        format(new Date(leave.start_date), "MMM dd, yyyy")
+      );
+
+      toast({ title: "Approved", description: "Leave approved successfully" });
       onOpenChange(false);
+      await onApprove(leave.id);
+    } catch (error) {
+      console.error("Error approving leave:", error);
+      toast({
+        title: "Error",
+        description: "Failed to approve leave",
+        variant: "destructive",
+      });
     } finally {
       setProcessing(null);
     }
   };
 
   const handleReject = async () => {
-    if (!rejectionReason.trim()) return;
+    if (!rejectionReason.trim()) {
+      toast({
+        title: "Reason Required",
+        description: "Please provide a reason for rejection",
+        variant: "destructive",
+      });
+      return;
+    }
     setProcessing("reject");
     try {
-      await onReject(leave.id, rejectionReason.trim());
+      const { error } = await supabase
+        .from("leaves")
+        .update({ 
+          status: "rejected",
+          rejection_reason: rejectionReason.trim()
+        })
+        .eq("id", leave.id);
+
+      if (error) throw error;
+
+      // Send rejection notification to employee
+      await leaveNotifications.rejected(
+        leave.user_id,
+        leave.leave_type || "leave",
+        rejectionReason.trim()
+      );
+
+      toast({ title: "Rejected", description: "Leave rejected successfully" });
       setRejectionReason("");
       onOpenChange(false);
+      await onReject(leave.id, rejectionReason.trim());
+    } catch (error) {
+      console.error("Error rejecting leave:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reject leave",
+        variant: "destructive",
+      });
     } finally {
       setProcessing(null);
     }

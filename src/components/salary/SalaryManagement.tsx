@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText, Gift, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
+import { sendNotification } from "@/lib/notificationService";
 
 interface Employee {
   user_id: string;
@@ -761,6 +762,28 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       if (error) throw error;
 
       const result = data as { created: number; skipped: number; working_days: number };
+      
+      // Send notifications to all employees whose salaries were created
+      if (result.created > 0) {
+        const { data: createdSalaries } = await supabase
+          .from("salaries")
+          .select("user_id")
+          .eq("month", selectedMonth)
+          .eq("year", selectedYear)
+          .limit(result.created);
+
+        if (createdSalaries) {
+          const userIds = createdSalaries.map(s => s.user_id);
+          for (const userId of userIds) {
+            await sendNotification({
+              userId,
+              title: "Salary Generated",
+              message: `Your salary for ${selectedMonth}/${selectedYear} has been generated and is pending approval.`,
+              type: "salary",
+            });
+          }
+        }
+      }
       
       toast({
         title: "Salaries Generated",
@@ -2145,6 +2168,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
   const handleApprove = async (salaryId: string) => {
     try {
+      const salary = salaryRecords.find(s => s.id === salaryId);
+      if (!salary) return;
+
       const { error } = await supabase
         .from("salaries")
         .update({
@@ -2155,6 +2181,15 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .eq("id", salaryId);
 
       if (error) throw error;
+
+      // Send notification to employee
+      await sendNotification({
+        userId: salary.user_id,
+        title: "Salary Approved",
+        message: `Your salary for ${selectedMonth}/${selectedYear} has been approved.`,
+        type: "salary",
+        relatedId: salaryId,
+      });
 
       toast({
         title: "Success",
@@ -2173,6 +2208,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
   const handleLock = async (salaryId: string) => {
     try {
+      const salary = salaryRecords.find(s => s.id === salaryId);
+      if (!salary) return;
+
       const { error } = await supabase
         .from("salaries")
         .update({
@@ -2184,6 +2222,15 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .eq("id", salaryId);
 
       if (error) throw error;
+
+      // Send notification to employee
+      await sendNotification({
+        userId: salary.user_id,
+        title: "Salary Locked",
+        message: `Your salary for ${selectedMonth}/${selectedYear} has been finalized and locked.`,
+        type: "salary",
+        relatedId: salaryId,
+      });
 
       toast({
         title: "Success",

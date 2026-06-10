@@ -1,0 +1,226 @@
+📱 FIREBASE MOBILE NOTIFICATIONS - QUICK START GUIDE
+
+═════════════════════════════════════════════════════════════════════════════════
+
+⏱️ TOTAL TIME: ~1 hour (30-45 min Firebase setup + 15-20 min deployment)
+
+═════════════════════════════════════════════════════════════════════════════════
+STEP-BY-STEP SUMMARY
+═════════════════════════════════════════════════════════════════════════════════
+
+STEP 1: CREATE FIREBASE PROJECT (5 min)
+├─ Go to: https://console.firebase.google.com
+├─ Click "+ Add Project"
+├─ Enter name: "WES OneDesk"
+├─ Click "Create Project"
+└─ Wait 2-3 minutes
+
+STEP 2: GET WEB CONFIG (5 min)
+├─ In Firebase Console
+├─ Click "</> Web" to add web app
+├─ Enter name: "WES OneDesk Web"
+├─ Click "Register app"
+├─ Copy the firebaseConfig object (7 values)
+└─ Save it!
+
+STEP 3: GET CREDENTIALS (5 min)
+├─ Settings (top-right) → Project Settings
+├─ Cloud Messaging tab
+├─ Copy: Sender ID, Server API Key, Public Key (VAPID)
+└─ Save these!
+
+STEP 4: UPDATE .ENV FILE (5 min)
+├─ Open: .env file in your project
+├─ Fill in Firebase values:
+│  REACT_APP_FIREBASE_API_KEY="your_value"
+│  REACT_APP_FIREBASE_AUTH_DOMAIN="your_value"
+│  REACT_APP_FIREBASE_PROJECT_ID="your_value"
+│  REACT_APP_FIREBASE_STORAGE_BUCKET="your_value"
+│  REACT_APP_FIREBASE_MESSAGING_SENDER_ID="your_value"
+│  REACT_APP_FIREBASE_APP_ID="your_value"
+│  REACT_APP_FIREBASE_MEASUREMENT_ID="your_value"
+└─ Save file (Ctrl+S)
+
+STEP 5: DEPLOY DATABASE MIGRATION (5 min)
+├─ Go to: https://app.supabase.com
+├─ Open your project
+├─ SQL Editor (left sidebar)
+├─ New Query
+├─ Copy file: supabase/migrations/20260610_create_fcm_tokens_table.sql
+├─ Paste in SQL editor
+├─ Click "Execute"
+└─ See: "Query executed successfully"
+
+STEP 6: DEPLOY CLOUD FUNCTION (10 min)
+├─ Terminal/PowerShell in project folder
+├─ npm install -g supabase
+├─ supabase login (sign in with browser)
+├─ supabase link (enter your project ref)
+├─ supabase functions deploy send-fcm-notification
+└─ See: "Function deployed successfully"
+
+STEP 7: RESTART APP (2 min)
+├─ Stop current dev server (Ctrl+C)
+├─ npm run dev
+└─ Opens on http://localhost:5173
+
+STEP 8: TEST ON MOBILE (10 min)
+├─ Find your computer IP: ipconfig (in Windows)
+├─ On mobile phone browser: http://YOUR_IP:5173
+├─ Log in
+├─ Click "Allow" for notifications
+├─ Generate salary/approve leave
+├─ Watch for notification on phone! 📱
+
+═════════════════════════════════════════════════════════════════════════════════
+WHAT YOU NEED TO COPY FROM FIREBASE
+═════════════════════════════════════════════════════════════════════════════════
+
+When you register a web app in Firebase, you get this:
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA_xxxxxxxxxxxxxx",
+  authDomain: "wes-onedesk-12345.firebaseapp.com",
+  projectId: "wes-onedesk-12345",
+  storageBucket: "wes-onedesk-12345.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456",
+  measurementId: "G-XXXXXXXXXX"
+};
+
+Copy these 7 values exactly to .env file!
+
+═════════════════════════════════════════════════════════════════════════════════
+EXAMPLE .ENV FILE
+═════════════════════════════════════════════════════════════════════════════════
+
+# Existing config
+VITE_SUPABASE_URL="https://..."
+VITE_SUPABASE_PUBLISHABLE_KEY="eyJ..."
+
+# Firebase Configuration (ADD THESE)
+REACT_APP_FIREBASE_API_KEY="AIzaSyA_xxxxxxxxxxxxxx"
+REACT_APP_FIREBASE_AUTH_DOMAIN="wes-onedesk-12345.firebaseapp.com"
+REACT_APP_FIREBASE_PROJECT_ID="wes-onedesk-12345"
+REACT_APP_FIREBASE_STORAGE_BUCKET="wes-onedesk-12345.appspot.com"
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID="123456789"
+REACT_APP_FIREBASE_APP_ID="1:123456789:web:abcdef123456"
+REACT_APP_FIREBASE_MEASUREMENT_ID="G-XXXXXXXXXX"
+
+═════════════════════════════════════════════════════════════════════════════════
+TESTING ON MOBILE - STEP BY STEP
+═════════════════════════════════════════════════════════════════════════════════
+
+1. FIND YOUR COMPUTER IP:
+   └─ Windows: Open cmd → type "ipconfig" → look for "IPv4 Address"
+   └─ Example: 192.168.1.100
+
+2. ON MOBILE DEVICE:
+   ├─ Open mobile browser (Chrome, Safari)
+   ├─ Type URL: http://192.168.1.100:5173
+   ├─ Press Enter
+
+3. LOG IN:
+   ├─ Use your login credentials
+   └─ Submit
+
+4. ALLOW NOTIFICATIONS:
+   ├─ Pop-up appears: "Allow notifications?"
+   ├─ Click "Allow"
+   └─ Wait for token to be saved
+
+5. GENERATE A NOTIFICATION:
+   ├─ Open admin panel (if admin user)
+   ├─ Generate Salary (or Approve Leave/Attendance)
+   ├─ Submit
+   └─ WATCH YOUR PHONE! 👀
+
+6. CHECK YOUR PHONE:
+   ├─ You should see notification:
+   │  "🔔 Salary Approved"
+   │  "Your salary has been approved"
+   ├─ You should hear SOUND on web (if browser open)
+   └─ Tap notification to open app
+
+═════════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING
+═════════════════════════════════════════════════════════════════════════════════
+
+NO NOTIFICATION ON PHONE?
+├─ Check 1: .env file has correct values (no typos, no extra spaces)
+├─ Check 2: Did you restart npm run dev? (Just updating .env isn't enough)
+├─ Check 3: Did you allow notifications when popup appeared?
+├─ Check 4: Check browser console (F12) for errors
+├─ Check 5: Check Supabase → user_fcm_tokens table (is token saved?)
+└─ Fix: Go through steps 1-3 again carefully
+
+CREDENTIALS ERROR?
+├─ Check: Is .env file format correct? (need quotes around values)
+├─ Check: Did you save .env file after editing?
+├─ Check: Restart app (Ctrl+C, then npm run dev)
+└─ Fix: Update .env with correct values
+
+CAN'T DEPLOY CLOUD FUNCTION?
+├─ Check: supabase login works (opens browser to sign in)
+├─ Check: supabase link works (shows your project)
+├─ Check: File exists: supabase/functions/send-fcm-notification/index.ts
+└─ Fix: Try again: supabase functions deploy send-fcm-notification
+
+DATABASE MIGRATION FAILS?
+├─ Check: You're in correct Supabase project
+├─ Check: SQL syntax is correct (don't modify file)
+├─ Check: Table doesn't already exist
+└─ Fix: Try again in SQL Editor
+
+═════════════════════════════════════════════════════════════════════════════════
+FILES TO KNOW ABOUT
+═════════════════════════════════════════════════════════════════════════════════
+
+Configuration:
+├─ .env (where you put Firebase credentials)
+├─ src/lib/firebaseConfig.ts (Firebase setup)
+└─ src/lib/firebaseMessaging.ts (FCM handling)
+
+Database:
+├─ supabase/migrations/20260610_create_fcm_tokens_table.sql (creates table)
+└─ user_fcm_tokens table (stores device tokens)
+
+Functions:
+├─ supabase/functions/send-fcm-notification/ (sends to Firebase)
+├─ src/lib/notificationService.ts (calls the function)
+└─ src/hooks/useAuth.tsx (initializes Firebase)
+
+Service Worker:
+└─ public/firebase-messaging-sw.js (handles background notifications)
+
+═════════════════════════════════════════════════════════════════════════════════
+FINAL CHECKLIST BEFORE TESTING
+═════════════════════════════════════════════════════════════════════════════════
+
+Before you test on mobile, make sure:
+
+□ Firebase project created
+□ Web app registered in Firebase
+□ All 7 config values copied to .env
+□ .env file saved
+□ npm run dev restarted
+□ Supabase migration deployed
+□ Supabase Cloud Function deployed
+□ Can access app on mobile phone
+□ Notification permission allowed on mobile
+□ Test notification received
+
+═════════════════════════════════════════════════════════════════════════════════
+
+✨ That's it! After these steps, mobile notifications are ready!
+
+When someone approves/rejects/generates:
+✓ Sound plays on web browser
+✓ Notification appears on mobile phone
+✓ User can tap to open app
+
+═════════════════════════════════════════════════════════════════════════════════
+
+For detailed step-by-step guide, see: FIREBASE_SETUP_DETAILED.txt
+
+═════════════════════════════════════════════════════════════════════════════════

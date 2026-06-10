@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Notification Sounds</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .sounds-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .sound-button {
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .sound-button:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+        }
+
+        .sound-button:active {
+            transform: translateY(-2px);
+        }
+
+        .sound-button.success {
+            color: #10b981;
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .sound-button.success:hover {
+            background: #dcfce7;
+        }
+
+        .sound-button.warning {
+            color: #f59e0b;
+            border-color: #f59e0b;
+            background: #fffbf0;
+        }
+
+        .sound-button.warning:hover {
+            background: #fef3c7;
+        }
+
+        .sound-button.error {
+            color: #ef4444;
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .sound-button.error:hover {
+            background: #fee2e2;
+        }
+
+        .sound-button.info {
+            color: #3b82f6;
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+
+        .sound-button.info:hover {
+            background: #e0f2fe;
+        }
+
+        .sound-button.default {
+            color: #8b5cf6;
+            border-color: #8b5cf6;
+            background: #faf5ff;
+        }
+
+        .sound-button.default:hover {
+            background: #f3e8ff;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .info-box p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .sound-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .sound-list h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .sound-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sound-item:last-child {
+            border-bottom: none;
+        }
+
+        .sound-icon {
+            font-size: 24px;
+            margin-right: 12px;
+            min-width: 30px;
+        }
+
+        .sound-info {
+            flex: 1;
+        }
+
+        .sound-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .sound-desc {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .volume-control {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .volume-control label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .volume-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+        }
+
+        .volume-value {
+            text-align: right;
+            margin-top: 8px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .notification-examples {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .notification-examples h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .example-button {
+            display: inline-block;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            padding: 10px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .example-button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .example-button:active {
+            transform: translateY(0);
+        }
+
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Notification Sounds Test</h1>
+        <p class="subtitle">Click below to test different notification sound types</p>
+
+        <div class="info-box">
+            <h3>About Notification Sounds</h3>
+            <p>
+                The system uses Web Audio API to generate unique sounds for different notifications.
+                Each notification type has its own frequency and pattern to provide instant audio feedback.
+            </p>
+        </div>
+
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">Test Sounds</h3>
+        <div class="sounds-grid">
+            <button class="sound-button success" onclick="playSound('success')">
+                🎵 Success
+            </button>
+            <button class="sound-button warning" onclick="playSound('warning')">
+                ⚠️ Warning
+            </button>
+            <button class="sound-button error" onclick="playSound('error')">
+                ❌ Error
+            </button>
+            <button class="sound-button info" onclick="playSound('info')">
+                ℹ️ Info
+            </button>
+            <button class="sound-button default" onclick="playSound('default')">
+                🔔 Default
+            </button>
+        </div>
+
+        <div class="volume-control">
+            <label for="volumeSlider">Master Volume</label>
+            <input 
+                type="range" 
+                id="volumeSlider" 
+                class="volume-slider" 
+                min="0" 
+                max="100" 
+                value="30"
+                onchange="updateVolume(this.value)"
+            >
+            <div class="volume-value">
+                Volume: <span id="volumeValue">30</span>%
+            </div>
+        </div>
+
+        <div class="sound-list">
+            <h3>Sound Types & Uses</h3>
+            <div class="sound-item">
+                <div class="sound-icon">🎵</div>
+                <div class="sound-info">
+                    <div class="sound-name">Success (C Major Chord)</div>
+                    <div class="sound-desc">Salary Approved, Leave Approved, Task Completed, Attendance Approved</div>
+                </div>
+            </div>
+            <div class="sound-item">
+                <div class="sound-icon">⚠️</div>
+                <div class="sound-info">
+                    <div class="sound-name">Warning (Double Beep)</div>
+                    <div class="sound-desc">Leave Applied, Pending Approvals</div>
+                </div>
+            </div>
+            <div class="sound-item">
+                <div class="sound-icon">❌</div>
+                <div class="sound-info">
+                    <div class="sound-name">Error (Descending Tones)</div>
+                    <div class="sound-desc">Leave Rejected, Attendance Rejected, Task Overdue</div>
+                </div>
+            </div>
+            <div class="sound-item">
+                <div class="sound-icon">ℹ️</div>
+                <div class="sound-info">
+                    <div class="sound-name">Info (Clear Tone)</div>
+                    <div class="sound-desc">Salary Generated, General Announcements</div>
+                </div>
+            </div>
+            <div class="sound-item">
+                <div class="sound-icon">🔔</div>
+                <div class="sound-info">
+                    <div class="sound-name">Default (Standard Tone)</div>
+                    <div class="sound-desc">Other notifications</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="notification-examples">
+            <h3>Quick Demo - Simulate Notifications</h3>
+            <button class="example-button" onclick="simulateNotification('Salary Approved')">Salary Approved</button>
+            <button class="example-button" onclick="simulateNotification('Leave Applied')">Leave Applied</button>
+            <button class="example-button" onclick="simulateNotification('Leave Rejected')">Leave Rejected</button>
+            <button class="example-button" onclick="simulateNotification('Attendance Approved')">Attendance Approved</button>
+            <button class="example-button" onclick="simulateNotification('Task Completed')">Task Completed</button>
+        </div>
+
+        <footer>
+            <p>💡 Tip: Use volume slider to adjust notification sound level</p>
+            <p>🎧 Make sure your device volume is not muted</p>
+        </footer>
+    </div>
+
+    <script>
+        let audioContext = null;
+        let masterVolume = 0.3;
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        function updateVolume(value) {
+            masterVolume = value / 100;
+            document.getElementById('volumeValue').textContent = value;
+        }
+
+        function playTone(frequency, duration, startTime, destination) {
+            const oscillator = audioContext.createOscillator();
+            const envelope = audioContext.createGain();
+
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+
+            envelope.gain.setValueAtTime(0, startTime);
+            envelope.gain.linearRampToValueAtTime(1, startTime + 0.02);
+            envelope.gain.linearRampToValueAtTime(0.7, startTime + duration * 0.5);
+            envelope.gain.linearRampToValueAtTime(0, startTime + duration);
+
+            oscillator.connect(envelope);
+            envelope.connect(destination);
+
+            oscillator.start(startTime);
+            oscillator.stop(startTime + duration);
+        }
+
+        function playSound(type) {
+            initAudioContext();
+
+            const now = audioContext.currentTime;
+            const volumeNode = audioContext.createGain();
+            volumeNode.connect(audioContext.destination);
+            volumeNode.gain.value = masterVolume;
+
+            switch (type) {
+                case 'success':
+                    playTone(261.63, 0.1, now, volumeNode);      // C
+                    playTone(329.63, 0.1, now + 0.05, volumeNode); // E
+                    playTone(392.0, 0.15, now + 0.1, volumeNode);  // G
+                    break;
+                case 'warning':
+                    playTone(440, 0.1, now, volumeNode);
+                    playTone(440, 0.1, now + 0.15, volumeNode);
+                    break;
+                case 'error':
+                    playTone(494.0, 0.1, now, volumeNode);        // B
+                    playTone(392.0, 0.1, now + 0.1, volumeNode);  // G
+                    playTone(329.63, 0.15, now + 0.2, volumeNode); // E
+                    break;
+                case 'info':
+                    playTone(523.25, 0.2, now, volumeNode); // C5
+                    break;
+                case 'default':
+                    playTone(440, 0.15, now, volumeNode); // A
+                    break;
+            }
+        }
+
+        function determineSound(title) {
+            if (title.includes('Approved') || title.includes('Completed')) {
+                return 'success';
+            } else if (title.includes('Rejected') || title.includes('Overdue')) {
+                return 'error';
+            } else if (title.includes('Applied') || title.includes('Pending')) {
+                return 'warning';
+            } else {
+                return 'info';
+            }
+        }
+
+        function simulateNotification(title) {
+            const soundType = determineSound(title);
+            playSound(soundType);
+            
+            // Optional: Show a visual indicator
+            const button = event.target;
+            const originalBg = button.style.background;
+            button.style.background = '#10b981';
+            button.textContent = '✓ Playing...';
+            
+            setTimeout(() => {
+                button.style.background = originalBg;
+                button.textContent = title;
+            }, 500);
+        }
+
+        // Initialize audio context on first interaction
+        document.addEventListener('click', initAudioContext, { once: true });
+    </script>
+</body>
+</html>

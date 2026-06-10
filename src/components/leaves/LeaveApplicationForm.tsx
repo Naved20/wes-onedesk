@@ -24,6 +24,7 @@ import { AlertTriangle, Info, Loader2, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { differenceInDays, format, addDays, isSunday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { leaveNotifications } from "@/lib/notificationService";
 
 type LeaveType = "casual" | "sick" | "unplanned" | "emergency";
 
@@ -217,6 +218,15 @@ export function LeaveApplicationForm({
       });
 
       if (error) throw error;
+
+      // Send notification to employee
+      const workingDaysDisplay = isHalfDay ? "0.5" : String(workingDays);
+      await leaveNotifications.applied(
+        userId,
+        leaveType,
+        parseInt(workingDaysDisplay) || 1,
+        format(new Date(startDate), "MMM dd, yyyy")
+      );
 
       onSuccess();
       resetForm();

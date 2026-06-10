@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { initializeFirebaseMessaging } from "@/lib/firebaseMessaging";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -33,6 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           setTimeout(() => {
             fetchUserRole(session.user.id);
+            // Initialize Firebase Messaging for push notifications
+            initializeFirebaseMessaging().catch(err => 
+              console.error("Firebase messaging setup failed:", err)
+            );
           }, 0);
         } else {
           setRole(null);
@@ -46,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserRole(session.user.id);
+        // Initialize Firebase Messaging for push notifications
+        initializeFirebaseMessaging().catch(err => 
+          console.error("Firebase messaging setup failed:", err)
+        );
       } else {
         setLoading(false);
       }
