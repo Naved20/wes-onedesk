@@ -39,7 +39,7 @@ const editorStyle = `
 type CompanyDocument = Database["public"]["Tables"]["company_documents"]["Row"];
 
 export default function Documents() {
-  const { role, user } = useAuth();
+  const { role, user, institution } = useAuth();
   const [documents, setDocuments] = useState<CompanyDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -52,6 +52,7 @@ export default function Documents() {
     document_type: "Policy Documents",
     document_link: "",
     custom_type: "",
+    institutes: ["WES", "DPS", "CLAS", "WESA"],
   });
   const [documentTypes, setDocumentTypes] = useState<string[]>([]);
   const [showCustomType, setShowCustomType] = useState(false);
@@ -59,6 +60,8 @@ export default function Documents() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("table");
   const [sortField, setSortField] = useState<"title" | "type" | "date">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [institutions, setInstitutions] = useState<string[]>(["WES", "DPS", "CLAS", "WESA"]);
+  const [selectedInstitutes, setSelectedInstitutes] = useState<string[]>(["WES", "DPS", "CLAS", "WESA"]);
 
   // Add custom styles
   useEffect(() => {
@@ -73,7 +76,7 @@ export default function Documents() {
   useEffect(() => {
     fetchDocuments();
     fetchDocumentTypes();
-  }, []);
+  }, [institution, role]);
 
   const fetchDocuments = async () => {
     try {
@@ -83,7 +86,18 @@ export default function Documents() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setDocuments(data || []);
+      
+      // Filter documents based on user's institute (if employee)
+      // Admins/managers see all documents
+      let filteredData = data || [];
+      if (role === "employee" && institution) {
+        filteredData = (data || []).filter((doc) => {
+          const applicableInstitutes = doc.applicable_institutes as string[];
+          return applicableInstitutes && applicableInstitutes.includes(institution);
+        });
+      }
+      
+      setDocuments(filteredData);
     } catch (error) {
       console.error("Error fetching documents:", error);
       toast({
@@ -158,6 +172,7 @@ export default function Documents() {
             description: formData.description || null,
             document_type: finalDocumentType,
             document_link: formData.document_link || null,
+            applicable_institutes: formData.institutes,
             updated_by: user?.id,
           })
           .eq("id", editingDocument.id);
@@ -178,6 +193,7 @@ export default function Documents() {
             description: formData.description || null,
             document_type: finalDocumentType,
             document_link: formData.document_link || null,
+            applicable_institutes: formData.institutes,
           });
 
         if (error) throw error;
@@ -194,6 +210,7 @@ export default function Documents() {
         document_type: "Policy Documents",
         document_link: "",
         custom_type: "",
+        institutes: ["WES", "DPS", "CLAS", "WESA"],
       });
       setShowCustomType(false);
       setEditingDocument(null);
@@ -220,6 +237,7 @@ export default function Documents() {
       document_type: isCustomType ? "Other" : (document.document_type || "Policy Documents"),
       document_link: document.document_link || "",
       custom_type: isCustomType ? (document.document_type || "") : "",
+      institutes: (document.applicable_institutes as string[]) || ["WES", "DPS", "CLAS", "WESA"],
     });
     setShowCustomType(isCustomType);
     setOpen(true);
@@ -234,6 +252,7 @@ export default function Documents() {
       document_type: "Policy Documents",
       document_link: "",
       custom_type: "",
+      institutes: ["WES", "DPS", "CLAS", "WESA"],
     });
     setShowCustomType(false);
   };
@@ -341,20 +360,20 @@ export default function Documents() {
               <DialogTrigger asChild>
                 <Button onClick={() => {
                   setEditingDocument(null);
-                  setFormData({ title: "", description: "", document_type: "Policy Documents", document_link: "", custom_type: "" });
+                  setFormData({ title: "", description: "", document_type: "Policy Documents", document_link: "", custom_type: "", institutes: ["WES", "DPS", "CLAS", "WESA"] });
                   setOpen(true);
                 }}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Document
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
+              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingDocument ? "Edit Document" : "Create New Document"}
                   </DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 pr-4">
                   <div className="space-y-2">
                     <Label htmlFor="title">Title</Label>
                     <Input
@@ -420,6 +439,40 @@ export default function Documents() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Add a link to an external document or file
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Applicable For Institutions</Label>
+                    <div className="border rounded-md bg-muted/50 p-3 overflow-x-auto">
+                      <div className="flex gap-3 min-w-min">
+                        {institutions.map((institute) => (
+                          <label key={institute} className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={(formData.institutes || []).includes(institute)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData({
+                                    ...formData,
+                                    institutes: [...(formData.institutes || []), institute],
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    institutes: (formData.institutes || []).filter(i => i !== institute),
+                                  });
+                                }
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm font-medium">{institute}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select institutions where this document applies (By default all are selected)
                     </p>
                   </div>
 
@@ -536,6 +589,15 @@ export default function Documents() {
                               </span>
                             </div>
                           )}
+                          {(document.applicable_institutes as string[])?.length > 0 && (
+                            <div className="flex items-center gap-1 flex-wrap mt-2">
+                              {((document.applicable_institutes as string[]) || []).map((inst) => (
+                                <span key={inst} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                  {inst}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-muted-foreground">
@@ -632,7 +694,8 @@ export default function Documents() {
                             {getSortIcon("type")}
                           </button>
                         </TableHead>
-                        <TableHead className="w-[20%]">Link</TableHead>
+                        <TableHead className="w-[15%]">Institutes</TableHead>
+                        <TableHead className="w-[15%]">Link</TableHead>
                         <TableHead className="w-[15%]">
                           <button
                             onClick={() => handleSort("date")}
@@ -666,6 +729,19 @@ export default function Documents() {
                               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                                 {document.document_type}
                               </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {(document.applicable_institutes as string[])?.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {((document.applicable_institutes as string[]) || []).map((inst) => (
+                                  <span key={inst} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    {inst}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">All</span>
                             )}
                           </TableCell>
                           <TableCell>

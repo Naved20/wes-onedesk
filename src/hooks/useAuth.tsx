@@ -11,6 +11,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: AppRole | null;
+  institution: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -22,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [institution, setInstitution] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           setTimeout(() => {
             fetchUserRole(session.user.id);
+            fetchUserInstitution(session.user.id);
             // Initialize Firebase Messaging for push notifications
             initializeFirebaseMessaging().catch(err => 
               console.error("Firebase messaging setup failed:", err)
@@ -49,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }, 0);
         } else {
           setRole(null);
+          setInstitution(null);
           // Stop listening to notifications when logged out
           if (user?.id) {
             stopRealtimeNotifications(user.id);
@@ -63,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserRole(session.user.id);
+        fetchUserInstitution(session.user.id);
         // Initialize Firebase Messaging for push notifications
         initializeFirebaseMessaging().catch(err => 
           console.error("Firebase messaging setup failed:", err)
@@ -110,6 +115,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const fetchUserInstitution = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("employee_profiles")
+        .select("institution_assignment")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching user institution:", error);
+      } else if (data) {
+        setInstitution(data.institution_assignment);
+      }
+    } catch (error) {
+      console.error("Error fetching user institution:", error);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -130,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, role, institution, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

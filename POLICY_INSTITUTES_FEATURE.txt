@@ -1,0 +1,90 @@
+===============================================================================
+POLICY PAGE - INSTITUTE MULTI-SELECT FEATURE
+===============================================================================
+
+✅ FEATURE ADDED: Multi-select institutes when creating/editing policies
+
+WHAT'S NEW:
+───────────
+
+1. INSTITUTE SELECTION IN POLICY CREATION:
+   - When creating a new policy/document, admins can now select which institutes
+     the policy applies to
+   - Multi-select checkboxes for: WES, DPS, CLAS, WESA
+   - By default, ALL institutes are selected
+
+2. BY DEFAULT ALL SELECTED:
+   - When opening "Create Document" dialog, all 4 institutes are pre-selected
+   - Admins can uncheck any institute they don't want
+   - Or check/uncheck specific institutes as needed
+
+3. EDIT SUPPORT:
+   - When editing existing policies, the selected institutes are remembered
+   - Can modify which institutes the policy applies to during edit
+
+4. DATABASE:
+   - Institutes are stored in "applicable_institutes" column
+   - Stored as array in the company_documents table
+   - Can be used to filter policies per institute later
+
+HOW TO USE:
+───────────
+
+1. Go to "Policy and Procedures" section
+2. Click "Create Document" button
+3. Fill in:
+   - Title
+   - Document Type
+   - Document Link (optional)
+   - Description
+   
+4. NEW FIELD: "Applicable For Institutions"
+   - 4 checkboxes: WES, DPS, CLAS, WESA
+   - By default all are checked ✓
+   - Uncheck any that don't need this policy
+   
+5. Click "Create Document"
+
+EXAMPLE SCENARIOS:
+──────────────────
+
+Scenario 1: Policy for all institutes
+- Leave all 4 checked (default)
+- Click Create
+
+Scenario 2: Policy only for WES and DPS
+- Uncheck CLAS and WESA
+- Check WES and DPS only
+- Click Create
+
+Scenario 3: Policy only for one institute
+- Uncheck 3, leave 1 checked
+- Click Create
+
+
+TECHNICAL DETAILS:
+──────────────────
+
+File Modified: src/pages/Documents.tsx
+
+Changes:
+✓ Added 'institutes' state to track selected institutes
+✓ Added 'selectedInstitutes' state
+✓ Updated formData to include institutes array
+✓ Added multi-select checkbox UI before Description field
+✓ Updated handleSubmit to save applicable_institutes
+✓ Updated handleEdit to restore selected institutes
+✓ All form resets now include institutes with all selected by default
+
+
+FUTURE ENHANCEMENTS:
+────────────────────
+
+Possible next steps:
+1. Filter policies by employee's institute when viewing
+2. Bulk assign institutes to existing policies
+3. Institute-specific policy templates
+4. Policy versioning per institute
+
+
+===============================================================================
