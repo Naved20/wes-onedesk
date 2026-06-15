@@ -12,17 +12,15 @@ import {
   FileText,
   Clock,
   DollarSign,
-  Bell,
   Settings,
   Menu,
   X,
-  Building,
   Star,
   Megaphone,
-  Cloud,
   CheckSquare,
   ScanFace,
   UserCheck,
+  HelpCircle,
 } from "lucide-react";
 
 interface NavItem {
@@ -42,6 +40,7 @@ const navItems: NavItem[] = [
   { label: "Performance", href: "/performance", icon: <Star className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Announcements", href: "/announcements", icon: <Megaphone className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Training", href: "/tasks", icon: <CheckSquare className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
+  { label: "Support & Requests", href: "/support-requests", icon: <HelpCircle className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Peer Reviewer Groups", href: "/peer-reviewer-groups", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Assignment Groups", href: "/assignment-groups", icon: <UserCheck className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Shift Management", href: "/shifts", icon: <Clock className="h-5 w-5" />, roles: ["admin"] },

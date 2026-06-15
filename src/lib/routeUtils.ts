@@ -19,6 +19,7 @@ export const getAvailableRoutes = (): AvailableRoute[] => {
     { value: "/performance", label: "Performance", category: "Main" },
     { value: "/announcements", label: "Announcements", category: "Main" },
     { value: "/documents", label: "Documents", category: "Main" },
+    { value: "/support-requests", label: "Support & Requests", category: "Main" },
     
     // Admin Pages
     { value: "/institutions", label: "Institutions", category: "Admin" },
@@ -41,7 +42,6 @@ export const getAvailableRoutes = (): AvailableRoute[] => {
     { value: "/settings/privacy", label: "Privacy", category: "Settings" },
     { value: "/settings/appearance", label: "Appearance", category: "Settings" },
     { value: "/settings/language", label: "Language", category: "Settings" },
-    { value: "/settings/support", label: "Support Requests", category: "Settings" },
   ];
 };
 

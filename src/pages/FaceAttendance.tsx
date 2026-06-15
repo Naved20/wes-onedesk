@@ -44,11 +44,25 @@ export default function FaceAttendance() {
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Check if authenticated for face attendance
-    const isAuthenticated = localStorage.getItem("faceAttendanceAuth");
+    // Check if authenticated for face attendance (check both storages)
+    const localAuth = localStorage.getItem("faceAttendanceAuth") === "true";
+    const sessionAuth = sessionStorage.getItem("faceAttendanceAuth") === "true";
+    const isAuthenticated = localAuth || sessionAuth;
+    
     if (!isAuthenticated) {
       navigate("/auth");
       return;
+    }
+
+    // Sync both storages
+    if (localAuth && !sessionAuth) {
+      sessionStorage.setItem("faceAttendanceAuth", "true");
+      const token = localStorage.getItem("faceSessionToken");
+      if (token) sessionStorage.setItem("faceSessionToken", token);
+    } else if (sessionAuth && !localAuth) {
+      localStorage.setItem("faceAttendanceAuth", "true");
+      const token = sessionStorage.getItem("faceSessionToken");
+      if (token) localStorage.setItem("faceSessionToken", token);
     }
 
     fetchCurrentUser();
@@ -324,6 +338,12 @@ export default function FaceAttendance() {
                 size="icon"
                 onClick={() => {
                   localStorage.removeItem("faceAttendanceAuth");
+                  localStorage.removeItem("faceSessionToken");
+                  localStorage.removeItem("faceSessionCreatedAt");
+                  localStorage.removeItem("faceAuthData");
+                  sessionStorage.removeItem("faceAttendanceAuth");
+                  sessionStorage.removeItem("faceSessionToken");
+                  sessionStorage.removeItem("faceSessionCreatedAt");
                   navigate("/auth");
                 }}
               >

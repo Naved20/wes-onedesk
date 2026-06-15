@@ -45,40 +45,38 @@ export default function FaceHub() {
   } | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      if (localStorage.getItem("faceAttendanceAuth") !== "true") {
+    const checkAuth = () => {
+      // Check if user is authenticated (check both localStorage and sessionStorage)
+      const localAuth = localStorage.getItem("faceAttendanceAuth") === "true";
+      const sessionAuth = sessionStorage.getItem("faceAttendanceAuth") === "true";
+      const isAuthenticated = localAuth || sessionAuth;
+      
+      console.log("[FaceHub] Auth check - localStorage:", localAuth, "sessionStorage:", sessionAuth);
+      
+      if (!isAuthenticated) {
+        console.log("[FaceHub] Not authenticated, redirecting to /auth");
         navigate("/auth");
         return;
       }
 
-      // Only check session validity if it exists and was created more than 5 seconds ago
-      const sessionToken = localStorage.getItem("faceSessionToken");
-      const sessionCreatedAt = localStorage.getItem("faceSessionCreatedAt");
+      // Session exists, allow access
+      console.log("[FaceHub] Session found, user can proceed");
       
-      if (sessionToken && sessionCreatedAt) {
-        const createdTime = parseInt(sessionCreatedAt);
-        const now = Date.now();
-        
-        // Only validate if session is older than 5 seconds (skip validation right after login)
-        if (now - createdTime > 5000) {
-          const valid = await isSessionValid(sessionToken);
-          if (!valid) {
-            localStorage.removeItem("faceAttendanceAuth");
-            localStorage.removeItem("faceSessionToken");
-            localStorage.removeItem("faceSessionCreatedAt");
-            toast({
-              title: "Session Expired",
-              description: "Your session has been logged out by admin",
-              variant: "destructive",
-            });
-            navigate("/auth");
-            return;
-          }
-        }
+      // Sync both storages to ensure consistency
+      if (localAuth && !sessionAuth) {
+        sessionStorage.setItem("faceAttendanceAuth", "true");
+        const token = localStorage.getItem("faceSessionToken");
+        if (token) sessionStorage.setItem("faceSessionToken", token);
+      } else if (sessionAuth && !localAuth) {
+        localStorage.setItem("faceAttendanceAuth", "true");
+        const token = sessionStorage.getItem("faceSessionToken");
+        if (token) localStorage.setItem("faceSessionToken", token);
       }
     };
 
+    // Run check immediately (no async)
     checkAuth();
+    
     initCamera();
     loadFaceModels()
       .then(() => setModelsReady(true))
@@ -87,15 +85,44 @@ export default function FaceHub() {
 
     // Update activity every 30 seconds
     const activityInterval = setInterval(() => {
-      const sessionToken = localStorage.getItem("faceSessionToken");
+      const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
       if (sessionToken) {
         updateSessionActivity(sessionToken);
       }
     }, 30000);
 
+    // Check session validity every 2 minutes (allows admin to logout remotely)
+    const sessionValidationInterval = setInterval(async () => {
+      const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
+      if (sessionToken) {
+        try {
+          const valid = await isSessionValid(sessionToken);
+          if (!valid) {
+            console.log("[FaceHub] Admin invalidated session");
+            localStorage.removeItem("faceAttendanceAuth");
+            localStorage.removeItem("faceSessionToken");
+            localStorage.removeItem("faceSessionCreatedAt");
+            localStorage.removeItem("faceAuthData");
+            sessionStorage.removeItem("faceAttendanceAuth");
+            sessionStorage.removeItem("faceSessionToken");
+            sessionStorage.removeItem("faceSessionCreatedAt");
+            toast({
+              title: "Session Ended",
+              description: "Your session has been ended by administrator",
+              variant: "destructive",
+            });
+            navigate("/auth");
+          }
+        } catch (error) {
+          console.error("Session validation error:", error);
+        }
+      }
+    }, 120000); // Check every 2 minutes
+
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       clearInterval(activityInterval);
+      clearInterval(sessionValidationInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -246,13 +273,17 @@ export default function FaceHub() {
   };
 
   const handleLogout = async () => {
-    const sessionToken = localStorage.getItem("faceSessionToken");
+    const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
     if (sessionToken) {
       await logoutFaceSession(sessionToken, "User logout");
     }
     localStorage.removeItem("faceAttendanceAuth");
     localStorage.removeItem("faceSessionToken");
     localStorage.removeItem("faceSessionCreatedAt");
+    localStorage.removeItem("faceAuthData");
+    sessionStorage.removeItem("faceAttendanceAuth");
+    sessionStorage.removeItem("faceSessionToken");
+    sessionStorage.removeItem("faceSessionCreatedAt");
     streamRef.current?.getTracks().forEach((t) => t.stop());
     navigate("/auth");
   };

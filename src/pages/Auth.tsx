@@ -26,8 +26,20 @@ export default function Auth() {
   // Get the intended destination from state or default to dashboard
   const from = (location.state as { from?: string })?.from || "/dashboard";
 
-  // Redirect if already logged in
+  // Redirect if already logged in (Supabase auth only)
+  // Also check if Face Hub session exists and redirect to face-hub
   useEffect(() => {
+    // Check Face Hub session first
+    const localAuth = localStorage.getItem("faceAttendanceAuth") === "true";
+    const sessionAuth = sessionStorage.getItem("faceAttendanceAuth") === "true";
+    
+    if (localAuth || sessionAuth) {
+      console.log("[Auth] Face Hub session detected, redirecting to /face-hub");
+      navigate("/face-hub", { replace: true });
+      return;
+    }
+
+    // Then check Supabase auth
     if (!loading && user && role) {
       navigate(from, { replace: true });
     }
@@ -57,9 +69,24 @@ export default function Auth() {
         // Create session in database
         const sessionToken = await createFaceSession();
         
+        // Store session permanently in localStorage and sessionStorage
+        const authData = {
+          auth: "true",
+          token: sessionToken,
+          timestamp: Date.now().toString(),
+          email: loginEmail
+        };
+        
         localStorage.setItem("faceAttendanceAuth", "true");
         localStorage.setItem("faceSessionToken", sessionToken);
         localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+        localStorage.setItem("faceAuthData", JSON.stringify(authData));
+        
+        // Also set sessionStorage as backup
+        sessionStorage.setItem("faceAttendanceAuth", "true");
+        sessionStorage.setItem("faceSessionToken", sessionToken);
+        sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+        
         toast({
           title: "Face Attendance Access",
           description: "Redirecting to face hub...",

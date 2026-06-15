@@ -47,9 +47,23 @@ export default function FaceAttendanceAuth() {
         const sessionToken = await createFaceSession();
         
         // Store session permanently in localStorage (unlimited duration)
+        // Also use sessionStorage as backup fallback
+        const authData = {
+          auth: "true",
+          token: sessionToken,
+          timestamp: Date.now().toString(),
+          username: credentials.username
+        };
+        
         localStorage.setItem("faceAttendanceAuth", "true");
         localStorage.setItem("faceSessionToken", sessionToken);
         localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+        localStorage.setItem("faceAuthData", JSON.stringify(authData));
+        
+        // Also set sessionStorage as backup
+        sessionStorage.setItem("faceAttendanceAuth", "true");
+        sessionStorage.setItem("faceSessionToken", sessionToken);
+        sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
         
         toast({
           title: "Login Successful",

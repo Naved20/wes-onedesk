@@ -1,6 +1,6 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useNavigate } from "react-router-dom";
-import { Lock, User, Bell, Shield, Palette, Globe, ChevronRight, UserCircle, LogOut, HelpCircle, Users } from "lucide-react";
+import { Lock, User, Bell, Shield, Palette, Globe, ChevronRight, UserCircle, LogOut, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,13 +80,6 @@ export default function Settings() {
       icon: <Lock className="h-5 w-5" />,
       description: "Update your account password",
       href: "/settings/password"
-    },
-    {
-      id: "support",
-      label: "Support & Requests",
-      icon: <HelpCircle className="h-5 w-5" />,
-      description: "Submit and track your support requests",
-      href: "/settings/support"
     },
     ...((role === "admin" || role === "manager") ? [{
       id: "peer-reviewer-groups",
