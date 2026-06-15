@@ -7,11 +7,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Calendar, MoreVertical, User, Tag } from 'lucide-react';
+import { Calendar, MoreVertical, User, Tag, Volume2, VolumeX } from 'lucide-react';
 import { format } from 'date-fns';
 import { Task } from './TaskBoard';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useTextToSpeech } from '@/hooks/useTextToSpeech';
 
 interface TaskCardProps {
   task: Task;
@@ -28,6 +29,7 @@ const priorityColors = {
 
 export const TaskCard = ({ task, onEdit, onStatusChange }: TaskCardProps) => {
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed';
+  const { speak, stop, isPlaying, isSpeechSupported } = useTextToSpeech();
 
   const { data: assignedEmployee } = useQuery({
     queryKey: ['employee', task.assigned_to],
@@ -79,9 +81,28 @@ export const TaskCard = ({ task, onEdit, onStatusChange }: TaskCardProps) => {
         </div>
 
         {task.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {task.description}
-          </p>
+          <div className="space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs text-muted-foreground line-clamp-2 flex-1">
+                {task.description}
+              </p>
+              {isSpeechSupported && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                  onClick={() => isPlaying ? stop() : speak(task.description)}
+                  title={isPlaying ? 'Stop reading' : 'Read aloud'}
+                >
+                  {isPlaying ? (
+                    <VolumeX className="h-3.5 w-3.5" />
+                  ) : (
+                    <Volume2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="flex flex-wrap gap-1">

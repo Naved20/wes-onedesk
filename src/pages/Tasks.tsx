@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins } from "lucide-react";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -179,6 +180,8 @@ interface TaskRemark {
 
 const Tasks = () => {
   const { role, user } = useAuth();
+  const { speak, stop, isPlaying, isSpeechSupported } = useTextToSpeech();
+  const [playingTaskId, setPlayingTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -273,6 +276,19 @@ const Tasks = () => {
     } else {
       setSortField(field);
       setSortDirection("asc");
+    }
+  };
+
+  const handleReadAloud = (taskId: string, text: string) => {
+    // Strip HTML tags for clean text
+    const plainText = text.replace(/<[^>]*>/g, '').trim();
+    
+    if (isPlaying && playingTaskId === taskId) {
+      stop();
+      setPlayingTaskId(null);
+    } else {
+      speak(plainText);
+      setPlayingTaskId(taskId);
     }
   };
 
@@ -2874,7 +2890,30 @@ const Tasks = () => {
 
                               {/* Description */}
                               <div>
-                                <h3 className="font-semibold mb-2">Description</h3>
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <h3 className="font-semibold">Description</h3>
+                                  {isSpeechSupported && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 px-3 gap-2"
+                                      onClick={() => handleReadAloud(task.id, task.description)}
+                                      title={isPlaying && playingTaskId === task.id ? "Stop reading" : "Read aloud"}
+                                    >
+                                      {isPlaying && playingTaskId === task.id ? (
+                                        <>
+                                          <VolumeX className="h-4 w-4" />
+                                          <span className="text-xs">Stop</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Volume2 className="h-4 w-4" />
+                                          <span className="text-xs">Read Aloud</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
                                 <div 
                                   className="prose prose-sm dark:prose-invert max-w-none"
                                   dangerouslySetInnerHTML={{ __html: task.description }}
