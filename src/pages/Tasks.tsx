@@ -228,8 +228,8 @@ const Tasks = () => {
   // Predefined reward amounts for each task type
   const rewardAmountsByType: Record<string, string> = {
     "English Reading, listening & speaking Task": "10",
-    "Lesson Plan & Delivery": "15",
-    "Soft & Digital Skills": "20",
+    "Lesson Plan & Delivery": "10",
+    "Soft & Digital Skills": "100",
   };
 
   const [employees, setEmployees] = useState<Array<{ user_id: string; first_name: string; last_name: string; email: string }>>([]);
@@ -1931,10 +1931,10 @@ const Tasks = () => {
                           📚 English Reading (₹10)
                         </SelectItem>
                         <SelectItem value="Lesson Plan & Delivery">
-                          📝 Lesson Plan (₹15)
+                          📝 Lesson Plan (₹10)
                         </SelectItem>
                         <SelectItem value="Soft & Digital Skills">
-                          💻 Soft & Digital (₹20)
+                          💻 Soft & Digital (₹100)
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -3923,10 +3923,10 @@ const Tasks = () => {
                     📚 English Reading (₹10)
                   </SelectItem>
                   <SelectItem value="Lesson Plan & Delivery">
-                    📝 Lesson Plan (₹15)
+                    📝 Lesson Plan (₹10)
                   </SelectItem>
                   <SelectItem value="Soft & Digital Skills">
-                    💻 Soft & Digital (₹20)
+                    💻 Soft & Digital (₹100)
                   </SelectItem>
                 </SelectContent>
               </Select>

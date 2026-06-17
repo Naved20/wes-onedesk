@@ -2466,6 +2466,81 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_reports: {
+        Row: {
+          approval_status: string
+          comments: string | null
+          created_at: string
+          employee_id: string
+          employee_name: string
+          hours_spent: number | null
+          id: string
+          manager_id: string | null
+          manager_notes: string | null
+          objectives: string | null
+          reviewed_at: string | null
+          status: string
+          submitted_at: string
+          tasks_completed: string | null
+          updated_at: string
+          week_ending: string
+          week_starting: string
+        }
+        Insert: {
+          approval_status?: string
+          comments?: string | null
+          created_at?: string
+          employee_id: string
+          employee_name: string
+          hours_spent?: number | null
+          id?: string
+          manager_id?: string | null
+          manager_notes?: string | null
+          objectives?: string | null
+          reviewed_at?: string | null
+          status?: string
+          submitted_at?: string
+          tasks_completed?: string | null
+          updated_at?: string
+          week_ending: string
+          week_starting: string
+        }
+        Update: {
+          approval_status?: string
+          comments?: string | null
+          created_at?: string
+          employee_id?: string
+          employee_name?: string
+          hours_spent?: number | null
+          id?: string
+          manager_id?: string | null
+          manager_notes?: string | null
+          objectives?: string | null
+          reviewed_at?: string | null
+          status?: string
+          submitted_at?: string
+          tasks_completed?: string | null
+          updated_at?: string
+          week_ending?: string
+          week_starting?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_reports_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_reports_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       variable_earnings: {
         Row: {
           amount: number

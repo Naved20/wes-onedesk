@@ -36,6 +36,8 @@ import FaceAttendance from "./pages/FaceAttendance";
 import FaceHub from "./pages/FaceHub";
 import FaceIdManagement from "./pages/FaceIdManagement";
 import FaceAttendanceSessions from "./pages/FaceAttendanceSessions";
+import WESTeacherReports from "./pages/WESTeacherReports";
+import WESWeeklyReportForm from "./pages/WESWeeklyReportForm";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -81,6 +83,8 @@ const App = () => (
             <Route path="/settings/privacy" element={<ProtectedRoute><Privacy /></ProtectedRoute>} />
             <Route path="/settings/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
             <Route path="/settings/language" element={<ProtectedRoute><Language /></ProtectedRoute>} />
+            <Route path="/wes-reports" element={<ProtectedRoute><WESTeacherReports /></ProtectedRoute>} />
+            <Route path="/wes-reports/:reportId" element={<ProtectedRoute><WESWeeklyReportForm /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
