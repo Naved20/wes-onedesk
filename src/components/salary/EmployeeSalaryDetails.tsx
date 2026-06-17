@@ -491,23 +491,45 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
           {/* Net Salary Summary */}
           <Card className="border-2 border-green-600">
             <CardHeader>
-              <CardTitle className="text-2xl">Your Net Salary</CardTitle>
-              <CardDescription>Amount you will receive in your bank account</CardDescription>
+              <CardTitle className="text-2xl">Your Net Salary (Take Home)</CardTitle>
+              <CardDescription>Includes all earnings minus deductions</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-                  <span className="text-lg font-semibold">Gross Earnings</span>
-                  <span className="text-2xl font-bold text-green-600">₹{salary.gross_salary.toLocaleString()}</span>
+                <div className="flex justify-between items-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                  <span className="text-lg font-semibold">Fixed Earnings (Basic + HRA + Other)</span>
+                  <span className="text-2xl font-bold text-blue-600">₹{((salary.basic_earned || 0) + (salary.hra_earned || 0) + (salary.other_allowance_earned || 0)).toLocaleString()}</span>
                 </div>
+                
+                {(salary.variable_earnings_total || 0) > 0 && (
+                  <div className="flex justify-between items-center p-4 bg-purple-50 dark:bg-purple-950 rounded-lg border-2 border-purple-300 dark:border-purple-700">
+                    <span className="text-lg font-semibold">+ Performance Based Earnings</span>
+                    <span className="text-2xl font-bold text-purple-600">₹{salary.variable_earnings_total.toLocaleString()}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between items-center p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600">
+                  <span className="text-lg font-semibold">Total Gross Earnings</span>
+                  <span className="text-2xl font-bold text-gray-800 dark:text-gray-200">₹{salary.gross_salary.toLocaleString()}</span>
+                </div>
+                
                 <div className="flex justify-between items-center p-4 bg-red-50 dark:bg-red-950 rounded-lg">
                   <span className="text-lg font-semibold">Total Deductions</span>
                   <span className="text-2xl font-bold text-red-600">-₹{salary.total_deductions.toLocaleString()}</span>
                 </div>
+                
                 <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg border-2 border-primary">
-                  <span className="text-xl font-bold">Net Salary (Take Home)</span>
+                  <span className="text-xl font-bold">Your Net Salary (Take Home)</span>
                   <span className="text-3xl font-bold text-primary">₹{salary.final_salary.toLocaleString()}</span>
                 </div>
+                
+                {(salary.variable_earnings_total || 0) > 0 && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-sm text-green-800 dark:text-green-200">
+                      ✓ Performance-based earnings of <span className="font-bold">₹{salary.variable_earnings_total.toLocaleString()}</span> are included in your net salary
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

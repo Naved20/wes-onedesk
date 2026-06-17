@@ -126,10 +126,11 @@ export default function Salaries() {
   );
   const totalGrossEarnings = fixedGross + totalVariableEarnings;
   
-  // C. Employee Deductions
+  // C. Employee Deductions - Calculate on TOTAL FIXED EARNINGS (Basic + HRA + Other) only
   const epfWageBase = basicSalary;
+  const totalFixedSalary = basicSalary + (hraAmount || 0) + (otherAllowance || 0);
   const epfEmployee = formData.epf_applicable ? (epfWageBase * (parseFloat(formData.pf_deduction_percentage) || 12) / 100) : 0;
-  const esicEmployee = formData.esic_applicable ? (totalGrossEarnings * (parseFloat(formData.esic_employee_rate) || 0.75) / 100) : 0;
+  const esicEmployee = formData.esic_applicable ? (totalFixedSalary * (parseFloat(formData.esic_employee_rate) || 0.75) / 100) : 0;
   const manualDeduction = parseFloat(formData.manual_deduction) || 0;
   const tdsDeduction = parseFloat(formData.tds_deduction) || 0;
   const professionalTax = parseFloat(formData.professional_tax) || 0;
@@ -140,9 +141,9 @@ export default function Salaries() {
   // D. Net Payable
   const netPayable = totalGrossEarnings - totalEmployeeDeductions;
   
-  // E. Employer Contributions
+  // E. Employer Contributions - Also on TOTAL FIXED EARNINGS (Basic + HRA + Other) only
   const epfEmployer = formData.epf_applicable ? (epfWageBase * (parseFloat(formData.pf_deduction_percentage) || 12) / 100) : 0;
-  const esicEmployer = formData.esic_applicable ? (totalGrossEarnings * (parseFloat(formData.esic_employer_rate) || 3.25) / 100) : 0;
+  const esicEmployer = formData.esic_applicable ? (totalFixedSalary * (parseFloat(formData.esic_employer_rate) || 3.25) / 100) : 0;
   const totalEmployerBenefit = epfEmployer + esicEmployer;
   
   // F. Total Cost to Company = Net Payable + Employer Contributions

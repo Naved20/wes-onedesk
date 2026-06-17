@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, Coins, FileText, Gift, X } from "lucide-react";
+import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Calculator, RefreshCw, Plus, History, TrendingUp, TrendingDown, Coins, FileText, Gift, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
 import { sendNotification } from "@/lib/notificationService";
@@ -690,24 +690,25 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       (sum, val) => sum + (parseFloat(val as any) || 0), 0
     );
     
-    // Deductions
+    // Deductions - Calculate on TOTAL FIXED EARNINGS (Basic + HRA + Other) only, NOT on performance earnings
+    const totalFixedEarnings = basicEarned + hraEarned + otherAllowanceEarned;
     const epfEmployee = formData.epf_applicable 
       ? (basicEarned * formData.epf_percentage / 100) 
       : 0;
     const esicEmployee = formData.esic_applicable 
-      ? (totalGrossEarnings * formData.esic_percentage / 100) 
+      ? (totalFixedEarnings * formData.esic_percentage / 100) 
       : 0;
     const totalDeductions = epfEmployee + esicEmployee + totalManualDeductions;
     
     // Net payable
     const netPayable = totalGrossEarnings - totalDeductions;
     
-    // Employer contributions
+    // Employer contributions - Also on TOTAL FIXED EARNINGS (Basic + HRA + Other) only
     const epfEmployer = formData.epf_applicable 
       ? (basicEarned * formData.epf_percentage / 100) 
       : 0;
     const esicEmployer = formData.esic_applicable 
-      ? (totalGrossEarnings * 3.25 / 100) 
+      ? (totalFixedEarnings * 3.25 / 100) 
       : 0;
     const totalEmployerBenefit = epfEmployer + esicEmployer;
     
@@ -1379,12 +1380,13 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           // Total gross
           const totalGrossEarnings = grossEarned + totalVariableEarnings;
           
-          // Deductions
+          // Deductions - Calculate on TOTAL FIXED EARNINGS (Basic + HRA + Other) only, NOT on performance earnings
+          const totalFixedEarningsForDeduction = basicEarned + hraEarned + otherAllowanceEarned;
           const epfEmployee = ((structure as any)?.epf_applicable ?? true) 
             ? (basicEarned * ((structure as any)?.epf_employee_rate || 12) / 100) 
             : 0;
           const esicEmployee = ((structure as any)?.esic_applicable ?? true) 
-            ? (totalGrossEarnings * ((structure as any)?.esic_employee_rate || 0.75) / 100) 
+            ? (totalFixedEarningsForDeduction * ((structure as any)?.esic_employee_rate || 0.75) / 100) 
             : 0;
           const totalDeductions = epfEmployee + esicEmployee + 
             (salary.manual_deduction || 0) + (salary.tds_deduction || 0) + 
@@ -1393,12 +1395,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           // Net payable
           const netPayable = totalGrossEarnings - totalDeductions;
           
-          // Employer contributions
+          // Employer contributions - Also on TOTAL FIXED EARNINGS (Basic + HRA + Other) only
           const epfEmployer = ((structure as any)?.epf_applicable ?? true) 
             ? (basicEarned * ((structure as any)?.epf_employee_rate || 12) / 100) 
             : 0;
           const esicEmployer = ((structure as any)?.esic_applicable ?? true) 
-            ? (totalGrossEarnings * 3.25 / 100) 
+            ? (totalFixedEarningsForDeduction * 3.25 / 100) 
             : 0;
           const totalEmployerBenefit = epfEmployer + esicEmployer;
           
@@ -3306,150 +3308,165 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             </TabsContent>
           </Tabs>
 
-          {/* Live Calculation Panel */}
-          <div className="mt-6 p-6 bg-gradient-to-br from-primary/5 to-secondary/5 rounded-lg border-2 border-primary/20">
-            <div className="flex items-center gap-2 mb-4">
+          {/* Live Calculation Panel - Restructured to match PayslipView */}
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-primary" />
-              <h4 className="font-bold text-lg">Live Calculation</h4>
+              <h4 className="font-bold text-lg">Salary Calculation Breakdown</h4>
             </div>
-            
-            <div className="space-y-3">
-              {/* A. Fixed Salary Structure */}
-              <div className="space-y-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>A. Fixed Salary Structure</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Fixed Gross Salary</span>
-                  <span className="font-medium">₹{formData.fixed_gross_salary.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Basic ({formData.basic_percentage}%)</span>
-                  <span className="font-medium">₹{calculateSalary().basicEarned.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>HRA ({formData.hra_percentage}% of Basic)</span>
-                  <span className="font-medium">₹{calculateSalary().hraEarned.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Other Allowance ({formData.other_allowance_percentage}%)</span>
-                  <span className="font-medium">₹{calculateSalary().otherAllowanceEarned.toLocaleString()}</span>
-                </div>
-              </div>
 
-              {/* B. Total Earnings */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>B. Fixed Earnings (Gross Salary)</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Fixed Gross (Earned based on attendance)</span>
-                  <span className="font-medium">₹{calculateSalary().grossEarned.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold pl-4 text-base">
-                  <span>Total Fixed Earnings</span>
-                  <span className="text-primary">₹{calculateSalary().grossEarned.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* C. Employee Deductions (on Fixed Earnings) */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>C. Employee Deductions (on Fixed Earnings)</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>EPF Employee ({formData.epf_percentage}% of Basic)</span>
-                  <span className="font-medium">₹{calculateSalary().epfEmployee.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>ESIC Employee ({formData.esic_percentage}% of Gross)</span>
-                  <span className="font-medium">₹{calculateSalary().esicEmployee.toLocaleString()}</span>
-                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* LEFT: EARNINGS */}
+              <div className="space-y-3">
+                <h5 className="font-semibold text-sm flex items-center gap-2 text-green-700 dark:text-green-400 border-b pb-2">
+                  <TrendingUp className="h-4 w-4" /> Earnings
+                </h5>
                 
-                {/* Custom Manual Deductions */}
-                {Object.entries(formData.manual_deductions).map(([name, amount]) => (
-                  <div key={name} className="flex justify-between text-sm pl-4">
-                    <span>{name}</span>
-                    <span className="font-medium">₹{(parseFloat(amount as any) || 0).toLocaleString()}</span>
+                <div className="space-y-2 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="text-xs text-muted-foreground font-medium">Fixed Salary Structure</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Basic Salary</span>
+                      <span className="font-semibold">₹{calculateSalary().basicEarned?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>HRA</span>
+                      <span className="font-semibold">₹{calculateSalary().hraEarned?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Other Allowance</span>
+                      <span className="font-semibold">₹{calculateSalary().otherAllowanceEarned?.toLocaleString()}</span>
+                    </div>
+                    <div className="border-t pt-1 flex justify-between font-semibold">
+                      <span>Earnings</span>
+                      <span className="text-green-700 dark:text-green-400">₹{((calculateSalary().basicEarned || 0) + (calculateSalary().hraEarned || 0) + (calculateSalary().otherAllowanceEarned || 0)).toLocaleString()}</span>
+                    </div>
                   </div>
-                ))}
-                
-                <div className="flex justify-between font-semibold pl-4 text-base">
-                  <span>Total Deductions</span>
-                  <span className="text-destructive">₹{calculateSalary().totalDeductions.toLocaleString()}</span>
+                </div>
+
+                {(calculateSalary().totalVariableEarnings || 0) > 0 && (
+                  <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <p className="text-xs text-muted-foreground font-medium">Performance Based</p>
+                    <div className="flex justify-between text-sm font-semibold">
+                      <span>Performance Earnings</span>
+                      <span className="text-blue-700 dark:text-blue-400">₹{calculateSalary().totalVariableEarnings?.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-muted-foreground font-medium">Total Monthly Earnings</p>
+                  <div className="flex justify-between">
+                    <span className="font-bold">Total Earnings</span>
+                    <span className="text-lg font-bold text-purple-700 dark:text-purple-400">₹{calculateSalary().totalGrossEarnings?.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* D. Performance Based Earnings (Added after deductions) */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>D. Performance Based Earnings</span>
+              {/* MIDDLE: DEDUCTIONS */}
+              <div className="space-y-3">
+                <h5 className="font-semibold text-sm flex items-center gap-2 text-red-700 dark:text-red-400 border-b pb-2">
+                  <TrendingDown className="h-4 w-4" /> Deductions
+                </h5>
+
+                <div className="space-y-2 p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+                  <p className="text-xs text-muted-foreground font-medium">Statuory Deductions</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>EPF Employee ({formData.epf_percentage}%)</span>
+                      <span className="font-semibold">₹{calculateSalary().epfEmployee?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>ESIC Employee ({formData.esic_percentage}%)</span>
+                      <span className="font-semibold">₹{calculateSalary().esicEmployee?.toLocaleString()}</span>
+                    </div>
+                    <div className="border-t pt-1 flex justify-between font-semibold">
+                      <span>Auto Deductions</span>
+                      <span className="text-red-700 dark:text-red-400">₹{((calculateSalary().epfEmployee || 0) + (calculateSalary().esicEmployee || 0)).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Performance Based Earnings</span>
-                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold pl-4 text-base">
-                  <span>Total Performance Earnings</span>
-                  <span className="text-blue-600">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
+
+                {Object.keys(formData.manual_deductions).length > 0 && (
+                  <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <p className="text-xs text-muted-foreground font-medium">Manual Deductions</p>
+                    <div className="space-y-1 text-sm">
+                      {Object.entries(formData.manual_deductions).map(([name, amount]) => (
+                        <div key={name} className="flex justify-between">
+                          <span>{name}</span>
+                          <span className="font-semibold">₹{(parseFloat(amount as any) || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
+                  <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
+                  <div className="flex justify-between">
+                    <span className="font-bold">Total Deductions</span>
+                    <span className="text-lg font-bold text-red-700 dark:text-red-400">₹{calculateSalary().totalDeductions?.toLocaleString()}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* E. Total Gross Earnings */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>E. Total Gross Earnings</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Fixed Earnings - Deductions</span>
-                  <span className="font-medium">₹{(calculateSalary().grossEarned - calculateSalary().totalDeductions).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>Performance Based Earnings</span>
-                  <span className="font-medium">₹{calculateSalary().totalVariableEarnings.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold text-xl border-b pb-2">
-                  <span>Total Gross Earnings</span>
-                  <span className="text-primary">₹{calculateSalary().totalGrossEarnings.toLocaleString()}</span>
-                </div>
-              </div>
+              {/* RIGHT: NET PAYABLE & CTC */}
+              <div className="space-y-3">
+                <h5 className="font-semibold text-sm border-b pb-2">Summary</h5>
 
-              {/* F. Net Payable */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-bold text-xl border-t-2 pt-3 text-green-600">
-                  <span>F. Net Payable to Employee</span>
-                  <span>₹{calculateSalary().netPayable.toLocaleString()}</span>
+                {/* Net Payable - LARGEST CARD */}
+                <div className="space-y-2 p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900 dark:to-emerald-900 rounded-lg border-3 border-green-400 dark:border-green-600 shadow-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                    <p className="text-xs font-semibold text-green-900 dark:text-green-200 uppercase tracking-wide">Your Net Salary</p>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Earnings</span>
+                      <span>₹{calculateSalary().totalGrossEarnings?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-red-600 dark:text-red-400">
+                      <span className="text-muted-foreground">(-) Deductions</span>
+                      <span>₹{calculateSalary().totalDeductions?.toLocaleString()}</span>
+                    </div>
+                    <div className="border-t-2 border-green-300 dark:border-green-700 pt-2 flex justify-between">
+                      <span className="font-bold text-lg">Net Salary</span>
+                      <span className="text-2xl font-bold text-green-700 dark:text-green-300">₹{calculateSalary().netPayable?.toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* G. Employer Contributions */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-semibold text-base border-b pb-2">
-                  <span>G. Employer Contributions</span>
+                {/* Employer Contribution */}
+                <div className="space-y-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-muted-foreground font-medium">Employer Statuory Contribution (Not in your salary)</p>
+                  <p className="text-xs text-muted-foreground font-medium">Diposited into your PF Account</p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Employer EPF</span>
+                      <span className="font-semibold">₹{calculateSalary().epfEmployer?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Employer ESIC</span>
+                      <span className="font-semibold">₹{calculateSalary().esicEmployer?.toLocaleString()}</span>
+                    </div>
+                    <div className="border-t pt-1 flex justify-between font-semibold">
+                      <span>Total Benefit</span>
+                      <span className="text-amber-700 dark:text-amber-400">₹{calculateSalary().totalEmployerBenefit?.toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>EPF Employer ({formData.epf_percentage}%)</span>
-                  <span className="font-medium">₹{calculateSalary().epfEmployer.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm pl-4">
-                  <span>ESIC Employer (3.25%)</span>
-                  <span className="font-medium">₹{calculateSalary().esicEmployer.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-semibold pl-4 text-base">
-                  <span>Total Employer Benefit</span>
-                  <span>₹{calculateSalary().totalEmployerBenefit.toLocaleString()}</span>
-                </div>
-              </div>
 
-              {/* H. Total CTC */}
-              <div className="space-y-2 pt-2">
-                <div className="flex justify-between font-bold text-2xl border-t-2 pt-3 text-primary">
-                  <span>H. Total Cost to Company</span>
-                  <span>₹{calculateSalary().totalCTC.toLocaleString()}</span>
+                {/* CTC */}
+                <div className="space-y-2 p-3 bg-slate-900 dark:bg-slate-950 rounded-lg border-2 border-slate-700 text-white">
+                  <p className="text-xs font-medium uppercase tracking-wide opacity-75">Cost to Company</p>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">Total CTC</span>
+                    <span className="text-xl font-bold text-yellow-400">₹{calculateSalary().totalCTC?.toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs opacity-75 mt-2">
+                    = Net Salary + Employer Contribution
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  Net Payable + Employer Contributions
-                </p>
               </div>
             </div>
           </div>
