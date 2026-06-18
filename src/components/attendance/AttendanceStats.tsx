@@ -393,11 +393,11 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <DialogTitle>Paid Leaves (PL)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {leaves.filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency').length === 0 ? (
+              {leaves.filter(l => l.leave_type === 'casual' || l.leave_type === 'medical').length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">No paid leaves this month</p>
               ) : (
                 leaves
-                  .filter(l => l.leave_type === 'casual' || l.leave_type === 'emergency')
+                  .filter(l => l.leave_type === 'casual' || l.leave_type === 'medical')
                   .map((leave) => (
                     <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20">
                       <div>
@@ -410,7 +410,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                         )}
                       </div>
                       <Badge variant="outline" className="bg-blue-100 dark:bg-blue-900/30">
-                        PL
+                        {leave.leave_type === 'medical' ? 'Medical (PL)' : 'PL'}
                       </Badge>
                     </div>
                   ))
@@ -439,11 +439,11 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <DialogTitle>Leaves (LE)</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {leaves.filter(l => l.leave_type === 'sick').length === 0 ? (
+              {leaves.filter(l => l.leave_type === 'sick' || l.leave_type === 'emergency' || l.leave_type === 'lop').length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">No leaves this month</p>
               ) : (
                 leaves
-                  .filter(l => l.leave_type === 'sick')
+                  .filter(l => l.leave_type === 'sick' || l.leave_type === 'emergency' || l.leave_type === 'lop')
                   .map((leave) => (
                     <div key={leave.id} className="flex items-center justify-between p-3 border rounded-lg bg-cyan-50 dark:bg-cyan-950/20">
                       <div>
@@ -455,8 +455,8 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                           <p className="text-sm text-muted-foreground">{leave.reason}</p>
                         )}
                       </div>
-                      <Badge variant="outline" className="bg-cyan-100 dark:bg-cyan-900/30">
-                        LE
+                      <Badge variant="outline" className={leave.leave_type === 'emergency' ? 'bg-red-100 dark:bg-red-900/30 text-red-800' : 'bg-cyan-100 dark:bg-cyan-900/30'}>
+                        {leave.leave_type === 'emergency' ? 'Emergency (LE)' : 'LE'}
                       </Badge>
                     </div>
                   ))

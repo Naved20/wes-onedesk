@@ -1117,6 +1117,10 @@ export type Database = {
         Row: {
           casual_leaves_entitled: number | null
           casual_leaves_used: number | null
+          medical_leaves_used: number | null
+          emergency_leaves_used: number | null
+          lop_leaves_used: number | null
+          half_day_leaves_used: number | null
           created_at: string | null
           id: string
           month: number
@@ -1129,6 +1133,10 @@ export type Database = {
         Insert: {
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
+          medical_leaves_used?: number | null
+          emergency_leaves_used?: number | null
+          lop_leaves_used?: number | null
+          half_day_leaves_used?: number | null
           created_at?: string | null
           id?: string
           month: number
@@ -1141,6 +1149,10 @@ export type Database = {
         Update: {
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
+          medical_leaves_used?: number | null
+          emergency_leaves_used?: number | null
+          lop_leaves_used?: number | null
+          half_day_leaves_used?: number | null
           created_at?: string | null
           id?: string
           month?: number
@@ -2912,7 +2924,7 @@ export type Database = {
         | "rejected"
         | "holiday"
       leave_status: "pending" | "approved" | "rejected"
-      leave_type: "casual" | "sick" | "unplanned" | "emergency"
+      leave_type: "casual" | "medical" | "emergency" | "lop" | "half_day"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3052,7 +3064,7 @@ export const Constants = {
         "holiday",
       ],
       leave_status: ["pending", "approved", "rejected"],
-      leave_type: ["casual", "sick", "unplanned", "emergency"],
+      leave_type: ["casual", "medical", "emergency", "lop", "half_day"],
     },
   },
 } as const

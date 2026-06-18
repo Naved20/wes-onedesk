@@ -28,7 +28,7 @@ const WESWeeklyReportForm = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [report, setReport] = useState<WESWeeklyReportComplete | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,18 +62,18 @@ const WESWeeklyReportForm = () => {
 
     try {
       setSaving(true);
-      
+
       // Calculate stats before submitting
       await wesWeeklyReportService.calculateReportStats(report.id);
-      
+
       // Submit the report
       await wesWeeklyReportService.submitWeeklyReport(report.id);
-      
+
       toast({
         title: "Success",
         description: "Report submitted for approval",
       });
-      
+
       navigate("/wes-reports");
     } catch (error: any) {
       toast({
@@ -93,7 +93,7 @@ const WESWeeklyReportForm = () => {
       approved: { variant: "default", label: "Approved" },
       rejected: { variant: "destructive", label: "Rejected" },
     };
-    
+
     const config = variants[status] || variants.draft;
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
@@ -125,106 +125,106 @@ const WESWeeklyReportForm = () => {
   return (
     <DashboardLayout>
       <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/wes-reports")}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold">WES ACADEMY - Weekly Report</h1>
-            <p className="text-muted-foreground">
-              {report.teacher_name} | {report.class_batch}
-            </p>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/wes-reports")}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold">Report</h1>
+              <p className="text-muted-foreground">
+                {report.teacher_name} | {report.class_batch}
+              </p>
+            </div>
           </div>
+          {getStatusBadge(report.status)}
         </div>
-        {getStatusBadge(report.status)}
-      </div>
 
-      {/* Week Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Week Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Week Period</p>
-              <p className="font-semibold">
-                {formatSafeDate(report.week_start_date)} - {formatSafeDate(report.week_end_date)}
-              </p>
+        {/* Week Info Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Week Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Week Period</p>
+                <p className="font-semibold">
+                  {formatSafeDate(report.week_start_date)} - {formatSafeDate(report.week_end_date)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total Attendance</p>
+                <p className="font-semibold">{report.total_attendance_percentage?.toFixed(1) || 0}%</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Lesson Plans</p>
+                <p className="font-semibold">
+                  {report.total_lesson_plans_submitted || 0} / {report.total_lesson_plans_reviewed || 0}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Attendance</p>
-              <p className="font-semibold">{report.total_attendance_percentage?.toFixed(1) || 0}%</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Lesson Plans</p>
-              <p className="font-semibold">
-                {report.total_lesson_plans_submitted || 0} / {report.total_lesson_plans_reviewed || 0}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Daily Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-8">
+        {/* Daily Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-8">
+            {dailyReports.map((daily) => (
+              <TabsTrigger key={daily.id} value={daily.day_name.toLowerCase()}>
+                {daily.day_name.substring(0, 3)}
+              </TabsTrigger>
+            ))}
+            <TabsTrigger value="challenges">Challenges</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+          </TabsList>
+
           {dailyReports.map((daily) => (
-            <TabsTrigger key={daily.id} value={daily.day_name.toLowerCase()}>
-              {daily.day_name.substring(0, 3)}
-            </TabsTrigger>
+            <TabsContent key={daily.id} value={daily.day_name.toLowerCase()}>
+              <WESDailyReportTab
+                dailyReport={daily}
+                isEditable={isDraft}
+                onUpdate={loadReport}
+              />
+            </TabsContent>
           ))}
-          <TabsTrigger value="challenges">Challenges</TabsTrigger>
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-        </TabsList>
 
-        {dailyReports.map((daily) => (
-          <TabsContent key={daily.id} value={daily.day_name.toLowerCase()}>
-            <WESDailyReportTab
-              dailyReport={daily}
+          <TabsContent value="challenges">
+            <WESChallengeManager
+              weeklyReportId={report.id}
+              challenges={report.challenges || []}
               isEditable={isDraft}
               onUpdate={loadReport}
             />
           </TabsContent>
-        ))}
 
-        <TabsContent value="challenges">
-          <WESChallengeManager
-            weeklyReportId={report.id}
-            challenges={report.challenges || []}
-            isEditable={isDraft}
-            onUpdate={loadReport}
-          />
-        </TabsContent>
+          <TabsContent value="summary">
+            <WESSummaryTab report={report} />
+          </TabsContent>
+        </Tabs>
 
-        <TabsContent value="summary">
-          <WESSummaryTab report={report} />
-        </TabsContent>
-      </Tabs>
-
-      {/* Action Buttons */}
-      {isDraft && (
-        <div className="flex justify-end gap-4">
-          <Button variant="outline" onClick={() => navigate("/wes-reports")}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={saving}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                Submit for Approval
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+        {/* Action Buttons */}
+        {isDraft && (
+          <div className="flex justify-end gap-4">
+            <Button variant="outline" onClick={() => navigate("/wes-reports")}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Submit for Approval
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -174,30 +174,59 @@ export function LeaveApprovalDialog({
 
   const getLeaveTypeBadge = () => {
     const type = leave.leave_type || "casual";
+    // Emergency leaves now carry a full‑day salary deduction.
+    if (type === "emergency" && leave.salary_deduction_percent === 100) {
+      return (
+        <Badge variant="outline" className="border-red-500 text-red-600">
+          Emergency (Deduction)
+        </Badge>
+      );
+    }
     switch (type) {
       case "casual":
         return <Badge variant="default">Casual</Badge>;
       case "sick":
-        return <Badge variant="secondary" className="bg-amber-100 text-amber-800">Sick</Badge>;
+        return (
+          <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+            Sick
+          </Badge>
+        );
+      case "medical":
+        return (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+            Medical (Paid)
+          </Badge>
+        );
       case "unplanned":
         return <Badge variant="destructive">Unplanned</Badge>;
       case "emergency":
-        return <Badge variant="outline" className="border-red-500 text-red-600">Emergency</Badge>;
+        return (
+          <Badge variant="outline" className="border-red-500 text-red-600">
+            Emergency (Deduction)
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
   };
 
   const getSalaryImpact = () => {
-    const percent = leave.salary_deduction_percent || 0;
+    const percent = leave.salary_deduction_percent;
+    const type = leave.leave_type;
+    if (percent === undefined || percent === null) {
+      return { text: "—", color: "text-muted-foreground" };
+    }
+    if (type === "emergency" || type === "lop") {
+      return { text: "1 LOP", color: "text-destructive" };
+    }
     if (percent === 0) return { text: "No deduction", color: "text-green-600" };
     if (percent === 50) return { text: "50% deduction", color: "text-amber-600" };
-    return { text: "100% deduction", color: "text-destructive" };
+    if (percent === 100) return { text: "Full deduction", color: "text-destructive" };
+    return { text: `${percent}% deduction`, color: "text-muted-foreground" };
   };
-
-  const salaryImpact = getSalaryImpact();
   const isCasualLeave = leave.leave_type === "casual";
   const isSingleDay = leave.start_date === leave.end_date;
+  const salaryImpact = getSalaryImpact();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
