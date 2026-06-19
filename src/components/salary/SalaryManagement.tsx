@@ -3317,7 +3317,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* LEFT: EARNINGS */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm flex items-center gap-2 text-green-700 dark:text-green-400 border-b pb-2">
                   <TrendingUp className="h-4 w-4" /> Earnings
                 </h5>
@@ -3354,17 +3354,20 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   </div>
                 )}
 
-                <div className="space-y-2 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                <div className="mt-auto space-y-2 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
                   <p className="text-xs text-muted-foreground font-medium">Total Monthly Earnings</p>
-                  <div className="flex justify-between">
+                  <div className="border-t border-purple-200 dark:border-purple-700 pt-2 flex justify-between">
                     <span className="font-bold">Total Earnings</span>
                     <span className="text-lg font-bold text-purple-700 dark:text-purple-400">₹{calculateSalary().totalGrossEarnings?.toLocaleString()}</span>
                   </div>
+                  <p className="text-xs opacity-0 mt-2 pointer-events-none">
+                    Placeholder
+                  </p>
                 </div>
               </div>
 
               {/* MIDDLE: DEDUCTIONS */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm flex items-center gap-2 text-red-700 dark:text-red-400 border-b pb-2">
                   <TrendingDown className="h-4 w-4" /> Deductions
                 </h5>
@@ -3401,17 +3404,20 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   </div>
                 )}
 
-                <div className="space-y-2 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
+                <div className="mt-auto space-y-2 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
                   <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
-                  <div className="flex justify-between">
+                  <div className="border-t border-red-300 dark:border-red-600 pt-2 flex justify-between">
                     <span className="font-bold">Total Deductions</span>
                     <span className="text-lg font-bold text-red-700 dark:text-red-400">₹{calculateSalary().totalDeductions?.toLocaleString()}</span>
                   </div>
+                  <p className="text-xs opacity-0 mt-2 pointer-events-none">
+                    Placeholder
+                  </p>
                 </div>
               </div>
 
               {/* RIGHT: NET PAYABLE & CTC */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm border-b pb-2">Summary</h5>
 
                 {/* Net Payable - LARGEST CARD */}
@@ -3457,9 +3463,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </div>
 
                 {/* CTC */}
-                <div className="space-y-2 p-3 bg-slate-900 dark:bg-slate-950 rounded-lg border-2 border-slate-700 text-white">
+                <div className="mt-auto space-y-2 p-3 bg-slate-900 dark:bg-slate-950 rounded-lg border-2 border-slate-700 text-white">
                   <p className="text-xs font-medium uppercase tracking-wide opacity-75">Cost to Company</p>
-                  <div className="flex justify-between items-center">
+                  <div className="border-t border-slate-700 pt-2 flex justify-between items-center">
                     <span className="font-semibold">Total CTC</span>
                     <span className="text-xl font-bold text-yellow-400">₹{calculateSalary().totalCTC?.toLocaleString()}</span>
                   </div>
