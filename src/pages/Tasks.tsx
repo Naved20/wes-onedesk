@@ -220,6 +220,8 @@ const Tasks = () => {
     reward_amount: "",
     due_date: "",
     file: null as File | null,
+    fileUrl: null as string | null,
+    fileName: null as string | null,
     assign_to: "all" as "all" | "specific" | "groups",
     assigned_user_ids: [] as string[],
     assignment_group_ids: [] as string[],
@@ -1019,8 +1021,8 @@ const Tasks = () => {
           category: formData.category || null,
           reward_amount: formData.reward_amount ? parseFloat(formData.reward_amount) : null,
           due_date: formData.due_date || null,
-          file_url: fileUrl,
-          file_name: fileName,
+          file_url: fileUrl || formData.fileUrl || null,
+          file_name: fileName || formData.fileName || null,
           created_by: user.id,
           is_active: true,
           review_assignment_type: formData.review_assignment_type,
@@ -1157,6 +1159,8 @@ const Tasks = () => {
         reward_amount: "",
         due_date: "", 
         file: null, 
+        fileUrl: null,
+        fileName: null,
         assign_to: "all", 
         assigned_user_ids: [], 
         assignment_group_ids: [],
@@ -1510,96 +1514,31 @@ const Tasks = () => {
         console.error("Error fetching individual reviewers:", e);
       }
 
-      // Insert new task
-      const { data: taskData, error: taskError } = await supabase
-        .from("tasks" as any)
-        .insert({
-          title: `${task.title} (Copy)`,
-          description: task.description,
-          type: task.type || null,
-          category: task.category || null,
-          reward_amount: task.reward_amount,
-          due_date: task.due_date || null,
-          file_url: task.file_url,
-          file_name: task.file_name,
-          created_by: user?.id,
-          is_active: true,
-          review_assignment_type: (task as any).review_assignment_type || "group",
-        })
-        .select()
-        .single();
-
-      if (taskError) throw taskError;
-
-      const newTaskId = (taskData as any).id;
-
-      // Duplicate task assignments
-      if (assignedUserIds.length > 0) {
-        const assignments = assignedUserIds.map(uid => ({
-          task_id: newTaskId,
-          user_id: uid,
-        }));
-        const { error: assignError } = await supabase
-          .from("task_assignments" as any)
-          .insert(assignments);
-        if (assignError) throw assignError;
-      }
-
-      if (assignedGroupIds.length > 0) {
-        const groupRefs = assignedGroupIds.map(gid => ({
-          task_id: newTaskId,
-          group_id: gid,
-        }));
-        const { error: grpError } = await (supabase as any)
-          .from("task_assignment_groups")
-          .insert(groupRefs);
-        if (grpError) throw grpError;
-      }
-
-      // Duplicate peer reviewers
-      if (peerReviewerIds.length > 0) {
-        const reviewers = peerReviewerIds.map(uid => ({
-          task_id: newTaskId,
-          user_id: uid,
-        }));
-        const { error: revError } = await supabase
-          .from("task_peer_reviewers" as any)
-          .insert(reviewers);
-        if (revError) throw revError;
-      }
-
-      if (groupIds.length > 0) {
-        const groupRefs = groupIds.map(gid => ({
-          task_id: newTaskId,
-          group_id: gid,
-        }));
-        const { error: grpError } = await (supabase as any)
-          .from("task_peer_reviewer_groups")
-          .insert(groupRefs);
-        if (grpError) throw grpError;
-      }
-
-      // Duplicate individual peer reviewer mappings
-      if (individualAssignments.length > 0) {
-        const mappings = individualAssignments.map(assignment => ({
-          task_id: newTaskId,
-          user_id: assignment.user_id,
-          reviewer_id: assignment.reviewer_id,
-          assigned_by: user?.id,
-        }));
-        const { error: mapError } = await supabase
-          .from("individual_peer_reviewers" as any)
-          .insert(mappings);
-        if (mapError) throw mapError;
-      }
-
-      toast({
-        title: "Success",
-        description: "Task duplicated successfully",
+      // Pre-fill the formData and open the Create Dialog
+      setFormData({
+        title: `${task.title} (Copy)`,
+        description: task.description,
+        type: task.type || "",
+        category: task.category || "",
+        reward_amount: task.reward_amount ? task.reward_amount.toString() : "",
+        due_date: task.due_date ? task.due_date.split('T')[0] : "",
+        file: null,
+        fileUrl: task.file_url,
+        fileName: task.file_name,
+        assign_to: assignedGroupIds.length > 0 ? "groups" : (assignedUserIds.length === employees.length ? "all" : "specific"),
+        assigned_user_ids: assignedUserIds,
+        assignment_group_ids: assignedGroupIds,
+        peer_reviewer_ids: peerReviewerIds,
+        peer_reviewer_group_ids: groupIds,
+        review_assignment_type: (task as any).review_assignment_type || "group",
+        individual_reviewer_assignments: individualAssignments,
       });
 
-      // Reload tasks list
-      fetchTasks(true);
+      setOpen(true);
+      toast({
+        title: "Success",
+        description: "Task details loaded into creation form",
+      });
     } catch (error) {
       console.error("Error duplicating task:", error);
       toast({
@@ -2503,97 +2442,73 @@ const Tasks = () => {
                         👥 For each assigned user, select their specific peer reviewer
                       </p>
                       
-                      {formData.assign_to === "all" ? (
-                        <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
-                          {employees.map((emp) => (
-                            <div key={`reviewer-map-${emp.user_id}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
-                                <p className="text-xs text-muted-foreground">{emp.email}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">→</span>
-                                <Select
-                                  value={formData.individual_reviewer_assignments.find(a => a.user_id === emp.user_id)?.reviewer_id || "no-reviewer"}
-                                  onValueChange={(reviewerId) => {
-                                    setFormData(prev => {
-                                      const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== emp.user_id);
-                                      if (reviewerId && reviewerId !== "no-reviewer") {
-                                        return {
-                                          ...prev,
-                                          individual_reviewer_assignments: [...existing, { user_id: emp.user_id, reviewer_id: reviewerId }]
-                                        };
-                                      }
-                                      return { ...prev, individual_reviewer_assignments: existing };
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger className="w-[200px]">
-                                    <SelectValue placeholder="Select reviewer" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="no-reviewer">No reviewer</SelectItem>
-                                    {employees.filter(e => e.user_id !== emp.user_id).map(reviewer => (
-                                      <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
-                                        {reviewer.first_name} {reviewer.last_name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : formData.assigned_user_ids.length > 0 ? (
-                        <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
-                          {formData.assigned_user_ids.map((userId) => {
-                            const emp = employees.find(e => e.user_id === userId);
-                            if (!emp) return null;
-                            return (
-                              <div key={`reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
-                                  <p className="text-xs text-muted-foreground">{emp.email}</p>
+                      {(() => {
+                        let assigneeIds: string[] = [];
+                        if (formData.assign_to === "all") {
+                          assigneeIds = employees.map(emp => emp.user_id);
+                        } else if (formData.assign_to === "groups") {
+                          const groupMemberIds = formData.assignment_group_ids
+                            .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+                          assigneeIds = Array.from(new Set(groupMemberIds));
+                        } else {
+                          assigneeIds = formData.assigned_user_ids;
+                        }
+
+                        if (assigneeIds.length === 0) {
+                          return (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              Please select employees or groups in step 1 first
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                            {assigneeIds.map((userId) => {
+                              const emp = employees.find(e => e.user_id === userId);
+                              if (!emp) return null;
+                              return (
+                                <div key={`reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                                    <p className="text-xs text-muted-foreground">{emp.email}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">→</span>
+                                    <Select
+                                      value={formData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
+                                      onValueChange={(reviewerId) => {
+                                        setFormData(prev => {
+                                          const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
+                                          if (reviewerId && reviewerId !== "no-reviewer") {
+                                            return {
+                                              ...prev,
+                                              individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
+                                            };
+                                          }
+                                          return { ...prev, individual_reviewer_assignments: existing };
+                                        });
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-[200px]">
+                                        <SelectValue placeholder="Select reviewer" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                                        {employees.filter(e => e.user_id !== userId).map(reviewer => (
+                                          <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                            {reviewer.first_name} {reviewer.last_name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">→</span>
-                                  <Select
-                                    value={formData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
-                                    onValueChange={(reviewerId) => {
-                                      setFormData(prev => {
-                                        const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
-                                        if (reviewerId && reviewerId !== "no-reviewer") {
-                                          return {
-                                            ...prev,
-                                            individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
-                                          };
-                                        }
-                                        return { ...prev, individual_reviewer_assignments: existing };
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-[200px]">
-                                      <SelectValue placeholder="Select reviewer" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="no-reviewer">No reviewer</SelectItem>
-                                      {employees.filter(e => e.user_id !== userId).map(reviewer => (
-                                        <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
-                                          {reviewer.first_name} {reviewer.last_name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          Please select employees in step 1 first
-                        </p>
-                      )}
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                       
                       {formData.individual_reviewer_assignments.length > 0 && (
                         <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">
@@ -4595,97 +4510,73 @@ const Tasks = () => {
                   👥 For each assigned user, select their specific peer reviewer
                 </p>
                 
-                {editFormData.assign_to === "all" ? (
-                  <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
-                    {employees.map((emp) => (
-                      <div key={`edit-reviewer-map-${emp.user_id}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
-                          <p className="text-xs text-muted-foreground">{emp.email}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">→</span>
-                          <Select
-                            value={editFormData.individual_reviewer_assignments.find(a => a.user_id === emp.user_id)?.reviewer_id || "no-reviewer"}
-                            onValueChange={(reviewerId) => {
-                              setEditFormData(prev => {
-                                const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== emp.user_id);
-                                if (reviewerId && reviewerId !== "no-reviewer") {
-                                  return {
-                                    ...prev,
-                                    individual_reviewer_assignments: [...existing, { user_id: emp.user_id, reviewer_id: reviewerId }]
-                                  };
-                                }
-                                return { ...prev, individual_reviewer_assignments: existing };
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-[200px]">
-                              <SelectValue placeholder="Select reviewer" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="no-reviewer">No reviewer</SelectItem>
-                              {employees.filter(e => e.user_id !== emp.user_id).map(reviewer => (
-                                <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
-                                  {reviewer.first_name} {reviewer.last_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : editFormData.assigned_user_ids.length > 0 ? (
-                  <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
-                    {editFormData.assigned_user_ids.map((userId) => {
-                      const emp = employees.find(e => e.user_id === userId);
-                      if (!emp) return null;
-                      return (
-                        <div key={`edit-reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
-                            <p className="text-xs text-muted-foreground">{emp.email}</p>
+                {(() => {
+                  let assigneeIds: string[] = [];
+                  if (editFormData.assign_to === "all") {
+                    assigneeIds = employees.map(emp => emp.user_id);
+                  } else if (editFormData.assign_to === "groups") {
+                    const groupMemberIds = editFormData.assignment_group_ids
+                      .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
+                    assigneeIds = Array.from(new Set(groupMemberIds));
+                  } else {
+                    assigneeIds = editFormData.assigned_user_ids;
+                  }
+
+                  if (assigneeIds.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Please select employees or groups in step 1 first
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4 bg-white dark:bg-gray-900">
+                      {assigneeIds.map((userId) => {
+                        const emp = employees.find(e => e.user_id === userId);
+                        if (!emp) return null;
+                        return (
+                          <div key={`edit-reviewer-map-${userId}`} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{emp.first_name} {emp.last_name}</p>
+                              <p className="text-xs text-muted-foreground">{emp.email}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">→</span>
+                              <Select
+                                value={editFormData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
+                                onValueChange={(reviewerId) => {
+                                  setEditFormData(prev => {
+                                    const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
+                                    if (reviewerId && reviewerId !== "no-reviewer") {
+                                      return {
+                                        ...prev,
+                                        individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
+                                      };
+                                    }
+                                    return { ...prev, individual_reviewer_assignments: existing };
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-[200px]">
+                                  <SelectValue placeholder="Select reviewer" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="no-reviewer">No reviewer</SelectItem>
+                                  {employees.filter(e => e.user_id !== userId).map(reviewer => (
+                                    <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
+                                      {reviewer.first_name} {reviewer.last_name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">→</span>
-                            <Select
-                              value={editFormData.individual_reviewer_assignments.find(a => a.user_id === userId)?.reviewer_id || "no-reviewer"}
-                              onValueChange={(reviewerId) => {
-                                setEditFormData(prev => {
-                                  const existing = prev.individual_reviewer_assignments.filter(a => a.user_id !== userId);
-                                  if (reviewerId && reviewerId !== "no-reviewer") {
-                                    return {
-                                      ...prev,
-                                      individual_reviewer_assignments: [...existing, { user_id: userId, reviewer_id: reviewerId }]
-                                    };
-                                  }
-                                  return { ...prev, individual_reviewer_assignments: existing };
-                                });
-                              }}
-                            >
-                              <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Select reviewer" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="no-reviewer">No reviewer</SelectItem>
-                                {employees.filter(e => e.user_id !== userId).map(reviewer => (
-                                  <SelectItem key={reviewer.user_id} value={reviewer.user_id}>
-                                    {reviewer.first_name} {reviewer.last_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Please select employees first
-                  </p>
-                )}
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 
                 {editFormData.individual_reviewer_assignments.length > 0 && (
                   <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">

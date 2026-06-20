@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "inbound-lexicon-499018-r2",
+  "private_key_id": "f671d867321c7104d7e2f68bb4b73d1b46c761b7",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCfFQpSGWf/K7Wb\nJFhC9+Ezhey3eEnCVHt6+YNJhZZYOsk+KHoM2/0PZt9uscN9GYUrKtVLXu2qy2J7\nFkGRC7iM7dPqgXHYAtf2Q+FIhspmKRCaR9ehZLeBvke+4B4vosb4uc4fnStlsn79\nCYsAU4qoCVpSyqjJbVORlXZYQg1+eakhChpq6RfSZJgh/f5MXTfbKN35j7STKese\nuA2JrWTTFpdM5iVWsdtiJFQVGlk+35w79eDOMiuzm49Zq6fiKQRbWMS0clakDCfl\ng8Tj12uWPPcJVG2LayRaXLWP6uLUB1+MV+hsUpAsg6Krzxdw8juaPLFtV2K3rdGk\nlX18h3f9AgMBAAECggEACasOsISoxGJUrDQeRRupjScThucBnJTj2Ep3xy0eQQh5\nmJR/Lm7kR15aL/EPz3eQl1oIEoeXbCzmNFLa80TCF5aQrYzmbVlm5KmldHH0tRbD\n0oyRN1bWrETzOU+Hph9/djhcpaE4tPqPKzO8Re3N3H6NBcEZVvyU+qEZyy1ggpIr\nwWcaEaWeY4V8kf+gPSWeaXkB1QQUYUnH2J0pVSebRcCG+HGYEch5BAnpDeqM1Lce\nsh6hwfaNJ87hvagzs49GWTu5AWm9dbX3lXxmhCJFcrqefEhCWm5YHCp5RMJEPhQ5\nxdvYdypqStiZKZCt9ar498sjEvSJ1SYlayVaSYzYoQKBgQDQZt2HELwvGqCy7r7B\nRKiyteLRMdl4TMGP+Nvi7czTQCJUnEBfVzly+t+ZtDRQc73rbRPhJEvWAhcbVnfN\nIwUKLAG5LJno8hrHGMzXEj2RoiN8inqSjCeRnmC5gAwGUrqSb0b3QkP2DjA9LLqR\noZ7wMgSONwMVUyuf90u8SCwM2QKBgQDDanwNGg0G+0KSYpqOKE0BH2XYddVh6luv\ng2CCIO0z+CIKc+/515YM+V25bPFtTLWe/TPj/Ou530cJei0Eu3p+rvtgTFhGpv0v\neRifwb06feWYpV310aZDESxKRHnS5/p6ETM+OiIMH0wBJ86wNTPjbZyKbdJrfhc1\nABYuBnUdxQKBgQCjeq34j+YvRUIeWy6ESanUVt4QoHwp5HxKxjsnbseoR70mhlPw\n9ml4itfwqO4I1mJ7VdusV16uCIG7zj64SupfKlpHuncZxyG+YPP/Gq31mi0gOzkf\n0JYRox3ZJltIcoks6eHPgMnzMPoiYv4P06rsXTA5p2nhxpaIK+PbVPpJMQKBgB3y\n5+gqIez7/QvqSL2Yt5SAd19hT76d6EdR3yySV0grsyve8NxdigWbAh408BtMMlmX\nfKhoTshBy+VL8DJVeUSJFMWBbdYGKa9o47k4PAQG33UxguD1rIGC1ELdk74bB2xF\nzpCu4CDzevaCX07qGHW2itM8WY9X176rsLqFCtXxAoGBAKtsTBDtnQMsh93xK44T\ndLvE4KhfWOpeO7oEMjuc6INp89MMhUXF4ZRrliMoKfctEaSVeZ94YaePMp3o/FwH\nzXcVmcyQ2vb6WoB24Xn7uvimSc5feQ1Wnc/0281fQzoqiwnQrX92pVp8PBkNi0n/\noc0wfGCi3I0mtGKk4zuHdcyG\n-----END PRIVATE KEY-----\n",
+  "client_email": "onedesk-gdrive@inbound-lexicon-499018-r2.iam.gserviceaccount.com",
+  "client_id": "117575941535661487140",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/onedesk-gdrive%40inbound-lexicon-499018-r2.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
