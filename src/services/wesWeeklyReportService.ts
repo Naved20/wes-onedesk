@@ -557,7 +557,7 @@ export const wesWeeklyReportService = {
     return reports.map(report => ({
       ...report,
       employee_profile: profileMap.get(report.teacher_id) || null,
-    }));
+    })) as any;
   },
 
   async getOrganizationStats(): Promise<{
