@@ -2964,8 +2964,6 @@ const Tasks = () => {
                         variant="outline"
                         onClick={() => {
                           setSearchQuery("");
-                          setSelectedCategory("all");
-                          setSelectedType("all");
                         }}
                         className="mt-4"
                       >
