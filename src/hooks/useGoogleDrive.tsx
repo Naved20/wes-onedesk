@@ -9,6 +9,7 @@ import {
   createDriveFolder,
   downloadFileFromDrive,
   getFileMetadata,
+  makeFilePublic,
   DriveFile,
 } from '@/lib/googleDrive';
 
@@ -67,6 +68,11 @@ export const useGoogleDrive = () => {
     try {
       setIsLoading(true);
       const uploadedFile = await uploadFileToDrive(file, folderId);
+      try {
+        await makeFilePublic(uploadedFile.id);
+      } catch (permissionErr) {
+        console.error('Failed to make file public:', permissionErr);
+      }
       toast.success(`File "${file.name}" uploaded successfully`);
       return uploadedFile;
     } catch (error) {

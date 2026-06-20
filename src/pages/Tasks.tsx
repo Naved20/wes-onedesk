@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useGoogleDrive } from "@/hooks/useGoogleDrive";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, Copy, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -183,6 +184,7 @@ interface TaskRemark {
 const Tasks = () => {
   const { role, user } = useAuth();
   const { speak, stop, isPlaying, isSpeechSupported } = useTextToSpeech();
+  const { uploadFile } = useGoogleDrive();
   const [playingTaskId, setPlayingTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,6 +248,57 @@ const Tasks = () => {
     file: null as File | null,
   });
   const [responseMode, setResponseMode] = useState<"link" | "file">("link");
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+
+  const handleGoogleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'article_link' | 'video_link' | 'link') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingToDrive(true);
+      toast({
+        title: "Uploading to Google Drive",
+        description: `Uploading "${file.name}"...`,
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Invoke the Edge Function to upload to Google Drive using the Service Account credentials
+      const { data, error } = await supabase.functions.invoke("upload-to-drive", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      if (data && data.webViewLink) {
+        setResponseFormData(prev => ({
+          ...prev,
+          [field]: data.webViewLink
+        }));
+        toast({
+          title: "Success",
+          description: `File uploaded to Google Drive. Link updated!`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Upload failed. Please check connection and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Google Drive upload error:", error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred during Google Drive upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingToDrive(false);
+      e.target.value = '';
+    }
+  };
 
   const [remarkFormData, setRemarkFormData] = useState({
     remark_text: "",
@@ -259,7 +312,7 @@ const Tasks = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
-  const [activeTab, setActiveTab] = useState<string>("Upcoming");
+  const [activeTab, setActiveTab] = useState<string>("To-Do");
   const [sortField, setSortField] = useState<string>("display_order");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
@@ -270,6 +323,38 @@ const Tasks = () => {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+
+  const getTaskStatus = (task: Task) => {
+    const taskResponses = responses[task.id] || [];
+    const userResponse = taskResponses.find(r => r.user_id === user?.id);
+    const taskRemarks = userResponse ? (remarks[userResponse.id] || []) : [];
+    const hasRemark = taskRemarks.length > 0;
+    
+    if (userResponse && hasRemark) {
+      return "Reviewed";
+    } else if (userResponse && !hasRemark) {
+      return "Pending Review";
+    } else {
+      if (!task.due_date) {
+        return "To-Do";
+      }
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(0, 0, 0, 0);
+
+      if (dueDate < today) {
+        return "Missed";
+      } else if (dueDate > today) {
+        return "Upcoming";
+      } else {
+        return "To-Do";
+      }
+    }
   };
 
   const handleSort = (field: string) => {
@@ -433,12 +518,104 @@ const Tasks = () => {
       const { data, error } = await supabase
         .from("employee_profiles")
         .select("user_id, first_name, last_name, email")
+        .eq("is_active", true)
         .order("first_name");
 
       if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
       console.error("Error fetching employees:", error);
+    }
+  };
+
+  const fetchBatchData = async (taskIds: string[]) => {
+    if (!taskIds.length) return;
+    
+    try {
+      // 1. Fetch Assignments
+      const { data: assignmentsData } = await supabase
+        .from("task_assignments")
+        .select("task_id, user_id")
+        .in("task_id", taskIds);
+      
+      // 2. Fetch Responses
+      const { data: responsesData } = await supabase
+        .from("task_responses")
+        .select("*")
+        .in("task_id", taskIds);
+        
+      // 3. Fetch Remarks
+      const responseIds = (responsesData || []).map((r: any) => r.id);
+      
+      // Chunk responseIds to avoid too large query
+      let remarksData: any[] = [];
+      if (responseIds.length > 0) {
+        const chunkSize = 150;
+        for (let i = 0; i < responseIds.length; i += chunkSize) {
+          const chunk = responseIds.slice(i, i + chunkSize);
+          const { data } = await supabase.from("task_remarks").select("*").in("response_id", chunk);
+          if (data) remarksData = [...remarksData, ...data];
+        }
+      }
+        
+      // 4. Fetch Profiles
+      const userIds = new Set<string>();
+      (assignmentsData || []).forEach((a: any) => userIds.add(a.user_id));
+      (responsesData || []).forEach((r: any) => userIds.add(r.user_id));
+      (remarksData || []).forEach((r: any) => userIds.add(r.remarked_by));
+      
+      const userIdsArr = Array.from(userIds);
+      let profilesData: any[] = [];
+      if (userIdsArr.length > 0) {
+        const chunkSize = 150;
+        for (let i = 0; i < userIdsArr.length; i += chunkSize) {
+          const chunk = userIdsArr.slice(i, i + chunkSize);
+          const { data } = await supabase.from("employee_profiles").select("user_id, first_name, last_name").in("user_id", chunk);
+          if (data) profilesData = [...profilesData, ...data];
+        }
+      }
+      const profileMap = new Map();
+      profilesData.forEach((p: any) => profileMap.set(p.user_id, p));
+      
+      // Group assignments
+      const newAssignments: Record<string, any[]> = {};
+      (assignmentsData || []).forEach((a: any) => {
+        if (!newAssignments[a.task_id]) newAssignments[a.task_id] = [];
+        const p = profileMap.get(a.user_id) || { first_name: "Unknown", last_name: "User" };
+        newAssignments[a.task_id].push({ user_id: a.user_id, first_name: p.first_name, last_name: p.last_name });
+      });
+      setAssignments(prev => ({ ...prev, ...newAssignments }));
+      
+      // Group responses
+      const newResponses: Record<string, any[]> = {};
+      (responsesData || []).forEach((r: any) => {
+        if (!newResponses[r.task_id]) newResponses[r.task_id] = [];
+        const p = profileMap.get(r.user_id) || { first_name: "Unknown", last_name: "User" };
+        newResponses[r.task_id].push({ ...r, employee_profiles: p });
+      });
+      setResponses(prev => ({ ...prev, ...newResponses }));
+      
+      // Group remarks
+      const newRemarks: Record<string, any[]> = {};
+      (remarksData || []).forEach((r: any) => {
+        if (!newRemarks[r.response_id]) newRemarks[r.response_id] = [];
+        const p = profileMap.get(r.remarked_by) || { first_name: "Unknown", last_name: "User" };
+        newRemarks[r.response_id].push({ ...r, employee_profiles: p });
+      });
+      setRemarks(prev => ({ ...prev, ...newRemarks }));
+      
+      // 5. Peer Reviewers
+      const { data: peerData } = await supabase.from("task_peer_reviewers").select("task_id, user_id").in("task_id", taskIds);
+      const newPeers: Record<string, any[]> = {};
+      (peerData || []).forEach((p: any) => {
+        if (!newPeers[p.task_id]) newPeers[p.task_id] = [];
+        const prof = profileMap.get(p.user_id) || { first_name: "Unknown", last_name: "User" };
+        newPeers[p.task_id].push({ user_id: p.user_id, first_name: prof.first_name, last_name: prof.last_name });
+      });
+      setPeerReviewers(prev => ({ ...prev, ...newPeers }));
+      
+    } catch (e) {
+      console.error("Batch fetch error", e);
     }
   };
 
@@ -504,18 +681,10 @@ const Tasks = () => {
       setTasks(newTasks);
       setHasMore(false);
       
-      // Fetch responses and assignments in parallel for better performance
+      // Fetch responses and assignments in batched queries for better performance
       if (newTasks && newTasks.length > 0) {
         const taskIds = newTasks.map(task => task.id);
-        
-        // Fetch all responses in one query
-        Promise.all(taskIds.map(id => fetchResponses(id))).catch(console.error);
-        
-        // Fetch all assignments in one query
-        Promise.all(taskIds.map(id => fetchAssignments(id))).catch(console.error);
-
-        // Fetch peer reviewers
-        Promise.all(taskIds.map(id => fetchPeerReviewers(id))).catch(console.error);
+        fetchBatchData(taskIds).catch(console.error);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -1274,6 +1443,172 @@ const Tasks = () => {
         description: "Failed to delete task",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleDuplicate = async (task: Task) => {
+    try {
+      setLoading(true);
+      
+      // Fetch assignment groups
+      let assignedGroupIds: string[] = [];
+      try {
+        const { data } = await (supabase as any)
+          .from("task_assignment_groups")
+          .select("group_id")
+          .eq("task_id", task.id);
+        assignedGroupIds = (data || []).map((r: any) => r.group_id);
+      } catch (e) {
+        console.error("Error fetching task assignment groups:", e);
+      }
+
+      // Fetch peer reviewer groups
+      let groupIds: string[] = [];
+      try {
+        const { data } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .select("group_id")
+          .eq("task_id", task.id);
+        groupIds = (data || []).map((r: any) => r.group_id);
+      } catch (e) {
+        console.error("Error fetching task groups:", e);
+      }
+
+      // Fetch peer reviewer ids
+      let peerReviewerIds: string[] = [];
+      try {
+        const { data } = await supabase
+          .from("task_peer_reviewers" as any)
+          .select("user_id")
+          .eq("task_id", task.id);
+        peerReviewerIds = (data || []).map((r: any) => r.user_id);
+      } catch (e) {
+        console.error("Error fetching peer reviewers:", e);
+      }
+
+      // Fetch assignments
+      let assignedUserIds: string[] = [];
+      try {
+        const { data } = await supabase
+          .from("task_assignments" as any)
+          .select("user_id")
+          .eq("task_id", task.id);
+        assignedUserIds = (data || []).map((r: any) => r.user_id);
+      } catch (e) {
+        console.error("Error fetching assignments:", e);
+      }
+
+      // Fetch individual reviewer assignments
+      let individualAssignments: Array<{ user_id: string; reviewer_id: string }> = [];
+      try {
+        const { data } = await supabase
+          .from("individual_peer_reviewers" as any)
+          .select("user_id, reviewer_id")
+          .eq("task_id", task.id);
+        individualAssignments = (data || []).map((r: any) => ({ user_id: r.user_id, reviewer_id: r.reviewer_id }));
+      } catch (e) {
+        console.error("Error fetching individual reviewers:", e);
+      }
+
+      // Insert new task
+      const { data: taskData, error: taskError } = await supabase
+        .from("tasks" as any)
+        .insert({
+          title: `${task.title} (Copy)`,
+          description: task.description,
+          type: task.type || null,
+          category: task.category || null,
+          reward_amount: task.reward_amount,
+          due_date: task.due_date || null,
+          file_url: task.file_url,
+          file_name: task.file_name,
+          created_by: user?.id,
+          is_active: true,
+          review_assignment_type: (task as any).review_assignment_type || "group",
+        })
+        .select()
+        .single();
+
+      if (taskError) throw taskError;
+
+      const newTaskId = (taskData as any).id;
+
+      // Duplicate task assignments
+      if (assignedUserIds.length > 0) {
+        const assignments = assignedUserIds.map(uid => ({
+          task_id: newTaskId,
+          user_id: uid,
+        }));
+        const { error: assignError } = await supabase
+          .from("task_assignments" as any)
+          .insert(assignments);
+        if (assignError) throw assignError;
+      }
+
+      if (assignedGroupIds.length > 0) {
+        const groupRefs = assignedGroupIds.map(gid => ({
+          task_id: newTaskId,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_assignment_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
+      }
+
+      // Duplicate peer reviewers
+      if (peerReviewerIds.length > 0) {
+        const reviewers = peerReviewerIds.map(uid => ({
+          task_id: newTaskId,
+          user_id: uid,
+        }));
+        const { error: revError } = await supabase
+          .from("task_peer_reviewers" as any)
+          .insert(reviewers);
+        if (revError) throw revError;
+      }
+
+      if (groupIds.length > 0) {
+        const groupRefs = groupIds.map(gid => ({
+          task_id: newTaskId,
+          group_id: gid,
+        }));
+        const { error: grpError } = await (supabase as any)
+          .from("task_peer_reviewer_groups")
+          .insert(groupRefs);
+        if (grpError) throw grpError;
+      }
+
+      // Duplicate individual peer reviewer mappings
+      if (individualAssignments.length > 0) {
+        const mappings = individualAssignments.map(assignment => ({
+          task_id: newTaskId,
+          user_id: assignment.user_id,
+          reviewer_id: assignment.reviewer_id,
+          assigned_by: user?.id,
+        }));
+        const { error: mapError } = await supabase
+          .from("individual_peer_reviewers" as any)
+          .insert(mappings);
+        if (mapError) throw mapError;
+      }
+
+      toast({
+        title: "Success",
+        description: "Task duplicated successfully",
+      });
+
+      // Reload tasks list
+      fetchTasks(true);
+    } catch (error) {
+      console.error("Error duplicating task:", error);
+      toast({
+        title: "Error",
+        description: "Failed to duplicate task",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2520,14 +2855,17 @@ const Tasks = () => {
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row gap-4 justify-between items-center w-full mb-4">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
-                  <TabsList className="grid w-full sm:w-auto grid-cols-2 md:grid-cols-4 lg:inline-flex bg-muted/50 p-1 rounded-lg">
-                    <TabsTrigger value="Upcoming" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Upcoming</TabsTrigger>
-                    <TabsTrigger value="Submitted / Pending Review" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Submitted / Pending Review</TabsTrigger>
-                    <TabsTrigger value="Complete" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Complete</TabsTrigger>
-                    <TabsTrigger value="Missed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Missed</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                {role === "employee" && (
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
+                    <TabsList className="flex flex-wrap w-full sm:w-auto bg-muted/50 p-1 rounded-lg gap-1">
+                      <TabsTrigger value="To-Do" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">To-Do</TabsTrigger>
+                      <TabsTrigger value="Pending Review" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Pending Review</TabsTrigger>
+                      <TabsTrigger value="Reviewed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Reviewed</TabsTrigger>
+                      <TabsTrigger value="Upcoming" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Upcoming</TabsTrigger>
+                      <TabsTrigger value="Missed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Missed</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                )}
                 <div className="flex items-center gap-2">
                   <Label htmlFor="month-selector" className="whitespace-nowrap font-medium text-sm">Month:</Label>
                   <Input 
@@ -2628,23 +2966,8 @@ const Tasks = () => {
                   }
                 }
 
-                const taskResponses = responses[task.id] || [];
-                // Admin can see the global status based on their own response if they responded,
-                // otherwise we assume it's for them personally.
-                const userResponse = taskResponses.find(r => r.user_id === user?.id);
-                const taskRemarks = userResponse ? (remarks[userResponse.id] || []) : [];
-                const hasRemark = taskRemarks.length > 0;
-                const isPastDue = task.due_date ? new Date(task.due_date) < new Date() : false;
-
-                let taskStatus = "Upcoming";
-                if (userResponse && hasRemark) {
-                  taskStatus = "Complete";
-                } else if (userResponse && !hasRemark) {
-                  taskStatus = "Submitted / Pending Review";
-                } else if (!userResponse && isPastDue) {
-                  taskStatus = "Missed";
-                }
-
+                if (role === "admin" || role === "manager") return true;
+                const taskStatus = getTaskStatus(task);
                 return activeTab === taskStatus;
               });
 
@@ -2659,8 +2982,8 @@ const Tasks = () => {
                     bValue = b.display_order ?? 999999;
                     break;
                   case "title":
-                    aValue = a.title.toLowerCase();
-                    bValue = b.title.toLowerCase();
+                    aValue = (a.title || "").toLowerCase();
+                    bValue = (b.title || "").toLowerCase();
                     break;
                   case "type":
                     aValue = (a.type || "").toLowerCase();
@@ -2679,8 +3002,13 @@ const Tasks = () => {
                     bValue = b.reward_amount || 0;
                     break;
                   case "status":
-                    aValue = a.is_active ? 1 : 0;
-                    bValue = b.is_active ? 1 : 0;
+                    if (role === "employee") {
+                      aValue = getTaskStatus(a).toLowerCase();
+                      bValue = getTaskStatus(b).toLowerCase();
+                    } else {
+                      aValue = a.is_active ? 1 : 0;
+                      bValue = b.is_active ? 1 : 0;
+                    }
                     break;
                   case "completion": {
                     const ca = (assignments[a.id]?.length || 0);
@@ -2691,15 +3019,17 @@ const Tasks = () => {
                   }
                   case "created_at":
                   default:
-                    aValue = new Date(a.created_at).getTime();
-                    bValue = new Date(b.created_at).getTime();
+                    aValue = a.created_at ? new Date(a.created_at).getTime() : 0;
+                    bValue = b.created_at ? new Date(b.created_at).getTime() : 0;
                     break;
                 }
 
+                if (aValue === bValue) return 0;
+                
                 if (sortDirection === "asc") {
-                  return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+                  return aValue > bValue ? 1 : -1;
                 } else {
-                  return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+                  return aValue < bValue ? 1 : -1;
                 }
               });
 
@@ -2753,8 +3083,9 @@ const Tasks = () => {
                           { key: "category", label: "Category", show: true },
                           { key: "reward_amount", label: "Reward", show: true },
                           { key: "due_date", label: "Deadline", show: true },
-                          { key: "status", label: role === "employee" ? "Your Status" : "Status", show: true },
+                          { key: "status", label: "Your Status", show: role === "employee" },
                           { key: "completion", label: "Completion", show: role === "admin" || role === "manager" },
+                          { key: "reviewed", label: "Reviewed", show: role === "admin" || role === "manager" },
                         ].filter(col => col.show).map(col => (
                           <TableHead key={col.key}>
                             <button
@@ -2781,6 +3112,8 @@ const Tasks = () => {
               const assignedCount = assignments[task.id]?.length || 0;
               const respondedCount = taskResponses.length;
               const completionPct = assignedCount ? Math.round((respondedCount / assignedCount) * 100) : 0;
+              const reviewedCount = taskResponses.filter(r => (remarks[r.id] || []).length > 0).length;
+              const reviewedPct = assignedCount ? Math.round((reviewedCount / assignedCount) * 100) : 0;
 
               return (
                 <Fragment key={task.id}>
@@ -2820,28 +3153,45 @@ const Tasks = () => {
                     <TableCell className="whitespace-nowrap text-sm">
                       {task.due_date ? format(new Date(task.due_date), "MMM dd, yyyy") : <span className="text-muted-foreground text-xs">—</span>}
                     </TableCell>
-                    <TableCell>
-                      {role === "employee" ? (
-                        <Badge variant={userResponse ? "default" : "secondary"} className={userResponse ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : ""}>
-                          {userResponse ? "✓ Completed" : "Pending"}
-                        </Badge>
-                      ) : (
-                        <Badge variant={task.is_active ? "default" : "secondary"} className={task.is_active ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" : ""}>
-                          {task.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    {(role === "admin" || role === "manager") && (
+                    {role === "employee" && (
                       <TableCell>
-                        <div className="flex items-center gap-2 min-w-[110px]">
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-primary" style={{ width: `${completionPct}%` }} />
-                          </div>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {respondedCount}/{assignedCount || 0}
-                          </span>
-                        </div>
+                        <Badge 
+                          variant="secondary" 
+                          className={
+                            getTaskStatus(task) === "Reviewed" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" : 
+                            getTaskStatus(task) === "Pending Review" ? "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100" : 
+                            getTaskStatus(task) === "Missed" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" : 
+                            getTaskStatus(task) === "To-Do" ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100" : 
+                            "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" // Upcoming
+                          }
+                        >
+                          {getTaskStatus(task)}
+                        </Badge>
                       </TableCell>
+                    )}
+                    {(role === "admin" || role === "manager") && (
+                      <>
+                        <TableCell>
+                          <div className="flex items-center gap-2 min-w-[110px]">
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-primary" style={{ width: `${completionPct}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {respondedCount}/{assignedCount || 0}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 min-w-[110px]">
+                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500" style={{ width: `${reviewedPct}%` }} />
+                            </div>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {reviewedCount}/{assignedCount || 0}
+                            </span>
+                          </div>
+                        </TableCell>
+                      </>
                     )}
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -3197,6 +3547,17 @@ const Tasks = () => {
                             onClick={() => openEditDialog(task)}
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {canEditTask && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-primary hover:text-primary"
+                            onClick={() => handleDuplicate(task)}
+                            title="Duplicate Task"
+                          >
+                            <Copy className="h-4 w-4" />
                           </Button>
                         )}
                         {canDeleteTask && (
@@ -3655,9 +4016,29 @@ const Tasks = () => {
 
             {/* Link Upload Field */}
             <div className="space-y-2">
-              <Label htmlFor="response_link" className="flex items-center gap-2">
-                <ExternalLink className="h-4 w-4" />
-                Link Upload (Optional)
+              <Label htmlFor="response_link" className="flex items-center justify-between w-full">
+                <span className="flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  Link Upload (Optional)
+                </span>
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  Or upload file to Google Drive:
+                  <input
+                    type="file"
+                    id="response_link_file_upload"
+                    className="hidden"
+                    onChange={(e) => handleGoogleDriveUpload(e, 'link')}
+                  />
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
+                    onClick={() => document.getElementById('response_link_file_upload')?.click()}
+                    disabled={isUploadingToDrive}
+                  >
+                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
               </Label>
               <Input
                 id="response_link"
@@ -3673,9 +4054,29 @@ const Tasks = () => {
 
             {/* Article / Vocabulary / Handwritten Notes Link Field */}
             <div className="space-y-2">
-              <Label htmlFor="article_link" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Article / Vocabulary / Handwritten Notes Link (Optional)
+              <Label htmlFor="article_link" className="flex items-center justify-between w-full">
+                <span className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Article / Vocabulary / Handwritten Notes Link (Optional)
+                </span>
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  Or upload file to Google Drive:
+                  <input
+                    type="file"
+                    id="article_file_upload"
+                    className="hidden"
+                    onChange={(e) => handleGoogleDriveUpload(e, 'article_link')}
+                  />
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
+                    onClick={() => document.getElementById('article_file_upload')?.click()}
+                    disabled={isUploadingToDrive}
+                  >
+                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
               </Label>
               <Input
                 id="article_link"
@@ -3691,9 +4092,30 @@ const Tasks = () => {
 
             {/* Video Link Field */}
             <div className="space-y-2">
-              <Label htmlFor="video_link" className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" />
-                Video Link (Optional)
+              <Label htmlFor="video_link" className="flex items-center justify-between w-full">
+                <span className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Video Link (Optional)
+                </span>
+                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                  Or upload video to Google Drive:
+                  <input
+                    type="file"
+                    id="video_file_upload"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => handleGoogleDriveUpload(e, 'video_link')}
+                  />
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
+                    onClick={() => document.getElementById('video_file_upload')?.click()}
+                    disabled={isUploadingToDrive}
+                  >
+                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
+                  </Button>
+                </div>
               </Label>
               <Input
                 id="video_link"

@@ -210,3 +210,25 @@ export const getFileMetadata = async (fileId: string): Promise<DriveFile> => {
 
   return response.result;
 };
+
+export const makeFilePublic = async (fileId: string): Promise<void> => {
+  const token = gapi.client.getToken();
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+    {
+      method: 'POST',
+      headers: new Headers({
+        Authorization: 'Bearer ' + token.access_token,
+        'Content-Type': 'application/json',
+      }),
+      body: JSON.stringify({
+        role: 'reader',
+        type: 'anyone',
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to make Google Drive file public');
+  }
+};

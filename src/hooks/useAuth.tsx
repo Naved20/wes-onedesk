@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode } from "react
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { toast } from "@/hooks/use-toast";
 import { initializeFirebaseMessaging } from "@/lib/firebaseMessaging";
 import { requestNotificationPermission, setupRealtimeNotifications, stopRealtimeNotifications } from "@/lib/simpleNotificationService";
 
@@ -119,13 +120,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from("employee_profiles")
-        .select("institution_assignment")
+        .select("institution_assignment, is_active")
         .eq("user_id", userId)
         .maybeSingle();
 
       if (error) {
         console.error("Error fetching user institution:", error);
       } else if (data) {
+        if (data.is_active === false) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+          setRole(null);
+          toast({
+            title: "Session Expired",
+            description: "Your account has been deactivated by an administrator.",
+            variant: "destructive",
+          });
+          return;
+        }
         setInstitution(data.institution_assignment);
       }
     } catch (error) {
@@ -135,10 +148,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+      
+      if (authData?.user) {
+        const { data: profile } = await supabase
+          .from("employee_profiles")
+          .select("is_active")
+          .eq("user_id", authData.user.id)
+          .single();
+          
+        if (profile && profile.is_active === false) {
+          await supabase.auth.signOut();
+          return { error: new Error("Account has been deactivated. Please contact admin.") };
+        }
+      }
+      
       return { error: error as Error | null };
     } catch (error) {
       return { error: error as Error };
