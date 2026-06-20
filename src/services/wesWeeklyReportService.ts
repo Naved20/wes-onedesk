@@ -37,7 +37,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async getWeeklyReport(reportId: string): Promise<WESWeeklyReportComplete> {
@@ -112,7 +112,7 @@ export const wesWeeklyReportService = {
       .order("week_start_date", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as any;
   },
 
   async submitWeeklyReport(reportId: string): Promise<WESWeeklyReport> {
@@ -127,7 +127,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async updateWeeklyReportStatus(
@@ -142,7 +142,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async deleteWeeklyReport(reportId: string): Promise<void> {
@@ -171,7 +171,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async updateDailyReport(
@@ -186,7 +186,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   // ==================== LESSON PLANS CRUD ====================
@@ -205,7 +205,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async updateLessonPlan(
@@ -220,7 +220,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   // ==================== CLASS UPDATES CRUD ====================
@@ -239,7 +239,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async updateClassUpdate(
@@ -254,7 +254,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   // ==================== FEEDBACK CRUD ====================
@@ -273,7 +273,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async createOperationsFeedback(
@@ -290,7 +290,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   // ==================== CHALLENGES CRUD ====================
@@ -309,7 +309,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async updateChallenge(
@@ -324,7 +324,7 @@ export const wesWeeklyReportService = {
       .single();
 
     if (error) throw error;
-    return data;
+    return data as any;
   },
 
   async deleteChallenge(challengeId: string): Promise<void> {
@@ -520,7 +520,7 @@ export const wesWeeklyReportService = {
       .order("week_start_date", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as any;
   },
 
   async getAllWeeklyReportsWithEmployeeDetails(): Promise<(WESWeeklyReport & { employee_profile?: any })[]> {
@@ -615,6 +615,6 @@ export const wesWeeklyReportService = {
       .order("week_start_date", { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as any;
   },
 };
