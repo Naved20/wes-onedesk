@@ -101,7 +101,7 @@ export const wesWeeklyReportService = {
       ...report,
       daily_reports: dailyReportsComplete,
       challenges: challenges || [],
-    };
+    } as any;
   },
 
   async getTeacherWeeklyReports(teacherId: string): Promise<WESWeeklyReport[]> {
