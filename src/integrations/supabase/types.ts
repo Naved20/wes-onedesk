@@ -412,8 +412,69 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_summary_backup: {
+        Row: {
+          absent_days: number | null
+          attendance_percentage: number | null
+          created_at: string | null
+          half_days: number | null
+          holiday_count: number | null
+          id: string | null
+          late_days: number | null
+          late_sets: number | null
+          leave_days: number | null
+          month: number | null
+          paid_leave_days: number | null
+          payroll_days: number | null
+          present_days: number | null
+          total_paid_days: number | null
+          updated_at: string | null
+          user_id: string | null
+          year: number | null
+        }
+        Insert: {
+          absent_days?: number | null
+          attendance_percentage?: number | null
+          created_at?: string | null
+          half_days?: number | null
+          holiday_count?: number | null
+          id?: string | null
+          late_days?: number | null
+          late_sets?: number | null
+          leave_days?: number | null
+          month?: number | null
+          paid_leave_days?: number | null
+          payroll_days?: number | null
+          present_days?: number | null
+          total_paid_days?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          year?: number | null
+        }
+        Update: {
+          absent_days?: number | null
+          attendance_percentage?: number | null
+          created_at?: string | null
+          half_days?: number | null
+          holiday_count?: number | null
+          id?: string | null
+          late_days?: number | null
+          late_sets?: number | null
+          leave_days?: number | null
+          month?: number | null
+          paid_leave_days?: number | null
+          payroll_days?: number | null
+          present_days?: number | null
+          total_paid_days?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+          year?: number | null
+        }
+        Relationships: []
+      }
       company_documents: {
         Row: {
+          applicable_institutes: string[]
           created_at: string | null
           description: string | null
           document_link: string | null
@@ -425,6 +486,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          applicable_institutes?: string[]
           created_at?: string | null
           description?: string | null
           document_link?: string | null
@@ -436,6 +498,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          applicable_institutes?: string[]
           created_at?: string | null
           description?: string | null
           document_link?: string | null
@@ -1117,12 +1180,12 @@ export type Database = {
         Row: {
           casual_leaves_entitled: number | null
           casual_leaves_used: number | null
-          medical_leaves_used: number | null
-          emergency_leaves_used: number | null
-          lop_leaves_used: number | null
-          half_day_leaves_used: number | null
           created_at: string | null
+          emergency_leaves_used: number | null
+          half_day_leaves_used: number | null
           id: string
+          lop_leaves_used: number | null
+          medical_leaves_used: number | null
           month: number
           sick_leaves_used: number | null
           unplanned_leaves_used: number | null
@@ -1133,12 +1196,12 @@ export type Database = {
         Insert: {
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
-          medical_leaves_used?: number | null
-          emergency_leaves_used?: number | null
-          lop_leaves_used?: number | null
-          half_day_leaves_used?: number | null
           created_at?: string | null
+          emergency_leaves_used?: number | null
+          half_day_leaves_used?: number | null
           id?: string
+          lop_leaves_used?: number | null
+          medical_leaves_used?: number | null
           month: number
           sick_leaves_used?: number | null
           unplanned_leaves_used?: number | null
@@ -1149,12 +1212,12 @@ export type Database = {
         Update: {
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
-          medical_leaves_used?: number | null
-          emergency_leaves_used?: number | null
-          lop_leaves_used?: number | null
-          half_day_leaves_used?: number | null
           created_at?: string | null
+          emergency_leaves_used?: number | null
+          half_day_leaves_used?: number | null
           id?: string
+          lop_leaves_used?: number | null
+          medical_leaves_used?: number | null
           month?: number
           sick_leaves_used?: number | null
           unplanned_leaves_used?: number | null
@@ -1720,6 +1783,8 @@ export type Database = {
           manager_proposed_by: string | null
           manager_proposed_salary: number | null
           manual_deduction: number | null
+          manual_deductions_details: Json | null
+          manual_deductions_total: number | null
           month: number
           net_salary_calculated: number | null
           net_salary_manual: number | null
@@ -1774,6 +1839,8 @@ export type Database = {
           manager_proposed_by?: string | null
           manager_proposed_salary?: number | null
           manual_deduction?: number | null
+          manual_deductions_details?: Json | null
+          manual_deductions_total?: number | null
           month: number
           net_salary_calculated?: number | null
           net_salary_manual?: number | null
@@ -1828,6 +1895,8 @@ export type Database = {
           manager_proposed_by?: string | null
           manager_proposed_salary?: number | null
           manual_deduction?: number | null
+          manual_deductions_details?: Json | null
+          manual_deductions_total?: number | null
           month?: number
           net_salary_calculated?: number | null
           net_salary_manual?: number | null
@@ -2457,6 +2526,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_fcm_tokens: {
+        Row: {
+          created_at: string | null
+          device_name: string | null
+          device_type: string | null
+          fcm_token: string
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_name?: string | null
+          device_type?: string | null
+          fcm_token: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_name?: string | null
+          device_type?: string | null
+          fcm_token?: string
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -2477,81 +2579,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      weekly_reports: {
-        Row: {
-          approval_status: string
-          comments: string | null
-          created_at: string
-          employee_id: string
-          employee_name: string
-          hours_spent: number | null
-          id: string
-          manager_id: string | null
-          manager_notes: string | null
-          objectives: string | null
-          reviewed_at: string | null
-          status: string
-          submitted_at: string
-          tasks_completed: string | null
-          updated_at: string
-          week_ending: string
-          week_starting: string
-        }
-        Insert: {
-          approval_status?: string
-          comments?: string | null
-          created_at?: string
-          employee_id: string
-          employee_name: string
-          hours_spent?: number | null
-          id?: string
-          manager_id?: string | null
-          manager_notes?: string | null
-          objectives?: string | null
-          reviewed_at?: string | null
-          status?: string
-          submitted_at?: string
-          tasks_completed?: string | null
-          updated_at?: string
-          week_ending: string
-          week_starting: string
-        }
-        Update: {
-          approval_status?: string
-          comments?: string | null
-          created_at?: string
-          employee_id?: string
-          employee_name?: string
-          hours_spent?: number | null
-          id?: string
-          manager_id?: string | null
-          manager_notes?: string | null
-          objectives?: string | null
-          reviewed_at?: string | null
-          status?: string
-          submitted_at?: string
-          tasks_completed?: string | null
-          updated_at?: string
-          week_ending?: string
-          week_starting?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "weekly_reports_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "weekly_reports_manager_id_fkey"
-            columns: ["manager_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       variable_earnings: {
         Row: {
@@ -2609,6 +2636,557 @@ export type Database = {
           },
         ]
       }
+      weekly_report_achievements: {
+        Row: {
+          achievement: string
+          category: string | null
+          created_at: string | null
+          id: string
+          impact: string | null
+          report_id: string
+        }
+        Insert: {
+          achievement: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          impact?: string | null
+          report_id: string
+        }
+        Update: {
+          achievement?: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          impact?: string | null
+          report_id?: string
+        }
+        Relationships: []
+      }
+      weekly_report_challenges: {
+        Row: {
+          assistance_needed: string | null
+          challenge: string
+          created_at: string | null
+          id: string
+          impact: string | null
+          proposed_solution: string | null
+          report_id: string
+        }
+        Insert: {
+          assistance_needed?: string | null
+          challenge: string
+          created_at?: string | null
+          id?: string
+          impact?: string | null
+          proposed_solution?: string | null
+          report_id: string
+        }
+        Update: {
+          assistance_needed?: string | null
+          challenge?: string
+          created_at?: string | null
+          id?: string
+          impact?: string | null
+          proposed_solution?: string | null
+          report_id?: string
+        }
+        Relationships: []
+      }
+      weekly_report_comments: {
+        Row: {
+          author_id: string
+          author_name: string
+          author_role: string | null
+          comment: string
+          created_at: string | null
+          id: string
+          report_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          author_id: string
+          author_name: string
+          author_role?: string | null
+          comment: string
+          created_at?: string | null
+          id?: string
+          report_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          author_id?: string
+          author_name?: string
+          author_role?: string | null
+          comment?: string
+          created_at?: string | null
+          id?: string
+          report_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      weekly_report_goals: {
+        Row: {
+          created_at: string | null
+          due_date: string | null
+          goal: string
+          id: string
+          priority: string
+          report_id: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          due_date?: string | null
+          goal: string
+          id?: string
+          priority: string
+          report_id: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          due_date?: string | null
+          goal?: string
+          id?: string
+          priority?: string
+          report_id?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
+      weekly_report_tasks: {
+        Row: {
+          actual_hours: number | null
+          completion_percentage: number | null
+          created_at: string | null
+          description: string | null
+          estimated_hours: number | null
+          id: string
+          notes: string | null
+          report_id: string
+          status: string
+          task_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          actual_hours?: number | null
+          completion_percentage?: number | null
+          created_at?: string | null
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          notes?: string | null
+          report_id: string
+          status: string
+          task_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          actual_hours?: number | null
+          completion_percentage?: number | null
+          created_at?: string | null
+          description?: string | null
+          estimated_hours?: number | null
+          id?: string
+          notes?: string | null
+          report_id?: string
+          status?: string
+          task_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      weekly_reports: {
+        Row: {
+          approval_status: string | null
+          comments: string | null
+          created_at: string | null
+          employee_id: string
+          employee_name: string
+          hours_spent: number | null
+          id: string
+          manager_id: string | null
+          manager_notes: string | null
+          objectives: string | null
+          reviewed_at: string | null
+          status: string | null
+          submitted_at: string | null
+          tasks_completed: string | null
+          updated_at: string | null
+          week_ending: string
+          week_starting: string
+        }
+        Insert: {
+          approval_status?: string | null
+          comments?: string | null
+          created_at?: string | null
+          employee_id: string
+          employee_name: string
+          hours_spent?: number | null
+          id?: string
+          manager_id?: string | null
+          manager_notes?: string | null
+          objectives?: string | null
+          reviewed_at?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          tasks_completed?: string | null
+          updated_at?: string | null
+          week_ending: string
+          week_starting: string
+        }
+        Update: {
+          approval_status?: string | null
+          comments?: string | null
+          created_at?: string | null
+          employee_id?: string
+          employee_name?: string
+          hours_spent?: number | null
+          id?: string
+          manager_id?: string | null
+          manager_notes?: string | null
+          objectives?: string | null
+          reviewed_at?: string | null
+          status?: string | null
+          submitted_at?: string | null
+          tasks_completed?: string | null
+          updated_at?: string | null
+          week_ending?: string
+          week_starting?: string
+        }
+        Relationships: []
+      }
+      wes_academic_feedback: {
+        Row: {
+          created_at: string | null
+          daily_report_id: string
+          feedback_date: string | null
+          id: string
+          rating: number | null
+          signature: string | null
+          what_is_good: string | null
+          where_improvement_needed: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          daily_report_id: string
+          feedback_date?: string | null
+          id?: string
+          rating?: number | null
+          signature?: string | null
+          what_is_good?: string | null
+          where_improvement_needed?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          daily_report_id?: string
+          feedback_date?: string | null
+          id?: string
+          rating?: number | null
+          signature?: string | null
+          what_is_good?: string | null
+          where_improvement_needed?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_academic_feedback_daily_report_id_fkey"
+            columns: ["daily_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_daily_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_challenges: {
+        Row: {
+          challenge_description: string
+          created_at: string | null
+          id: string
+          solution_applied: string | null
+          weekly_report_id: string
+        }
+        Insert: {
+          challenge_description: string
+          created_at?: string | null
+          id?: string
+          solution_applied?: string | null
+          weekly_report_id: string
+        }
+        Update: {
+          challenge_description?: string
+          created_at?: string | null
+          id?: string
+          solution_applied?: string | null
+          weekly_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_challenges_weekly_report_id_fkey"
+            columns: ["weekly_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_weekly_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wes_challenges_weekly_report_id_fkey"
+            columns: ["weekly_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_weekly_reports_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_class_updates: {
+        Row: {
+          chapter_name: string | null
+          chapters_topics_complete: number | null
+          class_number: number
+          created_at: string | null
+          daily_report_id: string
+          id: string
+          learning_outcomes: string | null
+          summary: string | null
+          time_slot: string
+          unit_name: string | null
+          what_went_well: string | null
+        }
+        Insert: {
+          chapter_name?: string | null
+          chapters_topics_complete?: number | null
+          class_number: number
+          created_at?: string | null
+          daily_report_id: string
+          id?: string
+          learning_outcomes?: string | null
+          summary?: string | null
+          time_slot: string
+          unit_name?: string | null
+          what_went_well?: string | null
+        }
+        Update: {
+          chapter_name?: string | null
+          chapters_topics_complete?: number | null
+          class_number?: number
+          created_at?: string | null
+          daily_report_id?: string
+          id?: string
+          learning_outcomes?: string | null
+          summary?: string | null
+          time_slot?: string
+          unit_name?: string | null
+          what_went_well?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_class_updates_daily_report_id_fkey"
+            columns: ["daily_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_daily_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_daily_reports: {
+        Row: {
+          attendance_marked: boolean | null
+          class_video_done: boolean | null
+          created_at: string | null
+          day_date: string
+          day_name: string
+          id: string
+          my_attendance: number | null
+          parent_call_comments: string | null
+          parents_called: number | null
+          parents_received: number | null
+          progress_tracker_updated: string | null
+          total_strength: number | null
+          tracker_updated: boolean | null
+          weekly_report_id: string
+        }
+        Insert: {
+          attendance_marked?: boolean | null
+          class_video_done?: boolean | null
+          created_at?: string | null
+          day_date: string
+          day_name: string
+          id?: string
+          my_attendance?: number | null
+          parent_call_comments?: string | null
+          parents_called?: number | null
+          parents_received?: number | null
+          progress_tracker_updated?: string | null
+          total_strength?: number | null
+          tracker_updated?: boolean | null
+          weekly_report_id: string
+        }
+        Update: {
+          attendance_marked?: boolean | null
+          class_video_done?: boolean | null
+          created_at?: string | null
+          day_date?: string
+          day_name?: string
+          id?: string
+          my_attendance?: number | null
+          parent_call_comments?: string | null
+          parents_called?: number | null
+          parents_received?: number | null
+          progress_tracker_updated?: string | null
+          total_strength?: number | null
+          tracker_updated?: boolean | null
+          weekly_report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_daily_reports_weekly_report_id_fkey"
+            columns: ["weekly_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_weekly_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wes_daily_reports_weekly_report_id_fkey"
+            columns: ["weekly_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_weekly_reports_summary"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_lesson_plans: {
+        Row: {
+          approval_rating: number | null
+          created_at: string | null
+          daily_report_id: string
+          id: string
+          lp_number: number
+          reviewed: boolean | null
+          submitted: boolean | null
+        }
+        Insert: {
+          approval_rating?: number | null
+          created_at?: string | null
+          daily_report_id: string
+          id?: string
+          lp_number: number
+          reviewed?: boolean | null
+          submitted?: boolean | null
+        }
+        Update: {
+          approval_rating?: number | null
+          created_at?: string | null
+          daily_report_id?: string
+          id?: string
+          lp_number?: number
+          reviewed?: boolean | null
+          submitted?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_lesson_plans_daily_report_id_fkey"
+            columns: ["daily_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_daily_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_operations_feedback: {
+        Row: {
+          created_at: string | null
+          daily_report_id: string
+          feedback_date: string | null
+          id: string
+          rating: number | null
+          signature: string | null
+          what_is_good: string | null
+          where_improvement_needed: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          daily_report_id: string
+          feedback_date?: string | null
+          id?: string
+          rating?: number | null
+          signature?: string | null
+          what_is_good?: string | null
+          where_improvement_needed?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          daily_report_id?: string
+          feedback_date?: string | null
+          id?: string
+          rating?: number | null
+          signature?: string | null
+          what_is_good?: string | null
+          where_improvement_needed?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wes_operations_feedback_daily_report_id_fkey"
+            columns: ["daily_report_id"]
+            isOneToOne: false
+            referencedRelation: "wes_daily_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wes_weekly_reports: {
+        Row: {
+          average_academic_rating: number | null
+          average_operations_rating: number | null
+          class_batch: string
+          created_at: string | null
+          id: string
+          status: string | null
+          submitted_at: string | null
+          teacher_id: string
+          teacher_name: string
+          total_attendance_percentage: number | null
+          total_lesson_plans_reviewed: number | null
+          total_lesson_plans_submitted: number | null
+          updated_at: string | null
+          week_end_date: string
+          week_start_date: string
+        }
+        Insert: {
+          average_academic_rating?: number | null
+          average_operations_rating?: number | null
+          class_batch: string
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          submitted_at?: string | null
+          teacher_id: string
+          teacher_name: string
+          total_attendance_percentage?: number | null
+          total_lesson_plans_reviewed?: number | null
+          total_lesson_plans_submitted?: number | null
+          updated_at?: string | null
+          week_end_date: string
+          week_start_date: string
+        }
+        Update: {
+          average_academic_rating?: number | null
+          average_operations_rating?: number | null
+          class_batch?: string
+          created_at?: string | null
+          id?: string
+          status?: string | null
+          submitted_at?: string | null
+          teacher_id?: string
+          teacher_name?: string
+          total_attendance_percentage?: number | null
+          total_lesson_plans_reviewed?: number | null
+          total_lesson_plans_submitted?: number | null
+          updated_at?: string | null
+          week_end_date?: string
+          week_start_date?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       holidays_view: {
@@ -2662,6 +3240,26 @@ export type Database = {
           status: string | null
           variable_earnings_details: Json | null
           variable_earnings_total: number | null
+        }
+        Relationships: []
+      }
+      wes_weekly_reports_summary: {
+        Row: {
+          average_academic_rating: number | null
+          average_operations_rating: number | null
+          class_batch: string | null
+          days_filled: number | null
+          id: string | null
+          status: string | null
+          submitted_at: string | null
+          teacher_id: string | null
+          teacher_name: string | null
+          total_attendance_percentage: number | null
+          total_lesson_plans_reviewed: number | null
+          total_lesson_plans_submitted: number | null
+          total_parents_called: number | null
+          week_end_date: string | null
+          week_start_date: string | null
         }
         Relationships: []
       }
@@ -2820,7 +3418,11 @@ export type Database = {
           casual_leaves_entitled: number | null
           casual_leaves_used: number | null
           created_at: string | null
+          emergency_leaves_used: number | null
+          half_day_leaves_used: number | null
           id: string
+          lop_leaves_used: number | null
+          medical_leaves_used: number | null
           month: number
           sick_leaves_used: number | null
           unplanned_leaves_used: number | null
@@ -2924,7 +3526,14 @@ export type Database = {
         | "rejected"
         | "holiday"
       leave_status: "pending" | "approved" | "rejected"
-      leave_type: "casual" | "medical" | "emergency" | "lop" | "half_day"
+      leave_type:
+        | "casual"
+        | "sick"
+        | "unplanned"
+        | "emergency"
+        | "medical"
+        | "lop"
+        | "half_day"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3064,7 +3673,15 @@ export const Constants = {
         "holiday",
       ],
       leave_status: ["pending", "approved", "rejected"],
-      leave_type: ["casual", "medical", "emergency", "lop", "half_day"],
+      leave_type: [
+        "casual",
+        "sick",
+        "unplanned",
+        "emergency",
+        "medical",
+        "lop",
+        "half_day",
+      ],
     },
   },
 } as const
