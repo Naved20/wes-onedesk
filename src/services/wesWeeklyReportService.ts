@@ -63,7 +63,7 @@ export const wesWeeklyReportService = {
       .eq("weekly_report_id", reportId);
 
     // For each daily report, get related data
-    const dailyReportsComplete: WESDailyReportComplete[] = await Promise.all(
+    const dailyReportsComplete: WESDailyReportComplete[] = await Promise.all<any>(
       (dailyReports || []).map(async (daily) => {
         const [lessonPlans, classUpdates, academicFeedback, operationsFeedback] =
           await Promise.all([
