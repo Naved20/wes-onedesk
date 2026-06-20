@@ -1707,16 +1707,16 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             console.log(`Fetched earnings for user ${salary.user_id}:`, earningsByType);
 
             // Get existing earnings from the salary record
-            const existingEarnings = salary.variable_earnings_details || {};
+            const existingEarnings = ((salary as any).variable_earnings_details || {}) as Record<string, any>;
             
             // Merge with new earnings (prefer fetched data for standard earning codes)
-            const mergedEarnings = {
+            const mergedEarnings: Record<string, number> = {
               ...existingEarnings,
               ...earningsByType,
             };
 
             // Calculate total variable earnings
-            const totalVariableEarnings = Object.values(mergedEarnings).reduce(
+            const totalVariableEarnings = Object.values(mergedEarnings).reduce<number>(
               (sum, val) => sum + (parseFloat(val as any) || 0), 0
             );
 

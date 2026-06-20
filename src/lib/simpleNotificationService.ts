@@ -123,7 +123,7 @@ export function setupRealtimeNotifications(userId: string) {
  */
 export async function stopRealtimeNotifications(userId: string) {
   try {
-    await supabase.removeChannel(`notifications:${userId}`);
+    await supabase.removeChannel(supabase.channel(`notifications:${userId}`));
   } catch (error) {
     console.error("Error removing notification channel:", error);
   }

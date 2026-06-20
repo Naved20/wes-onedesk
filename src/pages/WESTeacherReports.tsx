@@ -23,7 +23,7 @@ const formatSafeDate = (dateString: string | null | undefined): string => {
 };
 
 const WESTeacherReports = () => {
-  const { user, profile, role } = useAuth();
+  const { user, role } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [reports, setReports] = useState<WESWeeklyReport[]>([]);
