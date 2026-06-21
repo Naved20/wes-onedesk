@@ -15,7 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useGoogleDrive } from "@/hooks/useGoogleDrive";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
-import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, Copy, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX } from "lucide-react";
+import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, Copy, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX, Upload } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -250,54 +250,104 @@ const Tasks = () => {
     file: null as File | null,
   });
   const [responseMode, setResponseMode] = useState<"link" | "file">("link");
-  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [isUploadingArticle, setIsUploadingArticle] = useState(false);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [articleUploadStatus, setArticleUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [videoUploadStatus, setVideoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
 
-  const handleGoogleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'article_link' | 'video_link' | 'link') => {
+  // Reset statuses when dialog triggers or fields update
+  useEffect(() => {
+    if (responseDialogOpen) {
+      setArticleUploadStatus(responseFormData.article_link ? 'success' : 'idle');
+      setVideoUploadStatus(responseFormData.video_link ? 'success' : 'idle');
+    }
+  }, [responseDialogOpen, responseFormData.article_link, responseFormData.video_link]);
+
+  const handleGoogleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'article_link' | 'video_link') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isArticle = field === 'article_link';
+    if (isArticle) {
+      setIsUploadingArticle(true);
+      setArticleUploadStatus('uploading');
+    } else {
+      setIsUploadingVideo(true);
+      setVideoUploadStatus('uploading');
+    }
+
     try {
-      setIsUploadingToDrive(true);
-      toast({
-        title: "Uploading to Google Drive",
-        description: `Uploading "${file.name}"...`,
-      });
+      console.log(`[GoogleDriveUpload] Starting upload for ${field}: ${file.name}`);
+      
+      // Fetch user profile info dynamically for the structured renaming/folders
+      let profileName = "Unknown_User";
+      if (user?.id) {
+        const { data: profile } = await supabase
+          .from("employee_profiles")
+          .select("first_name, last_name")
+          .eq("user_id", user.id)
+          .single();
+        if (profile) {
+          profileName = `${profile.first_name}_${profile.last_name}`;
+        }
+      }
 
-      const formData = new FormData();
-      formData.append("file", file);
+      const taskTitle = selectedTask?.title || "Task";
+      const submissionType = isArticle ? "Article" : "Video";
 
-      // Invoke the Edge Function to upload to Google Drive using the Service Account credentials
+      const driveFormData = new FormData();
+      driveFormData.append("file", file);
+      driveFormData.append("taskName", taskTitle);
+      driveFormData.append("userName", profileName);
+      driveFormData.append("submissionType", submissionType);
+
+      // Invoke Edge Function
       const { data, error } = await supabase.functions.invoke("upload-to-drive", {
-        body: formData,
+        body: driveFormData,
       });
 
       if (error) throw error;
 
       if (data && data.webViewLink) {
+        console.log(`[GoogleDriveUpload] Upload success:`, data);
+        const targetLink = data.webViewLink;
+
         setResponseFormData(prev => ({
           ...prev,
-          [field]: data.webViewLink
+          [field]: targetLink
         }));
+
+        if (isArticle) {
+          setArticleUploadStatus('success');
+        } else {
+          setVideoUploadStatus('success');
+        }
+
         toast({
           title: "Success",
-          description: `File uploaded to Google Drive. Link updated!`,
+          description: `${submissionType} uploaded to Google Drive successfully!`,
         });
       } else {
-        toast({
-          title: "Error",
-          description: "Upload failed. Please check connection and try again.",
-          variant: "destructive",
-        });
+        throw new Error("No webViewLink returned from Edge Function");
       }
-    } catch (error) {
-      console.error("Google Drive upload error:", error);
+    } catch (err) {
+      console.error(`[GoogleDriveUpload] Upload failed for ${field}:`, err);
+      if (isArticle) {
+        setArticleUploadStatus('error');
+      } else {
+        setVideoUploadStatus('error');
+      }
       toast({
-        title: "Error",
-        description: "An unexpected error occurred during Google Drive upload.",
+        title: "Upload Failed",
+        description: `Failed to upload ${isArticle ? 'file' : 'video'}. Please try again.`,
         variant: "destructive",
       });
     } finally {
-      setIsUploadingToDrive(false);
+      if (isArticle) {
+        setIsUploadingArticle(false);
+      } else {
+        setIsUploadingVideo(false);
+      }
       e.target.value = '';
     }
   };
@@ -3914,7 +3964,7 @@ const Tasks = () => {
           </DialogHeader>
             );
           })()}
-          <form onSubmit={handleResponseSubmit} className="space-y-4">
+          <form onSubmit={handleResponseSubmit} className="space-y-4 ">
             <div className="space-y-2">
               <Label htmlFor="response_text">Your Response / Notes *</Label>
               <Textarea
@@ -3926,121 +3976,116 @@ const Tasks = () => {
                 required
               />
             </div>
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Article / Vocabulary / Handwritten Notes Upload */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <FileText className="h-4 w-4 text-primary" />
+                      Article / Handwritten Notes (Optional)
+                    </Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        id="article_file_upload"
+                        className="hidden"
+                        onChange={(e) => handleGoogleDriveUpload(e, 'article_link')}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('article_file_upload')?.click()}
+                        disabled={isUploadingArticle}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {responseFormData.article_link ? "Change File" : "Upload"}
+                      </Button>
+                      
+                      {articleUploadStatus === 'uploading' && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent inline-block"></span>
+                          Uploading...
+                        </span>
+                      )}
 
-            {/* Link Upload Field */}
-            <div className="space-y-2">
-              <Label htmlFor="response_link" className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  <ExternalLink className="h-4 w-4" />
-                  Link Upload (Optional)
-                </span>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  Or upload file to Google Drive:
-                  <input
-                    type="file"
-                    id="response_link_file_upload"
-                    className="hidden"
-                    onChange={(e) => handleGoogleDriveUpload(e, 'link')}
-                  />
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
-                    onClick={() => document.getElementById('response_link_file_upload')?.click()}
-                    disabled={isUploadingToDrive}
-                  >
-                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
-                  </Button>
-                </div>
-              </Label>
-              <Input
-                id="response_link"
-                type="url"
-                placeholder="https://example.com (Google Drive, Docs, GitHub, YouTube etc.)"
-                value={responseFormData.link}
-                onChange={(e) => setResponseFormData({ ...responseFormData, link: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Paste a link to your Google Drive, Docs, GitHub, YouTube, or any other online resource
-              </p>
-            </div>
+                      {articleUploadStatus === 'success' && responseFormData.article_link && (
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                          ✓ Uploaded
+                          <a
+                            href={responseFormData.article_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline ml-2"
+                          >
+                            View
+                          </a>
+                        </span>
+                      )}
 
-            {/* Article / Vocabulary / Handwritten Notes Link Field */}
-            <div className="space-y-2">
-              <Label htmlFor="article_link" className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Article / Vocabulary / Handwritten Notes Link (Optional)
-                </span>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  Or upload file to Google Drive:
-                  <input
-                    type="file"
-                    id="article_file_upload"
-                    className="hidden"
-                    onChange={(e) => handleGoogleDriveUpload(e, 'article_link')}
-                  />
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
-                    onClick={() => document.getElementById('article_file_upload')?.click()}
-                    disabled={isUploadingToDrive}
-                  >
-                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
-                  </Button>
-                </div>
-              </Label>
-              <Input
-                id="article_link"
-                type="url"
-                placeholder="https://example.com (Link to your article, vocabulary, or notes)"
-                value={responseFormData.article_link}
-                onChange={(e) => setResponseFormData({ ...responseFormData, article_link: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Paste a link to your article, vocabulary list, or handwritten notes (Google Drive, Docs, etc.)
-              </p>
-            </div>
+                      {articleUploadStatus === 'error' && (
+                        <span className="text-xs text-destructive font-medium">
+                          ✗ Upload Failed
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-            {/* Video Link Field */}
-            <div className="space-y-2">
-              <Label htmlFor="video_link" className="flex items-center justify-between w-full">
-                <span className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  Video Link (Optional)
-                </span>
-                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                  Or upload video to Google Drive:
-                  <input
-                    type="file"
-                    id="video_file_upload"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={(e) => handleGoogleDriveUpload(e, 'video_link')}
-                  />
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="p-0 h-auto text-xs text-primary hover:underline font-semibold"
-                    onClick={() => document.getElementById('video_file_upload')?.click()}
-                    disabled={isUploadingToDrive}
-                  >
-                    {isUploadingToDrive ? "Uploading..." : "Upload File"}
-                  </Button>
-                </div>
-              </Label>
-              <Input
-                id="video_link"
-                type="url"
-                placeholder="https://example.com (YouTube, Google Drive video link, etc.)"
-                value={responseFormData.video_link}
-                onChange={(e) => setResponseFormData({ ...responseFormData, video_link: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">
-                Paste a link to your video (YouTube, Google Drive, or any other video hosting platform)
-              </p>
-            </div>
+                  {/* Video Upload */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-sm font-semibold">
+                      <ImageIcon className="h-4 w-4 text-primary" />
+                      Video (Optional)
+                    </Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        id="video_file_upload"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(e) => handleGoogleDriveUpload(e, 'video_link')}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById('video_file_upload')?.click()}
+                        disabled={isUploadingVideo}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {responseFormData.video_link ? "Change Video" : "Upload"}
+                      </Button>
+                      
+                      {videoUploadStatus === 'uploading' && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent inline-block"></span>
+                          Uploading...
+                        </span>
+                      )}
+
+                      {videoUploadStatus === 'success' && responseFormData.video_link && (
+                        <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                          ✓ Uploaded
+                          <a
+                            href={responseFormData.video_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline ml-2"
+                          >
+                            View
+                          </a>
+                        </span>
+                      )}
+
+                      {videoUploadStatus === 'error' && (
+                        <span className="text-xs text-destructive font-medium">
+                          ✗ Upload Failed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                 </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>

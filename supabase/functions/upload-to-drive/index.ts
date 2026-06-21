@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info, x-supabase-api-version",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
 };
 
 Deno.serve(async (req) => {
@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
     // Get the multipart form data
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const folderId = formData.get("folderId") as string || undefined;
+    const taskName = formData.get("taskName") as string || "Task";
+    const userName = formData.get("userName") as string || "User";
+    const submissionType = formData.get("submissionType") as string || "Submission";
 
     if (!file) {
       return new Response(
@@ -45,13 +47,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 2. Upload file to Google Drive
+    // 2. Create/Resolve Folder Hierarchy:
+    // Main Folder ("OneDesk Submissions") -> Task Name -> User Name
+    const mainFolderId = await getOrCreateFolder("OneDesk Submissions", null, accessToken);
+    const taskFolderId = await getOrCreateFolder(taskName, mainFolderId, accessToken);
+    const userFolderId = await getOrCreateFolder(userName, taskFolderId, accessToken);
+
+    // 3. Rename File according to convention: {TaskName}_{UserName}_{SubmissionType}_{Timestamp}.ext
+    const fileExt = file.name.split('.').pop() || '';
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    
+    // Sanitize names to avoid invalid character issues in filesystem/drive query searches
+    const sanitizeName = (str: string) => str.trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_");
+    const cleanTaskName = sanitizeName(taskName);
+    const cleanUserName = sanitizeName(userName);
+    const cleanSubmissionType = sanitizeName(submissionType);
+    const newFileName = `${cleanTaskName}_${cleanUserName}_${cleanSubmissionType}_${timestamp}.${fileExt}`;
+
+    // 4. Upload file to Google Drive under User Name folder
     const uploadUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink";
     
     const metadata = {
-      name: file.name,
+      name: newFileName,
       mimeType: file.type,
-      ...(folderId && { parents: [folderId] }),
+      parents: [userFolderId],
     };
 
     const uploadFormData = new FormData();
@@ -78,7 +99,7 @@ Deno.serve(async (req) => {
     const uploadedFile = await uploadResponse.json();
     const fileId = uploadedFile.id;
 
-    // 3. Make file public (anyone with the link can view)
+    // 5. Make file public (anyone with the link can view)
     const permissionUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`;
     const permissionResponse = await fetch(permissionUrl, {
       method: "POST",
@@ -96,12 +117,18 @@ Deno.serve(async (req) => {
       console.warn("Failed to make file public, link might not be accessible without permissions");
     }
 
-    // Return the public webViewLink
+    // Direct download/view link format
+    const directViewLink = `https://drive.google.com/uc?export=view&id=${fileId}`;
+    const folderPath = `OneDesk Submissions > ${taskName} > ${userName}`;
+
+    // Return the response metadata
     return new Response(
       JSON.stringify({
-        id: fileId,
-        name: file.name,
+        fileId: fileId,
+        fileName: newFileName,
         webViewLink: uploadedFile.webViewLink,
+        directViewLink: directViewLink,
+        folderPath: folderPath,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -115,6 +142,52 @@ Deno.serve(async (req) => {
   }
 });
 
+// Helper: Find or create a folder in Google Drive
+async function getOrCreateFolder(folderName: string, parentId: string | null, accessToken: string): Promise<string> {
+  const sanitizedName = folderName.replace(/'/g, "\\'");
+  const query = parentId 
+    ? `mimeType = 'application/vnd.google-apps.folder' and name = '${sanitizedName}' and '${parentId}' in parents and trashed = false`
+    : `mimeType = 'application/vnd.google-apps.folder' and name = '${sanitizedName}' and 'root' in parents and trashed = false`;
+  
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  const searchResponse = await fetch(searchUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+
+  if (!searchResponse.ok) {
+    throw new Error(`Failed to search folder: ${await searchResponse.text()}`);
+  }
+
+  const searchData = await searchResponse.json();
+  if (searchData.files && searchData.files.length > 0) {
+    return searchData.files[0].id;
+  }
+
+  // Create folder if it doesn't exist
+  const createUrl = "https://www.googleapis.com/drive/v3/files?fields=id,name";
+  const metadata = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder",
+    ...(parentId && { parents: [parentId] })
+  };
+
+  const createResponse = await fetch(createUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(metadata)
+  });
+
+  if (!createResponse.ok) {
+    throw new Error(`Failed to create folder: ${await createResponse.text()}`);
+  }
+
+  const createData = await createResponse.json();
+  return createData.id;
+}
+
 // Helper: Convert PEM key to DER format
 function pemToDer(pem: string): Uint8Array {
   const pemHeader = "-----BEGIN PRIVATE KEY-----";
@@ -122,6 +195,7 @@ function pemToDer(pem: string): Uint8Array {
   const pemContents = pem
     .replace(pemHeader, "")
     .replace(pemFooter, "")
+    .replace(/\\n/g, "")
     .replace(/\s+/g, "");
   
   const binary = atob(pemContents);
@@ -132,6 +206,7 @@ function pemToDer(pem: string): Uint8Array {
   }
   return bytes;
 }
+
 
 // Helper: Generate JWT and fetch Google Access Token
 async function getGoogleAccessToken(serviceAccount: any): Promise<string | null> {
