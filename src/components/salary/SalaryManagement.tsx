@@ -17,6 +17,29 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
 import { sendNotification } from "@/lib/notificationService";
 
+const earningTypeLabels: Record<string, { label: string; description: string; icon: string }> = {
+  LESSON_PLAN: {
+    label: 'Lesson Plan & Delivery',
+    description: 'Complete assigned homework, research and write',
+    icon: '',
+  },
+  ENG_TRAINING: {
+    label: 'English Training Tasks',
+    description: 'Read, Write, Speak & Record articles',
+    icon: '',
+  },
+  DIGITAL_TRAINING: {
+    label: 'Soft & Digital Skills',
+    description: 'Complete GT Session tasks',
+    icon: '',
+  },
+  PERFORMANCE_REWARD: {
+    label: 'Performance Based Reward',
+    description: 'Mentorship sessions and deliverables',
+    icon: '',
+  },
+};
+
 interface Employee {
   user_id: string;
   first_name: string;
@@ -3347,9 +3370,22 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 {(calculateSalary().totalVariableEarnings || 0) > 0 && (
                   <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                     <p className="text-xs text-muted-foreground font-medium">Performance Based</p>
-                    <div className="flex justify-between text-sm font-semibold">
-                      <span>Performance Earnings</span>
-                      <span className="text-blue-700 dark:text-blue-400">₹{calculateSalary().totalVariableEarnings?.toLocaleString()}</span>
+                    <div className="space-y-1 text-sm">
+                      {Object.entries(formData.variable_earnings).map(([code, val]) => {
+                        const amount = parseFloat(val as string) || 0;
+                        if (amount <= 0) return null;
+                        const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '💰' };
+                        return (
+                          <div key={code} className="flex justify-between">
+                            <span className="text-muted-foreground">{labelInfo.icon} {labelInfo.label}</span>
+                            <span className="font-semibold">₹{amount.toLocaleString()}</span>
+                          </div>
+                        );
+                      })}
+                      <div className="border-t border-blue-200 dark:border-blue-700 pt-1 flex justify-between font-semibold">
+                        <span>Performance Earnings</span>
+                        <span className="text-blue-700 dark:text-blue-400">₹{calculateSalary().totalVariableEarnings?.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
                 )}

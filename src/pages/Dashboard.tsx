@@ -5,7 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SalaryStatusWidget } from "@/components/dashboard/SalaryStatusWidget";
+import { Leaderboard } from "@/components/dashboard/Leaderboard";
 import { QuickLinks } from "@/components/dashboard/QuickLinks";
+import { TodoUpcoming } from "@/components/tasks/TodoUpcoming";
 import { Users, Clock, Calendar, DollarSign, Bell, FileText, Building, Camera } from "lucide-react";
 
 interface DashboardStats {
@@ -244,6 +246,11 @@ export default function Dashboard() {
           </div>
         )}
 
+
+
+        {/* Global Performance Leaderboard - Visible to all users */}
+        <Leaderboard />
+
         {/* Salary Status Widget for Admin/Manager only */}
         {(role === "admin" || role === "manager") && user && (
           <div className="grid gap-4 md:grid-cols-2">
@@ -251,7 +258,15 @@ export default function Dashboard() {
           </div>
         )}
 
+
+
+
         <QuickLinks />
+
+
+
+        {/* Employee TO-DO Tasks Section */}
+        {role === "employee" && <TodoUpcoming />}
 
         {/* Quick Actions */}
         <Card>

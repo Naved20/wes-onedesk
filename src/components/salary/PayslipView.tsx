@@ -12,6 +12,29 @@ import { toast } from "@/hooks/use-toast";
 import { Download, AlertCircle, DollarSign, TrendingUp, TrendingDown, Calendar, Calculator } from "lucide-react";
 import { generatePayslipPDF } from "./PayslipPDF";
 
+const earningTypeLabels: Record<string, { label: string; description: string; icon: string }> = {
+  LESSON_PLAN: {
+    label: 'Lesson Plan & Delivery',
+    description: 'Complete assigned homework, research and write',
+    icon: '',
+  },
+  ENG_TRAINING: {
+    label: 'English Training Tasks',
+    description: 'Read, Write, Speak & Record articles',
+    icon: '',
+  },
+  DIGITAL_TRAINING: {
+    label: 'Soft & Digital Skills',
+    description: 'Complete GT Session tasks',
+    icon: '',
+  },
+  PERFORMANCE_REWARD: {
+    label: 'Performance Based Reward',
+    description: 'Mentorship sessions and deliverables',
+    icon: '',
+  },
+};
+
 interface SalaryDetail {
   id: string;
   month: number;
@@ -562,9 +585,23 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                 {(salary.variable_earnings_total || 0) > 0 && (
                   <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
                     <p className="text-xs text-muted-foreground font-medium">Performance Based</p>
-                    <div className="flex justify-between text-sm font-semibold">
-                      <span>Performance Earnings</span>
-                      <span className="text-blue-700 dark:text-blue-400">₹{salary.variable_earnings_total?.toLocaleString()}</span>
+                    <div className="space-y-1 text-sm">
+                      {salary.variable_earnings_details &&
+                        Object.entries(salary.variable_earnings_details).map(([code, amount]) => {
+                          const val = parseFloat(String(amount)) || 0;
+                          if (val <= 0) return null;
+                          const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '💰' };
+                          return (
+                            <div key={code} className="flex justify-between">
+                              <span className="text-muted-foreground">{labelInfo.icon} {labelInfo.label}</span>
+                              <span className="font-semibold">₹{val.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      <div className="border-t border-blue-200 dark:border-blue-700 pt-1 flex justify-between font-semibold">
+                        <span>Performance Earnings</span>
+                        <span className="text-blue-700 dark:text-blue-400">₹{salary.variable_earnings_total?.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
                 )}
