@@ -487,7 +487,7 @@ export const getMostWorkingHoursLeaderboard = async (): Promise<LeaderboardEntry
 
     // Sum working hours per user
     const hoursTotal: Record<string, number> = {};
-    (attendance || []).forEach(record => {
+    (attendance as any[] || []).forEach((record: any) => {
       const hours = parseFloat(record.working_hours?.toString() || "0");
       hoursTotal[record.user_id] = (hoursTotal[record.user_id] || 0) + hours;
     });
