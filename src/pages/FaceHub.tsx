@@ -210,37 +210,7 @@ export default function FaceHub() {
         return;
       }
 
-      // CRITICAL: Frontend validation - reject if distance > 0.40
       const distance = typeof data.distance === "number" ? data.distance : null;
-      if (distance !== null && distance > 0.40) {
-        setLastResult({ 
-          ok: false, 
-          msg: `Face not recognized. Match quality too low (${distance.toFixed(3)}). Please ensure you are enrolled.` 
-        });
-        setLastDistance(distance);
-        setNotEnrolledDistance(distance);
-        
-        // Show not enrolled popup
-        setShowNotEnrolledDialog(true);
-        
-        // Auto-close after 4 seconds
-        setTimeout(() => {
-          setShowNotEnrolledDialog(false);
-          setNotEnrolledDistance(null);
-        }, 4000);
-        
-        // Log failed attempt
-        await supabase.from("face_checkin_history").insert({
-          user_id: null,
-          matched: false,
-          match_distance: distance,
-          notes: "Rejected by frontend - distance above threshold",
-        });
-        
-        fetchHistory();
-        return;
-      }
-
       setLastDistance(distance);
       setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
       
