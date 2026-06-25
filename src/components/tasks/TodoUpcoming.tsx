@@ -115,7 +115,7 @@ export const TodoUpcoming = () => {
 
       if (taskError) throw taskError;
 
-      const fetchedTasks = (allTasks || []) as Task[];
+      const fetchedTasks = (allTasks || []) as unknown as Task[];
       setTasks(fetchedTasks);
 
       // Group tasks by date

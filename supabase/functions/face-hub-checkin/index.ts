@@ -121,48 +121,26 @@ serve(async (req) => {
     }
 
     let bestMatch: { user_id: string; distance: number } | null = null;
-    let secondBestMatch: { user_id: string; distance: number } | null = null;
-    
+
     for (const enrollment of validEnrollments) {
       const distance = euclideanDistance(candidate, enrollment.descriptor);
-      
       if (!bestMatch || distance < bestMatch.distance) {
-        // New best match found - demote current best to second best
-        secondBestMatch = bestMatch;
         bestMatch = { user_id: enrollment.user_id, distance };
-      } else if (!secondBestMatch || distance < secondBestMatch.distance) {
-        // New second best match found
-        secondBestMatch = { user_id: enrollment.user_id, distance };
       }
     }
 
-    // CRITICAL: Confidence check to prevent wrong person matching
-    // Only accept match if:
-    // 1. Best match distance is below strict threshold (0.30)
-    // 2. Second best match is significantly worse (gap > 0.20) OR doesn't exist
-    const isConfidentMatch = bestMatch && 
-      bestMatch.distance <= MATCH_THRESHOLD && 
-      (!secondBestMatch || (secondBestMatch.distance - bestMatch.distance) >= CONFIDENCE_GAP);
-
-    if (!bestMatch || !isConfidentMatch) {
-      const reason = !bestMatch 
-        ? "No match found"
-        : bestMatch.distance > MATCH_THRESHOLD
-        ? `Distance too high (${bestMatch.distance.toFixed(3)} > ${MATCH_THRESHOLD})`
-        : `Not confident - second match too close (best: ${bestMatch.distance.toFixed(3)}, second: ${secondBestMatch?.distance.toFixed(3)})`;
-      
+    if (!bestMatch) {
       await supabaseAdmin.from("face_checkin_history").insert({
         user_id: null,
         matched: false,
-        match_distance: bestMatch?.distance ?? null,
-        notes: reason,
+        match_distance: null,
+        notes: "No enrolled faces to compare",
       });
 
       return json({
         ok: false,
-        message: `Face not recognized. ${reason}`,
-        distance: bestMatch?.distance ?? null,
-        secondBestDistance: secondBestMatch?.distance ?? null,
+        message: "Face not recognized.",
+        distance: null,
         enrolledCount: validEnrollments.length,
       });
     }

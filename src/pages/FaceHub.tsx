@@ -129,15 +129,69 @@ export default function FaceHub() {
 
   const initCamera = async () => {
     try {
+      // Reuse existing live stream if available
+      const existing = streamRef.current;
+      if (existing && existing.getVideoTracks().some((t) => t.readyState === "live")) {
+        if (videoRef.current && videoRef.current.srcObject !== existing) {
+          videoRef.current.srcObject = existing;
+        }
+        try { await videoRef.current?.play(); } catch { /* ignore */ }
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 1280, height: 1280, facingMode: "user" },
       });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        try { await videoRef.current.play(); } catch { /* ignore */ }
+      }
+
+      // If a track ends unexpectedly, try to re-acquire
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          console.warn("[FaceHub] Camera track ended, reinitializing...");
+          streamRef.current = null;
+          initCamera();
+        };
+      });
     } catch (e) {
       toast({ title: "Camera error", description: "Cannot access camera", variant: "destructive" });
     }
   };
+
+  // Keep camera alive: re-attach stream and resume playback if it stops
+  useEffect(() => {
+    const keepAlive = setInterval(() => {
+      const video = videoRef.current;
+      const stream = streamRef.current;
+      if (!video) return;
+
+      const hasLiveTrack = stream && stream.getVideoTracks().some((t) => t.readyState === "live");
+      if (!hasLiveTrack) {
+        initCamera();
+        return;
+      }
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      if (video.paused || video.ended) {
+        video.play().catch(() => { /* ignore */ });
+      }
+    }, 1500);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") initCamera();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(keepAlive);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const playSuccessSound = () => {
     // Create a simple success beep using Web Audio API
@@ -210,37 +264,7 @@ export default function FaceHub() {
         return;
       }
 
-      // CRITICAL: Frontend validation - reject if distance > 0.40
       const distance = typeof data.distance === "number" ? data.distance : null;
-      if (distance !== null && distance > 0.40) {
-        setLastResult({ 
-          ok: false, 
-          msg: `Face not recognized. Match quality too low (${distance.toFixed(3)}). Please ensure you are enrolled.` 
-        });
-        setLastDistance(distance);
-        setNotEnrolledDistance(distance);
-        
-        // Show not enrolled popup
-        setShowNotEnrolledDialog(true);
-        
-        // Auto-close after 4 seconds
-        setTimeout(() => {
-          setShowNotEnrolledDialog(false);
-          setNotEnrolledDistance(null);
-        }, 4000);
-        
-        // Log failed attempt
-        await supabase.from("face_checkin_history").insert({
-          user_id: null,
-          matched: false,
-          match_distance: distance,
-          notes: "Rejected by frontend - distance above threshold",
-        });
-        
-        fetchHistory();
-        return;
-      }
-
       setLastDistance(distance);
       setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
       
