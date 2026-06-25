@@ -15,7 +15,9 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useGoogleDrive } from "@/hooks/useGoogleDrive";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useFileCompression } from "@/hooks/useFileCompression";
 import { CheckSquare, Plus, FileText, Download, File, Image as ImageIcon, Trash2, MessageSquare, Send, Users, Edit, Copy, GripVertical, ArrowUpDown, ExternalLink, UserCheck, Eye, Search, Filter, Coins, Volume2, VolumeX, Upload } from "lucide-react";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { Link, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -185,6 +187,7 @@ const Tasks = () => {
   const { role, user } = useAuth();
   const { speak, stop, isPlaying, isSpeechSupported } = useTextToSpeech();
   const { uploadFile } = useGoogleDrive();
+  const { compressFile, formatBytes } = useFileCompression();
   const [playingTaskId, setPlayingTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,6 +257,8 @@ const Tasks = () => {
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [articleUploadStatus, setArticleUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [videoUploadStatus, setVideoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [articleUploadProgress, setArticleUploadProgress] = useState(0);
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
 
   // Reset statuses when dialog triggers or fields update
   useEffect(() => {
@@ -264,20 +269,85 @@ const Tasks = () => {
   }, [responseDialogOpen, responseFormData.article_link, responseFormData.video_link]);
 
   const handleGoogleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'article_link' | 'video_link') => {
-    const file = e.target.files?.[0];
+    let file = e.target.files?.[0];
     if (!file) return;
 
     const isArticle = field === 'article_link';
     if (isArticle) {
       setIsUploadingArticle(true);
       setArticleUploadStatus('uploading');
+      setArticleUploadProgress(0);
     } else {
       setIsUploadingVideo(true);
       setVideoUploadStatus('uploading');
+      setVideoUploadProgress(0);
     }
+
+    // Start with compression status
+    if (isArticle) {
+      setArticleUploadProgress(5);
+    } else {
+      setVideoUploadProgress(5);
+    }
+
+    // Better progress tracking - 3 phases:
+    // Phase 1: Compression (0-15%)
+    // Phase 2: Upload preparation (15-20%)
+    // Phase 3: Actual upload (20-100%)
+    
+    const startTime = Date.now();
+    let currentProgress = 0;
+    
+    const progressInterval = setInterval(() => {
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
+      
+      // Estimate total upload time based on file size
+      // For reference: ~1 second per 10MB is typical
+      const estimatedTotalSeconds = Math.max(10, (file.size / (10 * 1024 * 1024)) * 1000);
+      
+      // Calculate progress based on elapsed time
+      // Cap at 95% until actual completion
+      const estimatedProgress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
+      
+      currentProgress = Math.round(estimatedProgress);
+      
+      if (isArticle) {
+        setArticleUploadProgress(currentProgress);
+      } else {
+        setVideoUploadProgress(currentProgress);
+      }
+    }, 200);
 
     try {
       console.log(`[GoogleDriveUpload] Starting upload for ${field}: ${file.name}`);
+      
+      // Compress file before upload
+      console.log(`[Compression] Compressing ${file.name} (${formatBytes(file.size)})...`);
+      
+      try {
+        const compressionResult = await compressFile(file, {
+          maxWidth: 1920,
+          maxHeight: 1080,
+          quality: 0.85,
+        });
+
+        file = compressionResult.file;
+        
+        if (compressionResult.compressionRatio < 1) {
+          const savedSize = compressionResult.originalSize - compressionResult.compressedSize;
+          console.log(`[Compression] Success! Saved ${formatBytes(savedSize)} (${Math.round((1 - compressionResult.compressionRatio) * 100)}% reduction)`);
+          console.log(`[Compression] New size: ${formatBytes(compressionResult.compressedSize)}`);
+        }
+      } catch (compressionError) {
+        console.warn('[Compression] Failed, uploading original file:', compressionError);
+        // Continue with original file if compression fails
+      }
+
+      if (isArticle) {
+        setArticleUploadProgress(20);
+      } else {
+        setVideoUploadProgress(20);
+      }
       
       // Fetch user profile info dynamically for the structured renaming/folders
       let profileName = "Unknown_User";
@@ -306,6 +376,8 @@ const Tasks = () => {
         body: driveFormData,
       });
 
+      clearInterval(progressInterval);
+
       if (error) throw error;
 
       if (data && data.webViewLink) {
@@ -318,8 +390,10 @@ const Tasks = () => {
         }));
 
         if (isArticle) {
+          setArticleUploadProgress(100);
           setArticleUploadStatus('success');
         } else {
+          setVideoUploadProgress(100);
           setVideoUploadStatus('success');
         }
 
@@ -331,6 +405,7 @@ const Tasks = () => {
         throw new Error("No webViewLink returned from Edge Function");
       }
     } catch (err) {
+      clearInterval(progressInterval);
       console.error(`[GoogleDriveUpload] Upload failed for ${field}:`, err);
       if (isArticle) {
         setArticleUploadStatus('error');
@@ -3983,7 +4058,7 @@ const Tasks = () => {
                       <FileText className="h-4 w-4 text-primary" />
                       Article / Handwritten Notes (Optional)
                     </Label>
-                    <div className="flex items-center gap-3">
+                    <div className="space-y-2">
                       <input
                         type="file"
                         id="article_file_upload"
@@ -3996,37 +4071,40 @@ const Tasks = () => {
                         size="sm"
                         onClick={() => document.getElementById('article_file_upload')?.click()}
                         disabled={isUploadingArticle}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 w-full justify-center"
                       >
                         <Upload className="h-4 w-4" />
-                        {responseFormData.article_link ? "Change File" : "Upload"}
+                        {responseFormData.article_link ? "Change File" : "Upload Article"}
                       </Button>
                       
                       {articleUploadStatus === 'uploading' && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent inline-block"></span>
-                          Uploading...
-                        </span>
+                        <UploadProgress
+                          fileName="Article/Notes File"
+                          percentage={articleUploadProgress}
+                          uploading={true}
+                          error={null}
+                          showSize={false}
+                        />
                       )}
 
                       {articleUploadStatus === 'success' && responseFormData.article_link && (
-                        <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                        <div className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 rounded">
                           ✓ Uploaded
                           <a
                             href={responseFormData.article_link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline ml-2"
+                            className="text-primary hover:underline"
                           >
                             View
                           </a>
-                        </span>
+                        </div>
                       )}
 
                       {articleUploadStatus === 'error' && (
-                        <span className="text-xs text-destructive font-medium">
+                        <div className="text-xs text-destructive font-medium p-2 bg-red-50 dark:bg-red-950/20 rounded">
                           ✗ Upload Failed
-                        </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -4037,7 +4115,7 @@ const Tasks = () => {
                       <ImageIcon className="h-4 w-4 text-primary" />
                       Video (Optional)
                     </Label>
-                    <div className="flex items-center gap-3">
+                    <div className="space-y-2">
                       <input
                         type="file"
                         id="video_file_upload"
@@ -4051,37 +4129,40 @@ const Tasks = () => {
                         size="sm"
                         onClick={() => document.getElementById('video_file_upload')?.click()}
                         disabled={isUploadingVideo}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 w-full justify-center"
                       >
                         <Upload className="h-4 w-4" />
-                        {responseFormData.video_link ? "Change Video" : "Upload"}
+                        {responseFormData.video_link ? "Change Video" : "Upload Video"}
                       </Button>
                       
                       {videoUploadStatus === 'uploading' && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent inline-block"></span>
-                          Uploading...
-                        </span>
+                        <UploadProgress
+                          fileName="Video File"
+                          percentage={videoUploadProgress}
+                          uploading={true}
+                          error={null}
+                          showSize={false}
+                        />
                       )}
 
                       {videoUploadStatus === 'success' && responseFormData.video_link && (
-                        <span className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                        <div className="text-xs text-green-600 dark:text-green-400 font-medium flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 rounded">
                           ✓ Uploaded
                           <a
                             href={responseFormData.video_link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:underline ml-2"
+                            className="text-primary hover:underline"
                           >
                             View
                           </a>
-                        </span>
+                        </div>
                       )}
 
                       {videoUploadStatus === 'error' && (
-                        <span className="text-xs text-destructive font-medium">
+                        <div className="text-xs text-destructive font-medium p-2 bg-red-50 dark:bg-red-950/20 rounded">
                           ✗ Upload Failed
-                        </span>
+                        </div>
                       )}
                     </div>
                   </div>
