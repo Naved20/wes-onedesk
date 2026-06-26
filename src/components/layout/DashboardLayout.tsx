@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
   { label: "Policy and Procedures", href: "/documents", icon: <FileText className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Performance", href: "/performance", icon: <Star className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Reports", href: "/wes-reports", icon: <BookOpen className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
+  { label: "Uploaded Reports", href: "/uploaded-reports", icon: <FileText className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Announcements", href: "/announcements", icon: <Megaphone className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Training", href: "/tasks", icon: <CheckSquare className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
   { label: "Support & Requests", href: "/support-requests", icon: <HelpCircle className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },

@@ -38,6 +38,7 @@ import FaceIdManagement from "./pages/FaceIdManagement";
 import FaceAttendanceSessions from "./pages/FaceAttendanceSessions";
 import WESTeacherReports from "./pages/WESTeacherReports";
 import WESWeeklyReportForm from "./pages/WESWeeklyReportForm";
+import UploadedReports from "./pages/UploadedReports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/settings/language" element={<ProtectedRoute><Language /></ProtectedRoute>} />
             <Route path="/wes-reports" element={<ProtectedRoute><WESTeacherReports /></ProtectedRoute>} />
             <Route path="/wes-reports/:reportId" element={<ProtectedRoute><WESWeeklyReportForm /></ProtectedRoute>} />
+            <Route path="/uploaded-reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><UploadedReports /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

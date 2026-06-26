@@ -25,9 +25,8 @@ Deno.serve(async (req) => {
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const taskName = (formData.get("taskName") as string) || "Task";
     const userName = (formData.get("userName") as string) || "User";
-    const submissionType = (formData.get("submissionType") as string) || "Submission";
+    const reportDate = (formData.get("reportDate") as string) || new Date().toISOString().split("T")[0];
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided in form-data" }), {
@@ -44,17 +43,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Folder hierarchy under ROOT_FOLDER_ID -> Task -> User
-    const taskFolderId = await getOrCreateFolder(taskName, ROOT_FOLDER_ID, accessToken);
-    const userFolderId = await getOrCreateFolder(userName, taskFolderId, accessToken);
+    // Folder hierarchy: ROOT_FOLDER_ID -> Reports -> Employee_Name
+    const reportsFolderId = await getOrCreateFolder("Reports", ROOT_FOLDER_ID, accessToken);
+    const employeeFolderId = await getOrCreateFolder(userName, reportsFolderId, accessToken);
 
     const fileExt = file.name.split(".").pop() || "";
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
-    const sanitizeName = (str: string) => str.trim().replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_");
-    const newFileName = `${sanitizeName(taskName)}_${sanitizeName(userName)}_${sanitizeName(submissionType)}_${timestamp}.${fileExt}`;
+    const sanitizeName = (str: string) => str.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_");
+    
+    // File name format: Report_Date_EmployeeName_timestamp.ext
+    const newFileName = `Report_${sanitizeName(reportDate)}_${sanitizeName(userName)}_${timestamp}.${fileExt}`;
 
     const uploadUrl =
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink";

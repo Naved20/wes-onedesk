@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { wesWeeklyReportService } from "@/services/wesWeeklyReportService";
+import { uploadedReportService } from "@/services/uploadedReportService";
 import { WESWeeklyReport } from "@/types/wesWeeklyReport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { UploadReportDialog } from "@/components/reports/UploadReportDialog";
+import { AdminUploadedReportView } from "@/components/reports/AdminUploadedReportView";
 
 const formatSafeDate = (dateString: string | null | undefined): string => {
   if (!dateString) return "N/A";
@@ -163,53 +166,67 @@ const WESTeacherReports = () => {
             </p>
           </div>
 
-          {(role === "employee") && (
-            <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="lg">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Report
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Weekly Report</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div>
-                    <Label htmlFor="teacher_name">Teacher Name *</Label>
-                    <Input
-                      id="teacher_name"
-                      value={newReport.teacher_name}
-                      onChange={(e) => setNewReport({ ...newReport, teacher_name: e.target.value })}
-                      placeholder="Enter your name"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="class_batch">Class/Batch *</Label>
-                    <Input
-                      id="class_batch"
-                      value={newReport.class_batch}
-                      onChange={(e) => setNewReport({ ...newReport, class_batch: e.target.value })}
-                      placeholder="e.g., Class 10A, Batch 2026"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="week_start_date">Week Start Date (Saturday) *</Label>
-                    <Input
-                      id="week_start_date"
-                      type="date"
-                      value={newReport.week_start_date}
-                      onChange={(e) => setNewReport({ ...newReport, week_start_date: e.target.value })}
-                    />
-                  </div>
-                  <Button onClick={handleCreateReport} className="w-full">
-                    Create Report
+          <div className="flex gap-2">
+            {/* Upload Report Button - For all users */}
+            <UploadReportDialog
+              onUpload={async (reportData) => {
+                await uploadedReportService.uploadReport(user!.id, reportData.employee_name, {
+                  report_date: reportData.report_date,
+                  file_url: reportData.file_url,
+                });
+              }}
+              onSuccess={loadReports}
+            />
+
+            {/* New Report Button - For employees only */}
+            {role === "employee" && (
+              <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="lg">
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Report
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Weekly Report</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label htmlFor="teacher_name">Teacher Name *</Label>
+                      <Input
+                        id="teacher_name"
+                        value={newReport.teacher_name}
+                        onChange={(e) => setNewReport({ ...newReport, teacher_name: e.target.value })}
+                        placeholder="Enter your name"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="class_batch">Class/Batch *</Label>
+                      <Input
+                        id="class_batch"
+                        value={newReport.class_batch}
+                        onChange={(e) => setNewReport({ ...newReport, class_batch: e.target.value })}
+                        placeholder="e.g., Class 10A, Batch 2026"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="week_start_date">Week Start Date (Saturday) *</Label>
+                      <Input
+                        id="week_start_date"
+                        type="date"
+                        value={newReport.week_start_date}
+                        onChange={(e) => setNewReport({ ...newReport, week_start_date: e.target.value })}
+                      />
+                    </div>
+                    <Button onClick={handleCreateReport} className="w-full">
+                      Create Report
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -362,6 +379,13 @@ const WESTeacherReports = () => {
             </div>
           )}
         </div>
+
+        {/* Uploaded Reports Section - Admin Only */}
+        {(role === "admin" || role === "manager") && (
+          <div className="space-y-4 mt-8 pt-8 border-t">
+            <AdminUploadedReportView />
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
