@@ -34,10 +34,8 @@ interface SalaryDetail {
   // Deductions
   epf_employee: number;
   esic_employee: number;
-  manual_deduction: number;
-  tds_deduction: number;
-  professional_tax: number;
-  other_deductions: number;
+  manual_deductions_details: Record<string, number>;
+  manual_deductions_total: number;
   total_deductions: number;
   
   // Totals
@@ -424,30 +422,21 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                   <span>ESIC (Employee State Insurance)</span>
                   <span className="font-semibold text-red-600">-₹{salary.esic_employee.toLocaleString()}</span>
                 </div>
-                {salary.manual_deduction > 0 && (
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <span>Manual Deduction</span>
-                    <span className="font-semibold text-red-600">-₹{salary.manual_deduction.toLocaleString()}</span>
+                
+                {Object.keys(salary.manual_deductions_details || {}).length > 0 && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <p className="text-xs text-muted-foreground font-medium mb-3">Manual Deductions</p>
+                    <div className="space-y-2">
+                      {Object.entries(salary.manual_deductions_details || {}).map(([name, amount]) => (
+                        <div key={name} className="flex justify-between items-center p-2 border-b">
+                          <span className="capitalize">{name.replace(/_/g, ' ')}</span>
+                          <span className="font-semibold text-red-600">-₹{(parseFloat(amount as any) || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {salary.tds_deduction > 0 && (
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <span>TDS (Tax Deducted at Source)</span>
-                    <span className="font-semibold text-red-600">-₹{salary.tds_deduction.toLocaleString()}</span>
-                  </div>
-                )}
-                {salary.professional_tax > 0 && (
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <span>Professional Tax</span>
-                    <span className="font-semibold text-red-600">-₹{salary.professional_tax.toLocaleString()}</span>
-                  </div>
-                )}
-                {salary.other_deductions > 0 && (
-                  <div className="flex justify-between items-center p-3 border rounded-lg">
-                    <span>Other Deductions</span>
-                    <span className="font-semibold text-red-600">-₹{salary.other_deductions.toLocaleString()}</span>
-                  </div>
-                )}
+                
                 <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-950 rounded-lg font-semibold">
                   <span>Total Deductions</span>
                   <span className="text-lg text-red-600">-₹{salary.total_deductions.toLocaleString()}</span>

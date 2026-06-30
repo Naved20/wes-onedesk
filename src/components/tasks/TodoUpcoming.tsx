@@ -30,7 +30,7 @@ interface GroupedTasks {
   today: Task[];
   tomorrow: Task[];
   day3: Task[];
-  day4: Task[];
+  upcomingNext3Days: Task[];
 }
 
 const priorityColors = {
@@ -61,7 +61,7 @@ export const TodoUpcoming = () => {
     today: [],
     tomorrow: [],
     day3: [],
-    day4: [],
+    upcomingNext3Days: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -96,7 +96,7 @@ export const TodoUpcoming = () => {
 
       if (taskIds.length === 0) {
         setTasks([]);
-        setGroupedTasks({ today: [], tomorrow: [], day3: [], day4: [] });
+        setGroupedTasks({ today: [], tomorrow: [], day3: [], upcomingNext3Days: [] });
         setLoading(false);
         return;
       }
@@ -123,7 +123,7 @@ export const TodoUpcoming = () => {
         today: [],
         tomorrow: [],
         day3: [],
-        day4: [],
+        upcomingNext3Days: [],
       };
 
       fetchedTasks.forEach(task => {
@@ -133,13 +133,22 @@ export const TodoUpcoming = () => {
         taskDate.setHours(0, 0, 0, 0);
 
         if (taskDate.getTime() === today.getTime()) {
-          grouped.today.push(task);
+          if (grouped.today.length < 3) {
+            grouped.today.push(task);
+          }
         } else if (taskDate.getTime() === tomorrow.getTime()) {
-          grouped.tomorrow.push(task);
+          if (grouped.tomorrow.length < 3) {
+            grouped.tomorrow.push(task);
+          }
         } else if (taskDate.getTime() === day3.getTime()) {
-          grouped.day3.push(task);
-        } else if (taskDate.getTime() === day4.getTime()) {
-          grouped.day4.push(task);
+          if (grouped.day3.length < 3) {
+            grouped.day3.push(task);
+          }
+        } else if (taskDate.getTime() === day4.getTime() || 
+                   (taskDate > day3 && taskDate < endOfDay4)) {
+          if (grouped.upcomingNext3Days.length < 3) {
+            grouped.upcomingNext3Days.push(task);
+          }
         }
       });
 
@@ -232,7 +241,7 @@ export const TodoUpcoming = () => {
   const totalTasks = groupedTasks.today.length + 
                      groupedTasks.tomorrow.length + 
                      groupedTasks.day3.length + 
-                     groupedTasks.day4.length;
+                     groupedTasks.upcomingNext3Days.length;
 
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
 
@@ -242,8 +251,9 @@ export const TodoUpcoming = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ListTodo className="h-5 w-5" />
-            My Tasks (Next 4 Days)
+            My Tasks (Today + 3 Days)
           </CardTitle>
+          <CardDescription>Top 3 tasks per day organized by date</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center py-8">
@@ -260,17 +270,17 @@ export const TodoUpcoming = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ListTodo className="h-5 w-5" />
-            My Tasks (Next 4 Days)
+            My Tasks (Today + 3 Days)
           </CardTitle>
           <CardDescription>
-            No tasks scheduled for the next 4 days
+            No tasks scheduled for the next 3 days
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              You're all caught up! No tasks are due in the next 4 days.
+              You're all caught up! No tasks are due in the next 3 days.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -288,10 +298,10 @@ export const TodoUpcoming = () => {
           <div className="flex-1">
             <CardTitle className="flex items-center gap-2">
               <ListTodo className="h-5 w-5" />
-              My Tasks (Next 4 Days)
+              My Tasks (Today + 3 Days)
             </CardTitle>
             <CardDescription className="mt-1">
-              {totalTasks} task{totalTasks !== 1 ? 's' : ''} pending · {completedTasks} completed
+              Top 3 tasks per day · {totalTasks} task{totalTasks !== 1 ? 's' : ''} pending · {completedTasks} completed
             </CardDescription>
           </div>
           <Button 
@@ -315,8 +325,8 @@ export const TodoUpcoming = () => {
         {/* Day 3 */}
         {groupedTasks.day3.length > 0 && renderDateSection(addDays(today, 2), groupedTasks.day3)}
 
-        {/* Day 4 */}
-        {groupedTasks.day4.length > 0 && renderDateSection(addDays(today, 3), groupedTasks.day4)}
+        {/* Next 3 Days */}
+        {groupedTasks.upcomingNext3Days.length > 0 && renderDateSection(addDays(today, 3), groupedTasks.upcomingNext3Days)}
       </CardContent>
     </Card>
   );

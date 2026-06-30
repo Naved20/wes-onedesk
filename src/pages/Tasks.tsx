@@ -603,7 +603,7 @@ const Tasks = () => {
         `)
         .eq("user_id", user.id);
 
-      console.log("💰 Earnings data:", data);
+      console.log(" Earnings data:", data);
       console.log("❌ Earnings error:", error);
 
       if (error) {
@@ -3262,7 +3262,7 @@ const Tasks = () => {
                                 )}
                                 {task.reward_amount && task.reward_amount > 0 && (
                                   <Badge variant="default" className="bg-green-100 text-green-800">
-                                    💰 ₹{task.reward_amount}
+                                     ₹{task.reward_amount}
                                   </Badge>
                                 )}
                                 {task.due_date && (
@@ -4432,7 +4432,7 @@ const Tasks = () => {
                 onChange={(e) => setEditFormData({ ...editFormData, reward_amount: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">
-                💰 Employees will earn this amount when their task response is reviewed and approved
+                 Employees will earn this amount when their task response is reviewed and approved
               </p>
             </div>
             <div className="space-y-2">

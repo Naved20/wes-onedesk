@@ -3346,7 +3346,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </h5>
                 
                 <div className="space-y-2 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-xs text-muted-foreground font-medium">Fixed Salary Structure</p>
+                  <p className="text-xs text-muted-foreground font-bold ">Fixed Salary Structure</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span>Basic Salary</span>
@@ -3369,12 +3369,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
                 {(calculateSalary().totalVariableEarnings || 0) > 0 && (
                   <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="text-xs text-muted-foreground font-medium">Performance Based</p>
+                    <p className="text-xs text-muted-foreground font-bold">Performance Based Earning</p>
                     <div className="space-y-1 text-sm">
                       {Object.entries(formData.variable_earnings).map(([code, val]) => {
                         const amount = parseFloat(val as string) || 0;
                         if (amount <= 0) return null;
-                        const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '💰' };
+                        const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '' };
                         return (
                           <div key={code} className="flex justify-between">
                             <span className="text-muted-foreground">{labelInfo.icon} {labelInfo.label}</span>
@@ -3383,22 +3383,20 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                         );
                       })}
                       <div className="border-t border-blue-200 dark:border-blue-700 pt-1 flex justify-between font-semibold">
-                        <span>Performance Earnings</span>
+                        <span>Total</span>
                         <span className="text-blue-700 dark:text-blue-400">₹{calculateSalary().totalVariableEarnings?.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="mt-auto space-y-2 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-                  <p className="text-xs text-muted-foreground font-medium">Total Monthly Earnings</p>
-                  <div className="border-t border-purple-200 dark:border-purple-700 pt-2 flex justify-between">
+                <div className="mt-auto space-y-1 py-2 px-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-muted-foreground font-medium"></p>
+                  <div className="flex justify-between">
                     <span className="font-bold">Total Earnings</span>
                     <span className="text-lg font-bold text-purple-700 dark:text-purple-400">₹{calculateSalary().totalGrossEarnings?.toLocaleString()}</span>
                   </div>
-                  <p className="text-xs opacity-0 mt-2 pointer-events-none">
-                    Placeholder
-                  </p>
+                 
                 </div>
               </div>
 
@@ -3409,7 +3407,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 </h5>
 
                 <div className="space-y-2 p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
-                  <p className="text-xs text-muted-foreground font-medium">Statuory Deductions</p>
+                  <p className="text-xs text-muted-foreground font-bold">Statuory Deductions</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span>EPF Employee ({formData.epf_percentage}%)</span>
@@ -3420,7 +3418,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       <span className="font-semibold">₹{calculateSalary().esicEmployee?.toLocaleString()}</span>
                     </div>
                     <div className="border-t pt-1 flex justify-between font-semibold">
-                      <span>Auto Deductions</span>
+                      <span>Total </span>
                       <span className="text-red-700 dark:text-red-400">₹{((calculateSalary().epfEmployee || 0) + (calculateSalary().esicEmployee || 0)).toLocaleString()}</span>
                     </div>
                   </div>
@@ -3428,7 +3426,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
                 {Object.keys(formData.manual_deductions).length > 0 && (
                   <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                    <p className="text-xs text-muted-foreground font-medium">Manual Deductions</p>
+                    <p className="text-xs text-muted-foreground font-bold">Other Deductions</p>
                     <div className="space-y-1 text-sm">
                       {Object.entries(formData.manual_deductions).map(([name, amount]) => (
                         <div key={name} className="flex justify-between">
@@ -3440,15 +3438,13 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                   </div>
                 )}
 
-                <div className="mt-auto space-y-2 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
-                  <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
-                  <div className="border-t border-red-300 dark:border-red-600 pt-2 flex justify-between">
+                <div className="mt-auto space-y-1 py-2 px-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
+                  <p className="text-xs text-muted-foreground font-medium"></p>
+                  <div className="flex justify-between">
                     <span className="font-bold">Total Deductions</span>
                     <span className="text-lg font-bold text-red-700 dark:text-red-400">₹{calculateSalary().totalDeductions?.toLocaleString()}</span>
                   </div>
-                  <p className="text-xs opacity-0 mt-2 pointer-events-none">
-                    Placeholder
-                  </p>
+                
                 </div>
               </div>
 
@@ -3460,7 +3456,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                 <div className="space-y-2 p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900 dark:to-emerald-900 rounded-lg border-3 border-green-400 dark:border-green-600 shadow-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                    <p className="text-xs font-semibold text-green-900 dark:text-green-200 uppercase tracking-wide">Your Net Salary</p>
+                    <p className="text-xs font-bold text-green-900 dark:text-green-200 uppercase tracking-wide">Your Net Salary</p>
                   </div>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
@@ -3480,8 +3476,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
                 {/* Employer Contribution */}
                 <div className="space-y-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-muted-foreground font-medium">Employer Statuory Contribution (Not in your salary)</p>
-                  <p className="text-xs text-muted-foreground font-medium">Diposited into your PF Account</p>
+                  <p className="text-xs text-muted-foreground font-bold">Employer Statuory Contribution (Not in your salary) Diposited into your PF Account</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span>Employer EPF</span>

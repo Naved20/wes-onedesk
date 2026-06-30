@@ -546,7 +546,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
             </div>
           </div>
 
-          {/* Live Calculation Panel - Restructured to match PayslipView */}
+          {/* Live Calculation Panel - EXACT SAME AS SALARY MANAGEMENT */}
           <div className="mt-6 space-y-4">
             <div className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-primary" />
@@ -555,13 +555,13 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* LEFT: EARNINGS */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm flex items-center gap-2 text-green-700 dark:text-green-400 border-b pb-2">
                   <TrendingUp className="h-4 w-4" /> Earnings
                 </h5>
                 
                 <div className="space-y-2 p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-xs text-muted-foreground font-medium">Fixed Salary Structure</p>
+                  <p className="text-xs text-muted-foreground font-bold">Fixed Salary Structure</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span>Basic Salary</span>
@@ -584,13 +584,13 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
                 {(salary.variable_earnings_total || 0) > 0 && (
                   <div className="space-y-2 p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <p className="text-xs text-muted-foreground font-medium">Performance Based</p>
+                    <p className="text-xs text-muted-foreground font-bold">Performance Based Earning</p>
                     <div className="space-y-1 text-sm">
                       {salary.variable_earnings_details &&
                         Object.entries(salary.variable_earnings_details).map(([code, amount]) => {
                           const val = parseFloat(String(amount)) || 0;
                           if (val <= 0) return null;
-                          const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '💰' };
+                          const labelInfo = earningTypeLabels[code] || { label: code.replace(/_/g, ' '), icon: '' };
                           return (
                             <div key={code} className="flex justify-between">
                               <span className="text-muted-foreground">{labelInfo.icon} {labelInfo.label}</span>
@@ -599,15 +599,15 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                           );
                         })}
                       <div className="border-t border-blue-200 dark:border-blue-700 pt-1 flex justify-between font-semibold">
-                        <span>Performance Earnings</span>
+                        <span>Total</span>
                         <span className="text-blue-700 dark:text-blue-400">₹{salary.variable_earnings_total?.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-2 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
-                  <p className="text-xs text-muted-foreground font-medium">Total Monthly Earnings</p>
+                <div className="mt-auto space-y-1 py-2 px-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-muted-foreground font-medium"></p>
                   <div className="flex justify-between">
                     <span className="font-bold">Total Earnings</span>
                     <span className="text-lg font-bold text-purple-700 dark:text-purple-400">₹{salary.gross_salary?.toLocaleString()}</span>
@@ -616,32 +616,32 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </div>
 
               {/* MIDDLE: DEDUCTIONS */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm flex items-center gap-2 text-red-700 dark:text-red-400 border-b pb-2">
                   <TrendingDown className="h-4 w-4" /> Deductions
                 </h5>
 
                 <div className="space-y-2 p-3 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
-                  <p className="text-xs text-muted-foreground font-medium">Statutory Deductions</p>
+                  <p className="text-xs text-muted-foreground font-bold">Statutory Deductions</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>EPF Employee (12%)</span>
+                      <span>EPF Employee ({(salary.epf_employee && salary.basic_earned) ? (salary.epf_employee / salary.basic_earned * 100).toFixed(0) : 12}%)</span>
                       <span className="font-semibold">₹{salary.epf_employee?.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>ESIC Employee (0.75%)</span>
-                      <span className="font-semibold">₹{(((salary.basic_earned || 0) + (salary.hra_earned || 0) + (salary.other_allowance_earned || 0)) * 0.0075).toLocaleString()}</span>
+                      <span className="font-semibold">₹{salary.esic_employee?.toLocaleString()}</span>
                     </div>
                     <div className="border-t pt-1 flex justify-between font-semibold">
-                      <span>Auto Deductions</span>
-                      <span className="text-red-700 dark:text-red-400">₹{((salary.epf_employee || 0) + (((salary.basic_earned || 0) + (salary.hra_earned || 0) + (salary.other_allowance_earned || 0)) * 0.0075)).toLocaleString()}</span>
+                      <span>Total</span>
+                      <span className="text-red-700 dark:text-red-400">₹{((salary.epf_employee || 0) + (salary.esic_employee || 0)).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
                 {Object.keys(salary.manual_deductions_details || {}).length > 0 && (
                   <div className="space-y-2 p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                    <p className="text-xs text-muted-foreground font-medium">Manual Deductions</p>
+                    <p className="text-xs text-muted-foreground font-bold">Other Deductions</p>
                     <div className="space-y-1 text-sm">
                       {Object.entries(salary.manual_deductions_details || {}).map(([name, amount]) => (
                         <div key={name} className="flex justify-between">
@@ -653,8 +653,8 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                   </div>
                 )}
 
-                <div className="space-y-2 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
-                  <p className="text-xs text-muted-foreground font-medium">Total Deductions</p>
+                <div className="mt-auto space-y-1 py-2 px-3 bg-red-100 dark:bg-red-900/30 rounded-lg border-2 border-red-300 dark:border-red-700">
+                  <p className="text-xs text-muted-foreground font-medium"></p>
                   <div className="flex justify-between">
                     <span className="font-bold">Total Deductions</span>
                     <span className="text-lg font-bold text-red-700 dark:text-red-400">₹{salary.total_deductions?.toLocaleString()}</span>
@@ -663,14 +663,14 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </div>
 
               {/* RIGHT: NET PAYABLE & CTC */}
-              <div className="space-y-3">
+              <div className="flex flex-col h-full space-y-3">
                 <h5 className="font-semibold text-sm border-b pb-2">Summary</h5>
 
                 {/* Net Payable - LARGEST CARD */}
                 <div className="space-y-2 p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900 dark:to-emerald-900 rounded-lg border-3 border-green-400 dark:border-green-600 shadow-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                    <p className="text-xs font-semibold text-green-900 dark:text-green-200 uppercase tracking-wide">Your Net Salary</p>
+                    <p className="text-xs font-bold text-green-900 dark:text-green-200 uppercase tracking-wide">Your Net Salary</p>
                   </div>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
@@ -679,41 +679,40 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                     </div>
                     <div className="flex justify-between text-red-600 dark:text-red-400">
                       <span className="text-muted-foreground">(-) Deductions</span>
-                      <span>₹{((salary.epf_employee || 0) + (((salary.basic_earned || 0) + (salary.hra_earned || 0) + (salary.other_allowance_earned || 0)) * 0.0075)).toLocaleString()}</span>
+                      <span>₹{salary.total_deductions?.toLocaleString()}</span>
                     </div>
                     <div className="border-t-2 border-green-300 dark:border-green-700 pt-2 flex justify-between">
                       <span className="font-bold text-lg">Net Salary</span>
-                      <span className="text-2xl font-bold text-green-700 dark:text-green-300">₹{((salary.gross_salary || 0) - ((salary.epf_employee || 0) + (((salary.basic_earned || 0) + (salary.hra_earned || 0) + (salary.other_allowance_earned || 0)) * 0.0075))).toLocaleString()}</span>
+                      <span className="text-2xl font-bold text-green-700 dark:text-green-300">₹{salary.final_salary?.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Employer Contribution */}
                 <div className="space-y-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                  <p className="text-xs text-muted-foreground font-medium">Employer Statutory Contribution (Not in your salary)</p>
-                  <p className="text-xs text-muted-foreground font-medium">Deposited into your PF Account</p>
+                  <p className="text-xs text-muted-foreground font-bold">Employer Statutory Contribution (Not in your salary) Deposited into your PF Account</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>Employer EPF (12%)</span>
+                      <span>Employer EPF</span>
                       <span className="font-semibold">₹{salary.epf_employer?.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Employer ESIC (3.25%)</span>
+                      <span>Employer ESIC</span>
                       <span className="font-semibold">₹{salary.esic_employer?.toLocaleString()}</span>
                     </div>
                     <div className="border-t pt-1 flex justify-between font-semibold">
                       <span>Total Benefit</span>
-                      <span className="text-amber-700 dark:text-amber-400">₹{((salary.epf_employer || 0) + (salary.esic_employer || 0)).toLocaleString()}</span>
+                      <span className="text-amber-700 dark:text-amber-400">₹{salary.total_employer_contribution?.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* CTC */}
-                <div className="space-y-2 p-3 bg-slate-900 dark:bg-slate-950 rounded-lg border-2 border-slate-700 text-white">
+                <div className="mt-auto space-y-2 p-3 bg-slate-900 dark:bg-slate-950 rounded-lg border-2 border-slate-700 text-white">
                   <p className="text-xs font-medium uppercase tracking-wide opacity-75">Cost to Company</p>
-                  <div className="flex justify-between items-center">
+                  <div className="border-t border-slate-700 pt-2 flex justify-between items-center">
                     <span className="font-semibold">Total CTC</span>
-                    <span className="text-xl font-bold text-yellow-400">₹{calculatedCTC.toLocaleString()}</span>
+                    <span className="text-xl font-bold text-yellow-400">₹{((salary.final_salary || 0) + (salary.total_employer_contribution || 0)).toLocaleString()}</span>
                   </div>
                   <p className="text-xs opacity-75 mt-2">
                     = Net Salary + Employer Contribution
@@ -742,27 +741,6 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </p>
             </div>
 
-            {/* Signature Section */}
-            <div className="grid grid-cols-3 gap-8 mt-8">
-              <div className="text-center">
-                <div className="border-t-2 border-gray-800 pt-4 mt-16">
-                  <p className="text-sm font-semibold text-gray-800">Prepared By</p>
-                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="border-t-2 border-gray-800 pt-4 mt-16">
-                  <p className="text-sm font-semibold text-gray-800">Checked By</p>
-                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="border-t-2 border-gray-800 pt-4 mt-16">
-                  <p className="text-sm font-semibold text-gray-800">Approved By</p>
-                  <p className="text-xs text-gray-600 mt-1">Name & Signature</p>
-                </div>
-              </div>
-            </div>
 
             {/* Generated Footer */}
             <div className="text-center text-xs text-gray-500 pt-8 border-t border-gray-300">
