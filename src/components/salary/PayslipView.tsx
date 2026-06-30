@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Download, AlertCircle, DollarSign, TrendingUp, TrendingDown, Calendar, Calculator } from "lucide-react";
 import { generatePayslipPDF } from "./PayslipPDF";
+import { PayslipWrapper } from "./PayslipWrapper";
 
 const earningTypeLabels: Record<string, { label: string; description: string; icon: string }> = {
   LESSON_PLAN: {
@@ -393,19 +394,20 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
 
       {/* Payslip Container */}
       <Card className="border-2 print:border-black print:shadow-none">
-        <CardContent className="p-8 print:p-4" id="payslip-content">
+        <CardContent className="p-4 print:p-2" id="payslip-content">
+          <PayslipWrapper>
           {/* Header */}
-          <div className="text-center mb-8 pb-6 border-b-2 border-gray-300">
-            <h1 className="text-3xl font-bold text-primary mb-2">PAYSLIP</h1>
-            <p className="text-gray-600 font-semibold" data-month-year>{monthLabel} {selectedYear}</p>
-            <p className="text-sm text-gray-500">Salary Statement</p>
+          <div className="text-center mb-3 pb-3 border-b-2 border-gray-300">
+            <h1 className="text-2xl font-bold text-primary mb-1">PAYSLIP</h1>
+            <p className="text-gray-600 font-semibold text-sm" data-month-year>{monthLabel} {selectedYear}</p>
+            <p className="text-xs text-gray-500">Salary Statement</p>
           </div>
 
           {/* Employee Info Section */}
-          <div className="grid grid-cols-2 gap-8 mb-8 pb-6 border-b-2 border-gray-300">
+          <div className="grid grid-cols-2 gap-4 mb-3 pb-3 border-b-2 border-gray-300">
             <div>
-              <h3 className="font-bold text-sm text-gray-600 mb-3">EMPLOYEE INFORMATION</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="font-bold text-xs text-gray-600 mb-1">EMPLOYEE INFORMATION</h3>
+              <div className="space-y-1 text-xs">
                 <div>
                   <span className="font-semibold">Name:</span>
                   <span className="ml-2" data-employee-name>{employeeInfo?.first_name} {employeeInfo?.last_name}</span>
@@ -433,8 +435,8 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               </div>
             </div>
             <div>
-              <h3 className="font-bold text-sm text-gray-600 mb-3">SALARY PERIOD</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="font-bold text-xs text-gray-600 mb-1">SALARY PERIOD</h3>
+              <div className="space-y-1 text-xs">
                 <div>
                   <span className="font-semibold">Month:</span>
                   <span className="ml-2">{monthLabel} {selectedYear}</span>
@@ -472,63 +474,62 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
           </div>
 
           {/* Attendance Section - Compact Stats Grid */}
-          <div className="mb-8 pb-6 border-b-2 border-gray-300">
-            <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
-              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+          <div className="mb-3 pb-3 border-b-2 border-gray-300">
+            <div className="p-2 rounded-lg border bg-blue-50 border-blue-200">
+              <h4 className="font-semibold text-xs mb-2 flex items-center gap-2">
                 📅 Attendance Summary (Auto-fetched)
               </h4>
               
               {/* First Row: Payroll Days, Present, Half Day, Paid Leave, Absent */}
-              <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+              <div className="grid grid-cols-5 gap-2 text-xs mb-2">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Payroll Days</p>
-                  <p className="font-semibold text-lg">{new Date(selectedYear, selectedMonth, 0).getDate()}</p>
+                  <p className="font-semibold text-sm">{new Date(selectedYear, selectedMonth, 0).getDate()}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Present (PR)</p>
-                  <p className="font-semibold text-lg text-green-600">{salary.present_days}</p>
+                  <p className="font-semibold text-sm text-green-600">{salary.present_days}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Half Day (HD)</p>
-                  <p className="font-semibold text-lg text-orange-600">{salary.half_days}</p>
+                  <p className="font-semibold text-sm text-orange-600">{salary.half_days}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Paid Leave (PL)</p>
-                  <p className="font-semibold text-lg text-blue-600">{salary.paid_leave_days}</p>
+                  <p className="font-semibold text-sm text-blue-600">{salary.paid_leave_days}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Absent (AB)</p>
-                  <p className="font-semibold text-lg text-red-600">{salary.absent_days}</p>
+                  <p className="font-semibold text-sm text-red-600">{salary.absent_days}</p>
                 </div>
               </div>
 
               {/* Second Row: Holidays, Late Days, Leave, Late Sets */}
-              <div className="grid grid-cols-5 gap-4 text-sm mb-4">
+              <div className="grid grid-cols-5 gap-2 text-xs mb-2">
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Holidays (HO)</p>
-                  <p className="font-semibold text-lg text-purple-600">{salary.holiday_count}</p>
+                  <p className="font-semibold text-sm text-purple-600">{salary.holiday_count}</p>
                 </div>
-                                <div>
+                <div>
                   <p className="text-xs text-muted-foreground font-medium">Leave (LE)</p>
-                  <p className="font-semibold text-lg text-pink-600">{salary.sick_leaves}</p>
+                  <p className="font-semibold text-sm text-pink-600">{salary.sick_leaves}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Late Days (LT)</p>
-                  <p className="font-semibold text-lg text-yellow-700">{salary.late_days}</p>
+                  <p className="font-semibold text-sm text-yellow-700">{salary.late_days}</p>
                 </div>
-
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Late Sets (LS)</p>
-                  <p className="font-semibold text-lg text-yellow-700">{Math.floor(salary.late_days / 3)}</p>
+                  <p className="font-semibold text-sm text-yellow-700">{Math.floor(salary.late_days / 3)}</p>
                 </div>
                 <div></div>
               </div>
 
               {/* Total Paid Days */}
-              <div className="mt-3 pt-3 border-t border-blue-200">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm font-medium">Total Paid Days:</span>
-                  <span className="text-lg font-bold text-primary">
+              <div className="mt-1 pt-1 border-t border-blue-200">
+                <div className="flex justify-between items-center mb-0.5">
+                  <span className="text-xs font-medium">Total Paid Days:</span>
+                  <span className="text-sm font-bold text-primary">
                     {(
                       salary.present_days + 
                       salary.holiday_count + 
@@ -749,6 +750,7 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
               <p className="mt-3 text-gray-400">Generated on {format(new Date(), "dd MMM yyyy")}</p>
             </div>
           </div>
+          </PayslipWrapper>
         </CardContent>
       </Card>
     </div>

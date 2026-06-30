@@ -25,43 +25,73 @@ export async function generatePayslipPDF() {
     const monthYear = element.querySelector('[data-month-year]')?.textContent || "Payslip";
     const filename = `Payslip_${employeeName.replace(/\s+/g, '_')}_${monthYear.replace(/\s+/g, '_')}.pdf`;
 
-    // Create canvas from HTML with better quality
-    const canvas = await html2canvas(element, {
-      scale: 3, // Higher quality
+    // Clone the element into an off-screen container at desktop width.
+    // This avoids touching the live DOM (which caused badge/text misalignment)
+    // while still forcing Tailwind's lg: breakpoints to fire correctly on mobile.
+    const DESKTOP_WIDTH = 1200;
+
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.top = "0";
+    container.style.left = "-9999px";
+    container.style.width = `${DESKTOP_WIDTH}px`;
+    container.style.background = "#ffffff";
+    container.style.zIndex = "-1";
+    document.body.appendChild(container);
+
+    const clone = element.cloneNode(true) as HTMLElement;
+    clone.style.width = `${DESKTOP_WIDTH}px`;
+    clone.style.maxWidth = `${DESKTOP_WIDTH}px`;
+    container.appendChild(clone);
+
+    // Let the browser fully lay out the clone before capturing
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    // Create canvas from the off-screen clone
+    const canvas = await html2canvas(clone, {
+      scale: 1.5,
       useCORS: true,
       logging: false,
-      backgroundColor: '#ffffff',
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight,
+      backgroundColor: "#ffffff",
+      windowWidth: DESKTOP_WIDTH,
+      windowHeight: clone.scrollHeight,
     });
 
-    // Calculate PDF dimensions
-    const imgWidth = 210; // A4 width in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const pageHeight = 297; // A4 height in mm
-    
+    // Clean up the off-screen clone
+    document.body.removeChild(container);
+
+    // A4 dimensions in mm
+    const pageWidth = 210;
+    const pageHeight = 297;
+
+    // Scale image to fit exactly one A4 page
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+    // If content is taller than A4, scale it down to fit
+    let finalWidth = imgWidth;
+    let finalHeight = imgHeight;
+    if (imgHeight > pageHeight) {
+      const ratio = pageHeight / imgHeight;
+      finalWidth = imgWidth * ratio;
+      finalHeight = pageHeight;
+    }
+
+    // Center horizontally if scaled down
+    const xOffset = (pageWidth - finalWidth) / 2;
+
     // Create PDF
     const pdf = new jsPDF({
-      orientation: imgHeight > imgWidth ? "portrait" : "portrait",
+      orientation: "portrait",
       unit: "mm",
       format: "a4",
     });
 
-    let heightLeft = imgHeight;
-    let position = 0;
-    const imgData = canvas.toDataURL("image/png");
+    // JPEG at 0.92 quality — 3-5x smaller than PNG, visually identical for payslips
+    const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
-    // Add first page
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    // Add additional pages if content is longer than one page
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
+    // Always fit on a single page
+    pdf.addImage(imgData, "JPEG", xOffset, 0, finalWidth, finalHeight);
 
     // Save PDF
     pdf.save(filename);
