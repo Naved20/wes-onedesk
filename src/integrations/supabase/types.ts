@@ -2526,6 +2526,36 @@ export type Database = {
         }
         Relationships: []
       }
+      uploaded_reports: {
+        Row: {
+          created_at: string | null
+          employee_id: string
+          employee_name: string
+          file_url: string
+          id: string
+          report_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          employee_id: string
+          employee_name: string
+          file_url: string
+          id?: string
+          report_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          employee_id?: string
+          employee_name?: string
+          file_url?: string
+          id?: string
+          report_date?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_fcm_tokens: {
         Row: {
           created_at: string | null
