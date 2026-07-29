@@ -46,18 +46,87 @@ export const TaskList = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ['tasks'],
+  const { data: session } = useQuery({
+    queryKey: ['session'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('tasks')
-        .select('*')
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return (data as unknown) as Task[];
+      const { data: { session } } = await supabase.auth.getSession();
+      return session;
     },
+  });
+
+  const { data: userRole } = useQuery({
+    queryKey: ['userRole', session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return null;
+      const { data } = await supabase
+        .from('employee_profiles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .single();
+      return data?.role;
+    },
+    enabled: !!session?.user?.id,
+  });
+
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['tasks', session?.user?.id, userRole],
+    queryFn: async () => {
+      if (!session?.user?.id) {
+        console.log('❌ TaskList: No user ID');
+        return [];
+      }
+      
+      console.log('🔍 TaskList: Fetching tasks for role:', userRole);
+      
+      if (userRole === 'admin') {
+        // Admin sees all tasks
+        const { data, error } = await (supabase as any)
+          .from('tasks')
+          .select('*')
+          .eq('is_deleted', false)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('❌ TaskList Admin fetch error:', error);
+          throw error;
+        }
+        console.log('✅ TaskList Admin fetched tasks:', data?.length);
+        return (data as unknown) as Task[];
+      } else {
+        // Employees and managers only see assigned tasks
+        const { data: assignedTasks, error: assignError } = await supabase
+          .from('task_assignments' as any)
+          .select('task_id')
+          .eq('user_id', session.user.id);
+
+        if (assignError) {
+          console.error('❌ TaskList assignments fetch error:', assignError);
+          throw assignError;
+        }
+
+        const taskIds = (assignedTasks || []).map((a: any) => a.task_id);
+        console.log('📋 TaskList: Assigned task IDs:', taskIds.length);
+        
+        if (taskIds.length === 0) return [];
+
+        const { data, error } = await (supabase as any)
+          .from('tasks')
+          .select('*')
+          .in('id', taskIds)
+          .eq('is_deleted', false)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('❌ TaskList Employee fetch error:', error);
+          throw error;
+        }
+        console.log('✅ TaskList Employee fetched tasks:', data?.length);
+        return (data as unknown) as Task[];
+      }
+    },
+    enabled: !!session?.user?.id && !!userRole,
   });
 
   const { data: employees = [] } = useQuery({

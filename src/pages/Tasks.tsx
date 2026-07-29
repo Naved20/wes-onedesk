@@ -440,6 +440,7 @@ const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [activeTab, setActiveTab] = useState<string>("To-Do");
+  const [activeTaskView, setActiveTaskView] = useState<"your-tasks" | "review-tasks">("your-tasks");
   const [sortField, setSortField] = useState<string>("display_order");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
@@ -2894,15 +2895,23 @@ const Tasks = () => {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-center w-full mb-4">
+              {/* Employee View Toggle + Filters in one row */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-between items-center w-full">
                 {role === "employee" && (
-                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full sm:w-auto">
-                    <TabsList className="flex flex-wrap w-full sm:w-auto bg-muted/50 p-1 rounded-lg gap-1">
-                      <TabsTrigger value="To-Do" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">To-Do</TabsTrigger>
-                      <TabsTrigger value="Pending Review" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Pending Review</TabsTrigger>
-                      <TabsTrigger value="Reviewed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Reviewed</TabsTrigger>
-                      <TabsTrigger value="Upcoming" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Upcoming</TabsTrigger>
-                      <TabsTrigger value="Missed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Missed</TabsTrigger>
+                  <Tabs value={activeTaskView} onValueChange={(v) => setActiveTaskView(v as "your-tasks" | "review-tasks")} className="w-full sm:w-auto">
+                    <TabsList className="flex w-full sm:w-auto bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-1 rounded-[18px] gap-1 border-2 border-primary/20">
+                      <TabsTrigger 
+                        value="your-tasks" 
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg rounded-md px-6 py-1.5 text-sm font-semibold transition-all"
+                      >
+                        Your Tasks
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="review-tasks" 
+                        className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg rounded-md px-6 py-1.5 text-sm font-semibold transition-all"
+                      >
+                        Review Tasks
+                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
                 )}
@@ -2917,6 +2926,21 @@ const Tasks = () => {
                   />
                 </div>
               </div>
+
+              {/* Status Filter Tabs - Below View Toggle (Only show for Your Tasks) */}
+              {role === "employee" && activeTaskView === "your-tasks" && (
+                <div>
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="inline-flex w-full whitespace-nowrap bg-muted/50 p-1 rounded-lg gap-1">
+                      <TabsTrigger value="To-Do" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">To-Do</TabsTrigger>
+                      <TabsTrigger value="Pending Review" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Pending Review</TabsTrigger>
+                      <TabsTrigger value="Reviewed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Reviewed</TabsTrigger>
+                      <TabsTrigger value="Upcoming" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Upcoming</TabsTrigger>
+                      <TabsTrigger value="Missed" className="data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-md px-4 py-2 text-sm font-medium transition-all">Missed</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              )}
               
               <div className="flex flex-col sm:flex-row gap-4 w-full">
                 <div className="flex-1 relative">
@@ -2986,7 +3010,7 @@ const Tasks = () => {
         ) : (
           <>
             {(() => {
-              // Filter tasks based on active tab and search query
+              // Filter tasks based on active tab, view, and search query
               let filteredTasks = tasks.filter((task) => {
                 // Search filter
                 const matchesSearch = searchQuery.trim() === "" || 
@@ -3006,9 +3030,31 @@ const Tasks = () => {
                   }
                 }
 
+                // Admin/Manager see all tasks
                 if (role === "admin" || role === "manager") return true;
-                const taskStatus = getTaskStatus(task);
-                return activeTab === taskStatus;
+
+                // Employee filtering
+                if (role === "employee") {
+                  // View filter: Your Tasks vs Review Tasks
+                  if (activeTaskView === "review-tasks") {
+                    // Show only tasks where user is a peer reviewer (no status filter)
+                    const isReviewer = isPeerReviewerOf(task.id);
+                    if (!isReviewer) return false;
+                    
+                    // Don't show task if user has already submitted their own response
+                    const taskResponses = responses[task.id] || [];
+                    const userHasSubmitted = taskResponses.some(r => r.user_id === user?.id);
+                    if (userHasSubmitted) return false;
+                    
+                    return true;
+                  } else {
+                    // Your Tasks: Apply status filter (To-Do, Pending Review, etc.)
+                    const taskStatus = getTaskStatus(task);
+                    return activeTab === taskStatus;
+                  }
+                }
+
+                return true;
               });
 
               // Sort tasks

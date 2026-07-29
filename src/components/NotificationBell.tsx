@@ -70,8 +70,12 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!user?.id) return;
-    const channel = supabase
-      .channel(`notif-${user.id}`)
+    
+    // Use a unique channel name to avoid conflicts
+    const channelName = `notif-${user.id}-${Date.now()}`;
+    const channel = supabase.channel(channelName);
+    
+    channel
       .on(
         "postgres_changes",
         {
@@ -106,6 +110,7 @@ export function NotificationBell() {
         }
       )
       .subscribe();
+      
     return () => {
       supabase.removeChannel(channel);
     };
