@@ -1275,50 +1275,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
 
       console.log(`Total holidays fetched for month: ${holidays.length}`, holidays.slice(0, 3));
 
-      // STEP 1: Update attendance_summary table for ALL employees (including locked ones - because attendance data is independent)
-      console.log(`Step 1: Updating attendance summary table for all employees...`);
+      // STEP 1: NO NEED - use RPC directly in Step 2 (server-side calculation is always up-to-date)
+      console.log(`Step 1: Skipping (using RPC directly in Step 2 for fresh data)...`);
       
-      for (const salary of salaryRecords) {
-        try {
-          // Fetch attendance data for this employee
-          const { data: attendanceData, error: attendanceError } = await supabase
-            .from("attendance")
-            .select("*")
-            .eq("user_id", salary.user_id)
-            .gte("date", startDate)
-            .lte("date", endDate);
-          
-          if (attendanceError) {
-            console.warn(`Warning: Could not fetch attendance data for ${salary.employee_name}:`, attendanceError);
-            attendanceSummaryErrorCount++;
-            continue;
-          }
-          
-          // Calculate attendance summary (passing holidays now)
-          const attendanceSummary = await calculateAttendanceSummary(salary.user_id, attendanceData || [], holidays);
-          
-          // Save to attendance_summary table
-          const saved = await saveAttendanceSummaryForEmployee(
-            salary.user_id,
-            selectedYear,
-            selectedMonth,
-            attendanceSummary
-          );
-          
-          if (saved) {
-            attendanceSummarySuccessCount++;
-          } else {
-            attendanceSummaryErrorCount++;
-          }
-        } catch (err) {
-          console.error(`Error updating attendance summary for ${salary.employee_name}:`, err);
-          attendanceSummaryErrorCount++;
-        }
-      }
-      
-      console.log(`Step 1 Complete: ${attendanceSummarySuccessCount} attendance summaries updated, ${attendanceSummaryErrorCount} errors`);
-      
-      // STEP 2: Update ONLY unlocked salaries using attendance_summary table data
+      // STEP 2: Update ONLY unlocked salaries using RPC-based attendance calculation
       console.log(`Step 2: Recalculating ${unlockedSalaries.length} unlocked salary records...`);
       
       for (const salary of unlockedSalaries) {
@@ -1330,39 +1290,28 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
             continue;
           }
           
-          // Fetch latest attendance summary from table
-          const { data: summaryData, error: summaryError } = await supabase
-            .from("attendance_summary")
-            .select("*")
-            .eq("user_id", salary.user_id)
-            .eq("year", selectedYear)
-            .eq("month", selectedMonth)
-            .maybeSingle();
+          // Fetch attendance stats via RPC (SAME SOURCE AS ATTENDANCE PAGE)
+          console.log(`✅ Calling calculate_attendance_stats RPC for ${salary.employee_name}`);
+          const { data: statsData, error: statsError } = await supabase.rpc('calculate_attendance_stats', {
+            p_user_id: salary.user_id,
+            p_year: selectedYear,
+            p_month: selectedMonth,
+          });
           
-          if (summaryError) {
-            console.warn(`Warning: Could not fetch attendance summary for ${salary.employee_name}:`, summaryError);
+          if (statsError) {
+            console.warn(`Warning: Could not fetch attendance stats via RPC for ${salary.employee_name}:`, statsError);
             salaryErrorCount++;
             continue;
           }
           
-          // Get working days
-          const { data: workingDaysData } = await supabase
-            .rpc('calculate_monthly_working_days', {
-              p_year: selectedYear,
-              p_month: selectedMonth
-            });
-          
-          const actualWorkingDays = workingDaysData || salary.working_days || 26;
-          
-          // Use attendance_summary data (or defaults)
-          const payrollDays = (summaryData as any)?.payroll_days || new Date(selectedYear, selectedMonth, 0).getDate();
-          const presentDays = (summaryData as any)?.present_days || 0;
-          const halfDays = (summaryData as any)?.half_days || 0;
-          const holidayCount = (summaryData as any)?.holiday_count || 0;
-          const paidLeaveDays = (summaryData as any)?.paid_leave_days || 0;
-          const absentDays = (summaryData as any)?.absent_days || 0;
-          const lateDays = (summaryData as any)?.late_days || 0;
-          const sickLeaves = (summaryData as any)?.leave_days || 0;
+          // Map RPC response
+          const presentDays = statsData?.present_days || 0;
+          const halfDays = statsData?.half_days || 0;
+          const holidayCount = statsData?.holiday_count || 0;
+          const paidLeaveDays = statsData?.paid_leave_days || 0;
+          const absentDays = statsData?.absent_days || 0;
+          const lateDays = statsData?.late_days || 0;
+          const sickLeaves = statsData?.leave_days || 0;
           
           // Fetch salary structure
           const { data: structure, error: structureError } = await supabase
@@ -1383,8 +1332,10 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const hraPercentage = (structure as any)?.hra_percentage || 40;
           const otherAllowancePercentage = (structure as any)?.other_allowance_percentage || 30;
           
-          // Calculate with payroll days (total days in month)
+          // Calculate payroll days (total days in month)
+          const payrollDays = new Date(selectedYear, selectedMonth, 0).getDate();
           const perDayRate = payrollDays > 0 ? fixedGrossSalary / payrollDays : 0;
+          const actualWorkingDays = payrollDays;
           
           // Late set deduction: 3 lates = 1 set
           const lateSets = Math.floor(lateDays / 3);
@@ -1417,11 +1368,19 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           const esicEmployee = ((structure as any)?.esic_applicable ?? true) 
             ? (totalFixedEarningsForDeduction * ((structure as any)?.esic_employee_rate || 0.75) / 100) 
             : 0;
-          const totalDeductions = epfEmployee + esicEmployee + 
-            (salary.manual_deduction || 0) + (salary.tds_deduction || 0) + 
-            (salary.professional_tax || 0) + (salary.other_deductions || 0);
           
-          // Net payable
+          // Calculate manual deductions total from manual_deductions_details
+          const totalManualDeductions = Object.values(salary.manual_deductions_details || {}).reduce(
+            (sum, val) => sum + (parseFloat(val as any) || 0), 0
+          );
+          
+          // Recalculate total deductions
+          const totalDeductions = epfEmployee + esicEmployee + totalManualDeductions +
+            (salary.tds_deduction || 0) + 
+            (salary.professional_tax || 0) + 
+            (salary.other_deductions || 0);
+          
+          // Net payable = Total Gross Earnings - Total Deductions
           const netPayable = totalGrossEarnings - totalDeductions;
           
           // Employer contributions - Also on TOTAL FIXED EARNINGS (Basic + HRA + Other) only
@@ -1458,6 +1417,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
               
               epf_employee: Math.round(epfEmployee * 100) / 100,
               esic_employee: Math.round(esicEmployee * 100) / 100,
+              manual_deductions_total: Math.round(totalManualDeductions * 100) / 100,
               total_deductions: Math.round(totalDeductions * 100) / 100,
               
               net_salary_calculated: Math.round(netPayable * 100) / 100,
@@ -1789,85 +1749,77 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
         .eq("is_active", true)
         .maybeSingle();
       
-      // 2. Check if attendance data is already saved in salaries table
-      const hasAttendanceDataInSalaries = 
-        salary.present_days !== null && 
-        salary.absent_days !== null && 
-        salary.paid_leave_days !== null;
+      // 2. Fetch holidays for calculating holiday count
+      console.log("🔍 Fetching holidays for month...");
+      const startDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
       
-      let attendanceSummary;
+      let holidays: any[] = [];
       
-      if (hasAttendanceDataInSalaries) {
-        // Use existing data from salaries table (already saved)
-        attendanceSummary = {
-          presentDays: salary.present_days || 0,
-          halfDays: salary.half_days || 0,
-          paidLeaveDays: salary.paid_leave_days || 0,
-          sickLeaves: salary.sick_leaves || 0,
-          absentDays: salary.absent_days || 0,
-          lateDays: salary.late_days || 0,
-          holidayCount: salary.holiday_count || 0,
-        };
+      // METHOD 1: Try holidays_view first (fetch ALL, then filter)
+      const { data: viewData, error: viewError } = await supabase
+        .from("holidays_view")
+        .select("date, name")
+        .order("date");
+
+      if (!viewError && viewData && viewData.length > 0) {
+        console.log("✅ Using holidays_view for holiday data");
+        holidays = viewData
+          .filter((h: any) => {
+            const hDate = new Date(h.date);
+            return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
+          })
+          .map((h: any) => ({ date: h.date, name: h.name || "Holiday" }));
       } else {
-        // First time: fetch from attendance_summary table
-        const { data: attendanceSummaryData, error: summaryError } = await supabase
-          .from("attendance_summary")
-          .select("*")
-          .eq("user_id", salary.user_id)
-          .eq("year", selectedYear)
-          .eq("month", selectedMonth)
-          .maybeSingle();
-        
-        if (summaryError) {
-          console.warn("Warning: Could not fetch attendance summary:", summaryError);
-        }
-        
-        if (attendanceSummaryData) {
-          // Use data from attendance_summary table
-          attendanceSummary = {
-            presentDays: attendanceSummaryData.present_days || 0,
-            halfDays: attendanceSummaryData.half_days || 0,
-            paidLeaveDays: attendanceSummaryData.paid_leave_days || 0,
-            sickLeaves: attendanceSummaryData.leave_days || 0,
-            absentDays: attendanceSummaryData.absent_days || 0,
-            lateDays: attendanceSummaryData.late_days || 0,
-            holidayCount: attendanceSummaryData.holiday_count || 0,
-          };
-          
-          console.log("Fetched attendance summary from attendance_summary table:", attendanceSummary);
-          
-          // Save attendance data to salaries table for future reference
-          const { error: updateError } = await supabase
-            .from("salaries")
-            .update({
-              present_days: attendanceSummary.presentDays,
-              half_days: attendanceSummary.halfDays,
-              paid_leave_days: attendanceSummary.paidLeaveDays,
-              sick_leaves: attendanceSummary.sickLeaves,
-              absent_days: attendanceSummary.absentDays,
-              late_days: attendanceSummary.lateDays,
-              holiday_count: attendanceSummary.holidayCount,
-              updated_at: new Date().toISOString(),
+        // METHOD 2: Try old holidays table
+        const { data: holidaysData, error: holidaysError } = await supabase
+          .from("holidays")
+          .select("date, name")
+          .order("date");
+
+        if (!holidaysError && holidaysData && holidaysData.length > 0) {
+          console.log("✅ Using holidays table for holiday data");
+          holidays = holidaysData
+            .filter((h: any) => {
+              const hDate = new Date(h.date);
+              return hDate.getMonth() === selectedMonth - 1 && hDate.getFullYear() === selectedYear;
             })
-            .eq("id", salary.id);
-          
-          if (updateError) {
-            console.warn("Warning: Could not save attendance data to salaries table:", updateError);
-          }
-        } else {
-          // Fallback: if no attendance_summary data, use zeros
-          console.log("No attendance summary found, using default values");
-          attendanceSummary = {
-            presentDays: 0,
-            halfDays: 0,
-            paidLeaveDays: 0,
-            sickLeaves: 0,
-            absentDays: 0,
-            lateDays: 0,
-            holidayCount: 0,
-          };
+            .map(h => ({ date: h.date, name: h.name }));
         }
       }
+
+      // 2b. Use SAME RPC as AttendanceStats for consistency!
+      console.log("✅ Calling calculate_attendance_stats RPC (SAME SOURCE AS ATTENDANCE PAGE)");
+      const { data: statsData, error: statsError } = await supabase.rpc('calculate_attendance_stats', {
+        p_user_id: salary.user_id,
+        p_year: selectedYear,
+        p_month: selectedMonth,
+      });
+      
+      if (statsError) {
+        console.warn("Warning: Could not fetch attendance stats via RPC:", statsError);
+      }
+      
+      // Map RPC response to our format
+      const attendanceSummary = statsData ? {
+        presentDays: statsData.present_days || 0,
+        halfDays: statsData.half_days || 0,
+        paidLeaveDays: statsData.paid_leave_days || 0,
+        sickLeaves: statsData.leave_days || 0,
+        absentDays: statsData.absent_days || 0,
+        lateDays: statsData.late_days || 0,
+        holidayCount: statsData.holiday_count || 0,
+      } : {
+        presentDays: 0,
+        halfDays: 0,
+        paidLeaveDays: 0,
+        sickLeaves: 0,
+        absentDays: 0,
+        lateDays: 0,
+        holidayCount: 0,
+      };
+      
+      console.log("✅ Attendance Summary from RPC:", attendanceSummary);
       
       // 3. Calculate actual working days using RPC function
       const { data: workingDaysData } = await supabase
@@ -2668,7 +2620,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                           onClick={() => handleSort("working_days")}
                         >
                           <div className="flex items-center justify-end gap-2">
-                            Working Days
+                            Payroll Days
                             {sortField === "working_days" && (
                               <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                             )}
@@ -2679,7 +2631,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                           onClick={() => handleSort("present")}
                         >
                           <div className="flex items-center justify-end gap-2">
-                            Present
+                            Paid Days
                             {sortField === "present" && (
                               <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                             )}
@@ -2712,12 +2664,26 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAndSortedRecords.map((salary) => (
+                      {filteredAndSortedRecords.map((salary) => {
+                        // Calculate payroll days (total days in month)
+                        const payrollDays = new Date(salary.year, salary.month, 0).getDate();
+                        
+                        // Calculate paid days using same formula as Attendance
+                        const paidDays = getPaidDays({
+                          present_days: salary.present_days || 0,
+                          holiday_count: salary.holiday_count || 0,
+                          half_days: salary.half_days || 0,
+                          paid_leave_days: salary.paid_leave_days || 0,
+                          late_days: salary.late_days || 0,
+                          absent_days: salary.absent_days || 0,
+                        });
+                        
+                        return (
                         <TableRow key={salary.id}>
                           <TableCell className="font-medium">{salary.employee_name}</TableCell>
                           <TableCell className="text-right">₹{salary.base_salary?.toLocaleString()}</TableCell>
-                          <TableCell className="text-right">{salary.working_days}</TableCell>
-                          <TableCell className="text-right">{salary.present_days || 0}</TableCell>
+                          <TableCell className="text-right">{payrollDays}</TableCell>
+                          <TableCell className="text-right">{paidDays.toFixed(1)}</TableCell>
                           <TableCell className="text-right">₹{salary.gross_salary?.toLocaleString() || "-"}</TableCell>
                           <TableCell className="text-right font-semibold">
                             ₹{(salary.net_salary_calculated || 0).toLocaleString()}
@@ -2758,7 +2724,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

@@ -236,7 +236,31 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
       if (salaryError) throw salaryError;
 
       if (salaryData) {
-        setSalary(salaryData as unknown as SalaryDetail);
+        // Fetch attendance stats via RPC (SAME SOURCE AS ATTENDANCE PAGE)
+        console.log("✅ Fetching attendance stats via RPC for PayslipView");
+        const { data: statsData, error: statsError } = await supabase.rpc('calculate_attendance_stats', {
+          p_user_id: userId,
+          p_year: selectedYear,
+          p_month: selectedMonth,
+        });
+        
+        if (statsError) {
+          console.warn("⚠️ Warning: Could not fetch attendance stats via RPC:", statsError);
+        }
+        
+        // Merge RPC attendance data with salary data to ensure fresh data
+        const enrichedSalaryData = statsData ? {
+          ...salaryData,
+          present_days: statsData.present_days,
+          half_days: statsData.half_days,
+          paid_leave_days: statsData.paid_leave_days,
+          sick_leaves: statsData.leave_days,
+          absent_days: statsData.absent_days,
+          late_days: statsData.late_days,
+          holiday_count: statsData.holiday_count,
+        } : salaryData;
+        
+        setSalary(enrichedSalaryData as unknown as SalaryDetail);
       } else {
         setSalary(null);
       }
