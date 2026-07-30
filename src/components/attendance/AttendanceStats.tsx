@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   Gift
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { getEffectiveStatus, getPaidDays, getPaidDaysFormula, summarizeAttendance } from "@/lib/paidDays";
+import { getPaidDaysFormula } from "@/lib/paidDays";
 
 type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
@@ -37,60 +37,28 @@ interface LeaveRecord {
   status: string;
 }
 
-interface Stats {
-  working_days: number;
+// RPC response type - exact match with calculate_attendance_stats function
+interface AttendanceStatsRPC {
   present_days: number;
-  half_days: number;
+  present_on_time: number;
   late_days: number;
+  late_sets: number;
+  half_days: number;
+  paid_leave_days: number;
+  leave_days: number;
+  holiday_count: number;
+  absent_days: number;
   pending_days: number;
   rejected_days: number;
-  casual_leaves: number;
-  sick_leaves: number;
-  unplanned_leaves: number;
-  absent_days: number;
-  effective_present: number;
+  total_paid_days: number;
   attendance_percentage: number;
-  present_on_time: number;
-  holiday_count?: number;
-  total_days_in_month?: number; // Added for payroll days (total days in month)
+  payroll_days: number;
 }
 
-type SummaryStatus = "present" | "late" | "half_day" | "paid_leave" | "leave" | "absent" | "holiday" | "pending";
-
 export function AttendanceStats({ userId, year, month, attendanceRecords = [], holidays = [], compactView = false }: AttendanceStatsProps) {
-  const [rpcStats, setRpcStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<AttendanceStatsRPC | null>(null);
   const [loading, setLoading] = useState(true);
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
-
-  const monthAttendanceRecords = useMemo(() => {
-    const monthPrefix = `${year}-${String(month).padStart(2, "0")}-`;
-    return attendanceRecords.filter((record) => record.user_id === userId && record.date.startsWith(monthPrefix));
-  }, [attendanceRecords, userId, year, month]);
-
-  const getRecordSummaryStatus = (record: Attendance): SummaryStatus =>
-    getEffectiveStatus(record as any) as SummaryStatus;
-
-  const derivedStats = useMemo<Stats>(() => {
-    const summary = summarizeAttendance(monthAttendanceRecords as any, year, month);
-
-    return {
-      working_days: summary.payroll_days,
-      present_days: summary.present_days,
-      half_days: summary.half_days,
-      late_days: summary.late_days,
-      pending_days: summary.pending_days,
-      rejected_days: summary.rejected_days,
-      casual_leaves: summary.paid_leave_days,
-      sick_leaves: summary.leave_days,
-      unplanned_leaves: 0,
-      absent_days: summary.absent_days,
-      effective_present: summary.total_paid_days,
-      attendance_percentage: summary.attendance_percentage,
-      present_on_time: summary.present_on_time,
-      holiday_count: summary.holiday_count,
-      total_days_in_month: summary.payroll_days,
-    };
-  }, [monthAttendanceRecords, year, month]);
 
   useEffect(() => {
     fetchStats();
@@ -131,31 +99,29 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
 
   const fetchStats = async () => {
     try {
+      console.log(`[AttendanceStats] Fetching RPC stats for user ${userId}, ${year}-${month}`);
+      
       const { data, error } = await supabase.rpc('calculate_attendance_stats', {
         p_user_id: userId,
         p_year: year,
         p_month: month,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[AttendanceStats] RPC error:", error);
+        throw error;
+      }
       
-      // Calculate total days in month
-      const totalDaysInMonth = new Date(year, month, 0).getDate();
+      console.log("[AttendanceStats] RPC response:", data);
       
-      setRpcStats({
-        ...(data as unknown as Stats),
-        total_days_in_month: totalDaysInMonth
-      });
+      // Use RPC data directly - no local calculations
+      setStats(data as unknown as AttendanceStatsRPC);
     } catch (error) {
-      console.error("Error fetching attendance stats:", error);
+      console.error("[AttendanceStats] Error fetching attendance stats:", error);
     } finally {
       setLoading(false);
     }
   };
-
-  // Note: Holiday count is now fetched from attendance table with status = 'holiday'
-  // This is handled in the calculate_attendance_stats RPC function
-  // No separate holiday fetch needed anymore
 
   if (loading) {
     if (compactView) {
@@ -177,8 +143,6 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     );
   }
 
-  const stats = attendanceRecords.length > 0 ? derivedStats : rpcStats;
-
   if (!stats) return null;
 
   const getPercentageColor = (percentage: number) => {
@@ -187,46 +151,16 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     return "text-red-600 dark:text-red-400";
   };
 
-  // Use a Set to ensure unique holiday dates (preventing double counting if a date exists twice in DB)
-  const uniqueHolidaysInMonth = new Set(
-    holidays
-      .filter(h => {
-        const hDate = new Date(h.date);
-        return hDate.getMonth() === month - 1 && hDate.getFullYear() === year;
-      })
-      .map(h => new Date(h.date).toISOString().split('T')[0])
-  );
-  
-  const holidaysWorked = attendanceRecords.filter(r => {
-    if (r.user_id !== userId) return false;
-    if (new Date(r.date).getMonth() !== month - 1) return false;
-    if (new Date(r.date).getFullYear() !== year) return false;
-    
-    const recordDate = new Date(r.date).toISOString().split('T')[0];
-    const isHolidayDate = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
-    
-    const calcStatus = r.calculated_status?.toLowerCase();
-    const isPresent = calcStatus === 'present' || calcStatus === 'late' || calcStatus === 'half_day' || r.is_half_day || r.is_late || calcStatus === 'paid_leave';
-    
-    return isHolidayDate && isPresent && r.status !== 'rejected';
-  });
-  
-  // Ensure holidaysWorked are unique by date
-  const uniqueHolidaysWorked = new Set(
-    holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
-  );
-  
-  const holidayCount = stats.holiday_count ?? (uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size);
+  // Use ONLY RPC data - no local calculations
   const paidDaysInput = {
     present_days: stats.present_days,
-    holiday_count: holidayCount,
+    holiday_count: stats.holiday_count,
     half_days: stats.half_days,
-    paid_leave_days: stats.casual_leaves,
+    paid_leave_days: stats.paid_leave_days,
     late_days: stats.late_days,
     absent_days: stats.absent_days,
   };
-  const lateSets = Math.floor(stats.late_days / 3);
-  const paidDayUnits = getPaidDays(paidDaysInput);
+  
   const paidDaysFormula = getPaidDaysFormula(paidDaysInput);
 
   // COMPACT VIEW - Like salary edit dialog
@@ -244,7 +178,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
         <div className="grid grid-cols-5 gap-4 text-sm mb-4">
           <div>
             <Label className="text-xs text-muted-foreground">Payroll Days</Label>
-            <p className="font-semibold text-lg">{stats.total_days_in_month || 31}</p>
+            <p className="font-semibold text-lg">{stats.payroll_days}</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Present (PR)</Label>
@@ -256,7 +190,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Paid Leave (PL)</Label>
-            <p className="font-semibold text-lg text-blue-600">{stats.casual_leaves}</p>
+            <p className="font-semibold text-lg text-blue-600">{stats.paid_leave_days}</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Absent (AB)</Label>
@@ -268,11 +202,11 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
         <div className="grid grid-cols-5 gap-4 text-sm mb-4">
           <div>
             <Label className="text-xs text-muted-foreground">Holidays (HO)</Label>
-            <p className="font-semibold text-lg text-purple-600">{holidayCount}</p>
+            <p className="font-semibold text-lg text-purple-600">{stats.holiday_count}</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
-            <p className="font-semibold text-lg text-pink-600">{stats.sick_leaves}</p>
+            <p className="font-semibold text-lg text-pink-600">{stats.leave_days}</p>
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Late Days (LT)</Label>
@@ -280,7 +214,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Late Sets (LS)</Label>
-            <p className="font-semibold text-lg text-yellow-700">{lateSets}</p>
+            <p className="font-semibold text-lg text-yellow-700">{stats.late_sets}</p>
           </div>
           <div></div>
         </div>
@@ -290,7 +224,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
           <div className="flex justify-between items-center mb-1">
             <span className="text-sm font-medium">Total Paid Days:</span>
             <span className="text-lg font-bold text-primary">
-              {paidDayUnits.toFixed(1)} days
+              {stats.total_paid_days.toFixed(1)} days
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1 text-right">
@@ -312,7 +246,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <CalendarDays className="h-4 w-4 text-slate-500" />
               <span className="text-xs text-muted-foreground">Payroll Days</span>
             </div>
-            <p className="text-2xl font-bold">{stats.total_days_in_month || 31}</p>
+            <p className="text-2xl font-bold">{stats.payroll_days}</p>
             <p className="text-xs text-muted-foreground mt-1">
               Total days in month
             </p>
@@ -353,7 +287,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <span className="text-xs text-muted-foreground">Holiday (HO)</span>
             </div>
             <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {holidayCount}
+              {stats.holiday_count}
             </p>
           </CardContent>
         </Card>
@@ -368,7 +302,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                   <span className="text-xs text-muted-foreground">Paid Leave (PL)</span>
                 </div>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {stats.casual_leaves}
+                  {stats.paid_leave_days}
                 </p>
               </CardContent>
             </Card>
@@ -414,7 +348,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                   <span className="text-xs text-muted-foreground">Leave (LE)</span>
                 </div>
                 <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
-                  {stats.sick_leaves}
+                  {stats.leave_days}
                 </p>
               </CardContent>
             </Card>
@@ -560,7 +494,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
               <span className="text-xs text-muted-foreground">Late Sets</span>
             </div>
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {lateSets}
+              {stats.late_sets}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               3 lates = 1 set
@@ -576,25 +510,23 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
             <div>
               <p className="text-sm text-muted-foreground mb-1">Paid Day Units</p>
               <p className="text-4xl font-bold text-primary">
-                {paidDayUnits.toFixed(1)}
+                {stats.total_paid_days.toFixed(1)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {paidDaysFormula}</p>
-           
+                {paidDaysFormula}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground mb-1">Payroll Utilization</p>
-              <p className={`text-3xl font-bold ${getPercentageColor(
-                (paidDayUnits / (stats.total_days_in_month || 30)) * 100
-              )}`}>
-                {((paidDayUnits / (stats.total_days_in_month || 30)) * 100).toFixed(1)}%
+              <p className={`text-3xl font-bold ${getPercentageColor(stats.attendance_percentage)}`}>
+                {stats.attendance_percentage.toFixed(1)}%
               </p>
               <Progress 
-                value={(paidDayUnits / (stats.total_days_in_month || 30)) * 100} 
+                value={stats.attendance_percentage} 
                 className="h-2 w-32 mt-2"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {paidDayUnits.toFixed(1)} / {stats.total_days_in_month || 30} days
+                {stats.total_paid_days.toFixed(1)} / {stats.payroll_days} days
               </p>
             </div>
           </div>

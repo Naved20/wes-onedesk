@@ -746,6 +746,9 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       totalPaidDays,
       grossEarned,
       totalGrossEarnings,
+      epfEmployee,
+      esicEmployee,
+      totalManualDeductions,
       totalDeductions,
       netPayable,
       epfEmployer,
@@ -753,7 +756,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       totalEmployerBenefit,
       totalCTC,
       lateSets,
-      formula: `Per Day Rate (${perDayRate}) × Total Paid Days (${totalPaidDays}) = Gross Earned (${grossEarned})`
+      formula: `Per Day Rate (${perDayRate}) × Total Paid Days (${totalPaidDays}) = Gross Earned (${grossEarned})`,
+      deductionsBreakdown: `EPF (${epfEmployee}) + ESIC (${esicEmployee}) + Manual (${totalManualDeductions}) = Total (${totalDeductions})`
     });
     
     return {
@@ -767,6 +771,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       totalGrossEarnings: Math.round(totalGrossEarnings * 100) / 100,
       epfEmployee: Math.round(epfEmployee * 100) / 100,
       esicEmployee: Math.round(esicEmployee * 100) / 100,
+      totalManualDeductions: Math.round(totalManualDeductions * 100) / 100,
       totalDeductions: Math.round(totalDeductions * 100) / 100,
       netPayable: Math.round(netPayable * 100) / 100,
       epfEmployer: Math.round(epfEmployer * 100) / 100,
@@ -2715,10 +2720,8 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                           <TableCell className="text-right">{salary.present_days || 0}</TableCell>
                           <TableCell className="text-right">₹{salary.gross_salary?.toLocaleString() || "-"}</TableCell>
                           <TableCell className="text-right font-semibold">
-                            ₹{(salary.final_salary || salary.net_salary_calculated || 0).toLocaleString()}
-                            {salary.net_salary_manual && salary.net_salary_manual !== salary.net_salary_calculated && (
-                              <span className="text-xs text-muted-foreground ml-1">(manual)</span>
-                            )}
+                            ₹{(salary.net_salary_calculated || 0).toLocaleString()}
+                            
                           </TableCell>
                           <TableCell>{getStatusBadge(salary)}</TableCell>
                           <TableCell className="text-right">
