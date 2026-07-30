@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Clock, Calculator, CheckCircle, Lock, AlertCircle, TrendingUp, TrendingDown, User, Coins } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
 import { getPaidDays } from "@/lib/paidDays";
+import {
   Table,
   TableBody,
   TableCell,
