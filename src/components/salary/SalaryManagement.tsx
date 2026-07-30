@@ -16,6 +16,7 @@ import { DollarSign, Lock, Unlock, Download, CheckCircle, Clock, AlertCircle, Ca
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PayslipView } from "./PayslipView";
 import { sendNotification } from "@/lib/notificationService";
+import { getPaidDays, getPaidDaysFormula } from "@/lib/paidDays";
 
 const earningTypeLabels: Record<string, { label: string; description: string; icon: string }> = {
   LESSON_PLAN: {
@@ -690,7 +691,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     const lateSets = Math.floor(formData.late_days / 3);
     
     // Total Paid Days = PR + HO + (HD × 0.5) + PL - Late Sets - AB
-    const totalPaidDays = formData.present_days + formData.holiday_count + (formData.half_days * 0.5) + formData.paid_leave_days - lateSets - formData.absent_days;
+    const totalPaidDays = getPaidDays(formData as any);
     
     // Gross Earned = Per Day Rate × Total Paid Days
     const grossEarned = totalPaidDays * perDayRate;
@@ -1385,7 +1386,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
           
           // Paid Day Units (NEW FORMULA)
           // = PR + HO + (HD × 0.5) + PL - Late Sets - AB
-          const paidDayUnits = presentDays + holidayCount + (halfDays * 0.5) + paidLeaveDays - lateSets - absentDays;
+          const paidDayUnits = getPaidDays({ present_days: presentDays, holiday_count: holidayCount, half_days: halfDays, paid_leave_days: paidLeaveDays, late_days: lateDays, absent_days: absentDays });
           
           // Gross earned
           const grossEarned = paidDayUnits * perDayRate;

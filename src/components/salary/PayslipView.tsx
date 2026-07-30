@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { getPaidDays, getPaidDaysFormula } from "@/lib/paidDays";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -530,18 +531,11 @@ export function PayslipView({ userId, month: initialMonth, year: initialYear }: 
                 <div className="flex justify-between items-center mb-0.5">
                   <span className="text-xs font-medium">Total Paid Days:</span>
                   <span className="text-sm font-bold text-primary">
-                    {(
-                      salary.present_days + 
-                      salary.holiday_count + 
-                      (salary.half_days * 0.5) + 
-                      salary.paid_leave_days - 
-                      Math.floor(salary.late_days / 3) - 
-                      salary.absent_days
-                    ).toFixed(1)} days
+                    {getPaidDays(salary).toFixed(1)} days
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground text-right">
-                  PR ({salary.present_days}) + HO ({salary.holiday_count}) + HD ({(salary.half_days * 0.5).toFixed(1)}) + PL ({salary.paid_leave_days}) - Late Sets ({Math.floor(salary.late_days / 3)}) - AB ({salary.absent_days})
+                  {getPaidDaysFormula(salary)}
                 </p>
               </div>
             </div>

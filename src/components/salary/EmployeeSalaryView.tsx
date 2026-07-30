@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { DollarSign, Calendar, Clock, Calculator, CheckCircle, Lock, AlertCircle, TrendingUp, TrendingDown, User, Coins } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+import { getPaidDays } from "@/lib/paidDays";
   Table,
   TableBody,
   TableCell,
@@ -719,12 +720,12 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
                 </div>
                 <div className="flex justify-between items-center py-2 bg-muted/30 px-2 rounded">
                   <span className="text-muted-foreground">× (Present + Paid Leave)</span>
-                  <span className="font-medium">{(salary.present_days || 0) + (salary.paid_leave_days || 0)} days</span>
+                  <span className="font-medium">{getPaidDays(salary as any).toFixed(1)} days</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-t">
                   <span className="text-muted-foreground font-medium">Earned Basic</span>
                   <span className="font-semibold">
-                    {formatCurrency((salary.per_day_salary || 0) * ((salary.present_days || 0) + (salary.paid_leave_days || 0)))}
+                    {formatCurrency((salary.per_day_salary || 0) * getPaidDays(salary as any))}
                   </span>
                 </div>
               </CardContent>
@@ -746,7 +747,7 @@ export function EmployeeSalaryView({ userId, isAdmin = false }: EmployeeSalaryVi
                   <span className="text-muted-foreground">Basic Earned</span>
                   <div className="text-right">
                     <span className="font-medium">
-                      {formatCurrency((salary.per_day_salary || 0) * ((salary.present_days || 0) + (salary.paid_leave_days || 0)))}
+                      {formatCurrency((salary.per_day_salary || 0) * getPaidDays(salary as any))}
                     </span>
                     <Badge variant="outline" className="ml-2 text-xs">Auto</Badge>
                   </div>
