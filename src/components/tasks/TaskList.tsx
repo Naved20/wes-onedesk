@@ -59,11 +59,11 @@ export const TaskList = () => {
     queryFn: async () => {
       if (!session?.user?.id) return null;
       const { data } = await supabase
-        .from('employee_profiles')
+        .from('user_roles')
         .select('role')
         .eq('user_id', session.user.id)
-        .single();
-      return data?.role;
+        .maybeSingle();
+      return data?.role ?? null;
     },
     enabled: !!session?.user?.id,
   });

@@ -15,6 +15,7 @@ import {
   Gift
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
+import { getEffectiveStatus, getPaidDays, getPaidDaysFormula, summarizeAttendance } from "@/lib/paidDays";
 
 type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
@@ -50,6 +51,7 @@ interface Stats {
   effective_present: number;
   attendance_percentage: number;
   present_on_time: number;
+  holiday_count?: number;
   total_days_in_month?: number; // Added for payroll days (total days in month)
 }
 
@@ -65,52 +67,28 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     return attendanceRecords.filter((record) => record.user_id === userId && record.date.startsWith(monthPrefix));
   }, [attendanceRecords, userId, year, month]);
 
-  const getRecordSummaryStatus = (record: Attendance): SummaryStatus => {
-    const calculatedStatus = record.calculated_status?.toLowerCase();
-
-    if (record.status === "rejected" || calculatedStatus === "absent") return "absent";
-    if (calculatedStatus === "paid_leave") return "paid_leave";
-    if (calculatedStatus === "leave") return "leave";
-    if (calculatedStatus === "holiday") return "holiday";
-    if (calculatedStatus === "half_day" || record.is_half_day) return "half_day";
-    if (record.is_late || calculatedStatus === "late") return "late";
-    if (record.check_in_time || calculatedStatus === "present" || record.status === "approved") return "present";
-
-    return "pending";
-  };
+  const getRecordSummaryStatus = (record: Attendance): SummaryStatus =>
+    getEffectiveStatus(record as any) as SummaryStatus;
 
   const derivedStats = useMemo<Stats>(() => {
-    const totalDaysInMonth = new Date(year, month, 0).getDate();
-    const counts = monthAttendanceRecords.reduce(
-      (acc, record) => {
-        const summaryStatus = getRecordSummaryStatus(record);
-        acc[summaryStatus] += 1;
-        if (record.status === "pending") acc.pending += 1;
-        if (record.status === "rejected") acc.rejected += 1;
-        return acc;
-      },
-      { present: 0, late: 0, half_day: 0, paid_leave: 0, leave: 0, absent: 0, holiday: 0, pending: 0, rejected: 0 }
-    );
-
-    const effectivePresent = counts.present + counts.late + counts.paid_leave + (counts.half_day * 0.5);
-    const countedDays = counts.present + counts.late + counts.half_day + counts.paid_leave + counts.leave + counts.absent;
+    const summary = summarizeAttendance(monthAttendanceRecords as any, year, month);
 
     return {
-      working_days: totalDaysInMonth,
-      // Count late days as present as well
-      present_days: counts.present + counts.late,
-      half_days: counts.half_day,
-      late_days: counts.late,
-      pending_days: counts.pending,
-      rejected_days: counts.rejected,
-      casual_leaves: counts.paid_leave,
-      sick_leaves: counts.leave,
+      working_days: summary.payroll_days,
+      present_days: summary.present_days,
+      half_days: summary.half_days,
+      late_days: summary.late_days,
+      pending_days: summary.pending_days,
+      rejected_days: summary.rejected_days,
+      casual_leaves: summary.paid_leave_days,
+      sick_leaves: summary.leave_days,
       unplanned_leaves: 0,
-      absent_days: counts.absent,
-      effective_present: effectivePresent,
-      attendance_percentage: countedDays > 0 ? Math.min((effectivePresent / countedDays) * 100, 100) : 0,
-      present_on_time: counts.present,
-      total_days_in_month: totalDaysInMonth,
+      absent_days: summary.absent_days,
+      effective_present: summary.total_paid_days,
+      attendance_percentage: summary.attendance_percentage,
+      present_on_time: summary.present_on_time,
+      holiday_count: summary.holiday_count,
+      total_days_in_month: summary.payroll_days,
     };
   }, [monthAttendanceRecords, year, month]);
 
@@ -238,10 +216,18 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     holidaysWorked.map(r => new Date(r.date).toISOString().split('T')[0])
   );
   
-  const holidayCount = uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size;
+  const holidayCount = stats.holiday_count ?? (uniqueHolidaysInMonth.size - uniqueHolidaysWorked.size);
+  const paidDaysInput = {
+    present_days: stats.present_days,
+    holiday_count: holidayCount,
+    half_days: stats.half_days,
+    paid_leave_days: stats.casual_leaves,
+    late_days: stats.late_days,
+    absent_days: stats.absent_days,
+  };
   const lateSets = Math.floor(stats.late_days / 3);
-  // Since late days are already included in `present_days`, don't add `late_days` again
-  const paidDayUnits = stats.present_days + holidayCount + (stats.half_days * 0.5) + stats.casual_leaves - (lateSets + stats.absent_days);
+  const paidDayUnits = getPaidDays(paidDaysInput);
+  const paidDaysFormula = getPaidDaysFormula(paidDaysInput);
 
   // COMPACT VIEW - Like salary edit dialog
   if (compactView) {
@@ -308,8 +294,7 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1 text-right">
-            PR ({stats.present_days}) + HO ({holidayCount}) + HD ({(stats.half_days * 0.5).toFixed(1)}) + PL ({stats.casual_leaves}) - Late Sets ({lateSets}) - AB ({stats.absent_days}) 
-          </p>
+            {paidDaysFormula}</p>
         </div>
       </div>
     );
@@ -594,23 +579,22 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
                 {paidDayUnits.toFixed(1)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                PR ({stats.present_days}) + HO ({holidayCount}) + HD ({(stats.half_days * 0.5).toFixed(1)}) + PL ({stats.casual_leaves}) - Late Sets ({lateSets}) - AB ({stats.absent_days}) 
-              </p>
+                {paidDaysFormula}</p>
            
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground mb-1">Payroll Utilization</p>
               <p className={`text-3xl font-bold ${getPercentageColor(
-                (paidDayUnits / (stats.total_days_in_month || 31)) * 100
+                (paidDayUnits / (stats.total_days_in_month || 30)) * 100
               )}`}>
-                {((paidDayUnits / (stats.total_days_in_month || 31)) * 100).toFixed(1)}%
+                {((paidDayUnits / (stats.total_days_in_month || 30)) * 100).toFixed(1)}%
               </p>
               <Progress 
-                value={(paidDayUnits / (stats.total_days_in_month || 31)) * 100} 
+                value={(paidDayUnits / (stats.total_days_in_month || 30)) * 100} 
                 className="h-2 w-32 mt-2"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {paidDayUnits.toFixed(1)} / {stats.total_days_in_month || 31} days
+                {paidDayUnits.toFixed(1)} / {stats.total_days_in_month || 30} days
               </p>
             </div>
           </div>

@@ -3305,6 +3305,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      attendance_effective_status: {
+        Args: {
+          p_calculated_status: string
+          p_check_in_time: string
+          p_is_half_day: boolean
+          p_is_late: boolean
+          p_status: string
+        }
+        Returns: string
+      }
       calculate_attendance_stats: {
         Args: { p_month: number; p_user_id: string; p_year: number }
         Returns: Json

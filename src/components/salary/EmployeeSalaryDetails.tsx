@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { DollarSign, TrendingUp, TrendingDown, Briefcase, Calendar, AlertCircle, Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getPaidDays, getPaidDaysFormula } from "@/lib/paidDays";
 
 interface SalaryDetail {
   id: string;
@@ -270,7 +271,7 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                 <div className="flex justify-between items-center">
                   <span className="font-semibold">Total Paid Days:</span>
                   <span className="text-xl font-bold text-primary">
-                    {salary.present_days + salary.paid_leave_days} days
+                    {getPaidDays(salary as any).toFixed(1)} days
                   </span>
                 </div>
               </div>
@@ -378,11 +379,11 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-semibold">Total Paid Days</span>
                     <span className="text-2xl font-bold text-blue-600">
-                      {salary.present_days + salary.paid_leave_days} days
+                      {getPaidDays(salary as any).toFixed(1)} days
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {salary.present_days} present + {salary.paid_leave_days} paid leaves
+                    {getPaidDaysFormula(salary as any)}
                   </p>
                 </div>
 
@@ -390,7 +391,7 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-semibold">Attendance Percentage</span>
                     <span className="text-2xl font-bold text-amber-600">
-                      {((salary.present_days / salary.working_days) * 100).toFixed(1)}%
+                      {((getPaidDays(salary as any) / (salary.working_days || 1)) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -567,7 +568,7 @@ export function EmployeeSalaryDetails({ userId, month: initialMonth, year: initi
                 </div>
                 <div className="flex justify-between p-2 border-b">
                   <span>Paid Days (Present + Leaves)</span>
-                  <span className="font-semibold">{salary.present_days + salary.paid_leave_days} days</span>
+                  <span className="font-semibold">{getPaidDays(salary as any).toFixed(1)} days</span>
                 </div>
                 <div className="flex justify-between p-2 border-b">
                   <span>Gross Earned</span>
