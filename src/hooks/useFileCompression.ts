@@ -37,7 +37,7 @@ const loadFFmpeg = async () => {
   try {
     const ffmpegMod: any = await import('@ffmpeg/ffmpeg');
     const FFmpegClass = ffmpegMod.FFmpeg;
-    const fetchFile = ffmpegMod.fetchFile ?? (await import('@ffmpeg/util')).fetchFile;
+    const fetchFile = ffmpegMod.fetchFile ?? (async (f: any) => new Uint8Array(await (f as Blob).arrayBuffer()));
     FFmpeg = { FFmpeg: FFmpegClass, fetchFile };
     await FFmpeg.FFmpeg.load();
     ffmpegLoaded = true;
