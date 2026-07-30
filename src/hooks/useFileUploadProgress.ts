@@ -31,7 +31,7 @@ export const useFileUploadProgress = (): UseFileUploadProgressReturn => {
         const filePath = path;
 
         // Method 1: Use XMLHttpRequest for progress tracking with regular upload
-        return await new Promise((resolve, reject) => {
+        return await new Promise(async (resolve, reject) => {
           const xhr = new XMLHttpRequest();
 
           // Track upload progress
@@ -92,7 +92,7 @@ export const useFileUploadProgress = (): UseFileUploadProgressReturn => {
             throw new Error('Not authenticated');
           }
 
-          const storageUrl = `${supabase.supabaseUrl}/storage/v1/object/${bucket}/${filePath}`;
+          const storageUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/${bucket}/${filePath}`;
 
           xhr.open('POST', storageUrl, true);
           xhr.setRequestHeader('Authorization', `Bearer ${token}`);
