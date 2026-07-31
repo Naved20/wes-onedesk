@@ -213,16 +213,39 @@ export default function FaceHub() {
   };
 
   const fetchHistory = async () => {
-    const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
-      body: { action: "history" },
-    });
+    try {
+      console.log("[FaceHub] Fetching history...");
+      const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
+        body: { action: "history" },
+      });
 
-    if (error || !data?.ok) {
-      console.error("Face history load failed:", error ?? data?.message);
-      return;
+      console.log("[FaceHub] History response:", { data, error });
+      
+      if (error) {
+        console.error("[FaceHub] Edge function error:", error);
+        toast({ 
+          title: "History load failed", 
+          description: `${error.code}: ${error.message}`, 
+          variant: "destructive" 
+        });
+        return;
+      }
+      
+      if (!data?.ok) {
+        console.error("[FaceHub] History response not ok:", data?.message);
+        return;
+      }
+
+      setHistory(data.history ?? []);
+      console.log("[FaceHub] History loaded:", data.history?.length);
+    } catch (e: any) {
+      console.error("[FaceHub] History exception:", e);
+      toast({ 
+        title: "History load error", 
+        description: e.message, 
+        variant: "destructive" 
+      });
     }
-
-    setHistory(data.history ?? []);
   };
 
   const handleScan = async () => {
@@ -235,9 +258,11 @@ export default function FaceHub() {
     setScanning(true);
     setLastResult(null);
     try {
+      console.log("[FaceHub] Starting face scan...");
       // Average multiple frames so one blink/movement/lighting change does not break matching
       const descriptor = await getAveragedFaceDescriptor(v, 7, 160);
       if (!descriptor) {
+        console.warn("[FaceHub] No face descriptor generated");
         setLastResult({ ok: false, msg: "No face detected. Please face the camera squarely with good lighting." });
         
         // Show not enrolled popup for no face detected
@@ -255,12 +280,27 @@ export default function FaceHub() {
         return;
       }
 
+      console.log("[FaceHub] Face descriptor obtained, calling edge function...");
       const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
         body: { descriptor: Array.from(descriptor) },
       });
 
-      if (error || !data) {
-        setLastResult({ ok: false, msg: error?.message ?? "Face check-in failed." });
+      console.log("[FaceHub] Edge function response:", { data, error, ok: data?.ok, message: data?.message });
+
+      if (error) {
+        console.error("[FaceHub] Edge function error:", error);
+        setLastResult({ ok: false, msg: `Error: ${error.code} - ${error.message}` });
+        toast({
+          title: "Face check-in error",
+          description: `${error.code}: ${error.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!data) {
+        console.error("[FaceHub] No response data from edge function");
+        setLastResult({ ok: false, msg: "No response from server" });
         return;
       }
 
@@ -270,6 +310,7 @@ export default function FaceHub() {
       
       // If successful, play sound and show popup
       if (data.ok) {
+        console.log("[FaceHub] Face match successful:", data.employeeName);
         playSuccessSound();
         speakAttendanceEnrolled(data.employeeName || "Employee");
         setCheckInData({
@@ -290,7 +331,13 @@ export default function FaceHub() {
       
       fetchHistory();
     } catch (e: any) {
-      setLastResult({ ok: false, msg: e.message ?? "Scan failed" });
+      console.error("[FaceHub] Scan exception:", e);
+      setLastResult({ ok: false, msg: `Exception: ${e.message}` });
+      toast({
+        title: "Scan error",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setScanning(false);
     }
