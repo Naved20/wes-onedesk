@@ -13,8 +13,14 @@ async function loadFaceAPILibrary() {
     
     return new Promise((resolve, reject) => {
       script.onload = () => {
-        FaceAPI = (window as any).FaceAPI;
-        console.log("[FaceAPI] Face-API library loaded from CDN");
+        // @vladmandic/face-api exposes as 'faceapi' (lowercase) on window
+        FaceAPI = (window as any).faceapi;
+        if (!FaceAPI) {
+          console.error("[FaceAPI] FaceAPI not found on window. Available:", Object.keys(window).filter(k => k.toLowerCase().includes('face')));
+          reject(new Error("FaceAPI not exposed on window"));
+          return;
+        }
+        console.log("[FaceAPI] Face-API library loaded from CDN successfully");
         resolve(FaceAPI);
       };
       script.onerror = () => {
@@ -73,15 +79,23 @@ export async function getFaceDescriptor(
     await loadFaceModels();
     
     if (!FaceAPI) {
+      console.error("[FaceAPI] FaceAPI not initialized");
       throw new Error("FaceAPI library not loaded");
     }
     
+    console.log("[FaceAPI] Detecting face...");
     const detection = await FaceAPI
       .detectSingleFace(input, new FaceAPI.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
       .withFaceLandmarks()
       .withFaceDescriptor();
     
-    return detection?.descriptor ?? null;
+    if (!detection) {
+      console.warn("[FaceAPI] No face detected in image");
+      return null;
+    }
+    
+    console.log("[FaceAPI] Face detected, descriptor obtained");
+    return detection.descriptor ?? null;
   } catch (e) {
     console.error("[FaceAPI] Error getting face descriptor:", e);
     return null;
