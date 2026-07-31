@@ -1,39 +1,42 @@
-## Goal
-Merge `holidays` table into `attendance` table so there's one source of truth and no conflicts between holiday entries and attendance entries.
+## Diagnosis (no changes made)
 
-## Approach
-Holidays will live **as attendance rows** with `status = 'holiday'`. When admin adds a holiday for an institution (or all), the system fans it out to every matching user as an attendance row. The `holidays` table is dropped.
+Face Hub ka camera, login aur backend sab theek hai — problem browser me face models load hone par crash ho rahi hai, isliye scan hi start nahi hota.
 
-## Schema changes (migration)
+### Evidence collected
 
-1. Add columns to `public.attendance`:
-   - `holiday_name TEXT` — populated only for holiday rows
-   - `holiday_description TEXT`
-   - `is_national BOOLEAN DEFAULT false`
-   - `institution_name TEXT` — denormalized for filtering / admin views
-2. Index: `CREATE INDEX idx_attendance_holiday ON attendance(date) WHERE status = 'holiday';`
-3. New SECURITY DEFINER functions:
-   - `add_holiday(p_date, p_name, p_description, p_is_national, p_institution)` — inserts/updates an attendance row with `status='holiday'` for every active employee in the target institution (or all institutions if NULL). Skips users who already have an `approved` present/half-day for that date (to avoid wiping real attendance).
-   - `update_holiday(p_date, p_old_institution, p_name, p_description, p_is_national, p_new_institution)` — updates all matching holiday rows; handles institution re-scoping.
-   - `delete_holiday(p_date, p_institution)` — deletes only holiday rows for that date+scope.
-   - `list_holidays()` view: distinct `(date, holiday_name, holiday_description, is_national, institution_name)` from attendance where `status='holiday'`.
-4. Backfill: copy existing `holidays` rows into attendance via `add_holiday(...)` then `DROP TABLE public.holidays`.
-5. Trigger on `employee_profiles` insert: when a new user joins, auto-create their holiday attendance rows from existing holiday dates in their institution.
+1. **Backend healthy** — `face-hub-checkin` function live hai, direct call par HTTP 200 + valid history return kar raha hai. `face_descriptors` me 37 active enrollments (sab 128-length, koi null nahi).
+2. **Check-ins ek exact date par ruke** — `attendance` me face check-ins 1 Jul se 29 Jul tak roz 20–26 rows, 30/31 Jul par **zero**. `face_checkin_history` ka last row bhi 29 Jul 11:29. Sessions 30–31 Jul par active the, matlab log kiosk khol rahe the par scan attempt server tak pahunch hi nahi raha.
+3. **Live browser test (`/face-hub`)** — page render hota hai, camera stream ready (1280x1280, readyState 4), lekin UI par permanently "Loading face models..." aur **"Scan Face & Check-in" button disabled**. `modelsReady` kabhi `true` nahi hota.
+4. **Model files fine** — CDN se saare weights 200 aate hain (manifest + shards).
+5. **Actual error** — `loadFaceModels()` ko directly call karne par:
+   ```text
+   ERR: Lt2.makeTensor is not a function
+   ```
+   plus console warnings: "webgl backend was already registered", "cpu backend was already registered", "Platform browser has already been set."
 
-## Frontend changes
+### Root cause
 
-- `src/components/attendance/HolidayManager.tsx`: switch from `from('holidays')` to RPCs `add_holiday`, `update_holiday`, `delete_holiday`, and read via the `list_holidays` view. UI stays the same.
-- `src/integrations/supabase/types.ts`: regenerated after migration.
-- Any other reads of `holidays` table → switch to the view.
+`node_modules` me TensorFlow.js ki **do copies** install hain:
 
-## Conflict resolution rules
-- Holiday rows have `status='holiday'`, `is_manual_override=false`.
-- If a user already checked in (`approved` + present/half_day), holiday is **not** overwritten — their attendance wins.
-- If a leave is approved on the same date, leave wins over holiday.
-- Salary/stats calculations already treat `holiday` status correctly.
+```text
+node_modules/@tensorflow/tfjs-core                                  -> 1.2.2   (face-api.js ka exact pin)
+node_modules/tfjs-image-recognition-base/node_modules/@tensorflow/tfjs-core -> 1.7.0  (^1.2.9 range se resolve)
+```
 
-## Risk
-- Holiday rows multiply by employee count — but attendance already has daily rows per user, so this is consistent.
-- One-time backfill copies historical holidays into existing employees' attendance.
+- `face-api.js@0.20.1` `@tensorflow/tfjs-core@1.2.2` pin karta hai.
+- Uski dependency `tfjs-image-recognition-base` `^1.2.9` maangti hai, to uske liye alag nested 1.7.0 install hua.
+- 1.2.2 ke engine me `makeTensor` method **exist hi nahi karta**; 1.7.0 me karta hai. Weight-loading code 1.7.0 copy se aata hai par engine/backend 1.2.2 copy ka register hota hai (duplicate backend registration warnings isi ka proof hain) → `makeTensor is not a function` throw hota hai.
+- `loadFaceModels()` apna failed promise cache kar leta hai, aur error sirf ek toast me jaata hai, isliye button hamesha disabled rehta hai aur user ko clear reason nahi dikhta.
 
-Approve to proceed with migration + code changes.
+Ye break kisi UI ya DB change se nahi, **dependency re-resolution** (fresh install / lockfile update) se aaya — code path 29 Jul tak same tha aur kaam kar raha tha.
+
+### Ek chhota secondary issue (asli cause nahi)
+
+- `supabase/config.toml` me `face-hub-checkin` ke liye entry nahi hai (JWT verify default on) — anon key se abhi kaam kar raha hai, so blocking nahi.
+- "No face detected" case me client seedha `face_checkin_history` me insert karta hai aur error ignore karta hai — anon RLS block hone par ye silently drop hota hai.
+
+### Fix options (aapke kehne par implement karunga)
+
+1. **Pin ek hi TFJS copy** — `package.json` me `@tensorflow/tfjs-core` ko `1.7.0` par pin karke overrides/resolutions se nested copy hata dena (sabse chhota, targeted fix).
+2. **`@vladmandic/face-api` par migrate** — maintained fork jo modern TFJS ke saath ship hota hai (thoda bada change, long-term stable).
+3. Saath me: model-load failure par UI par visible error + "Retry" button, aur `loadFaceModels()` me failed promise cache na karna.
