@@ -1,6 +1,32 @@
-import * as faceapi from "face-api.js";
+// Dynamically load face-api from CDN to avoid TensorFlow.js dependency conflicts
+// @vladmandic/face-api includes all TensorFlow dependencies correctly bundled
+let FaceAPI: any = null;
 
-const MODEL_URL = "https://justadudewhohacks.github.io/face-api.js/models";
+async function loadFaceAPILibrary() {
+  if (FaceAPI) return FaceAPI;
+  
+  try {
+    // Load the library from CDN (includes all deps)
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.14/dist/face-api.min.js';
+    script.type = 'application/javascript';
+    
+    return new Promise((resolve, reject) => {
+      script.onload = () => {
+        FaceAPI = (window as any).FaceAPI;
+        console.log("[FaceAPI] Face-API library loaded from CDN");
+        resolve(FaceAPI);
+      };
+      script.onerror = () => {
+        reject(new Error("Failed to load FaceAPI from CDN"));
+      };
+      document.head.appendChild(script);
+    });
+  } catch (e) {
+    console.error("[FaceAPI] Error loading library:", e);
+    throw e;
+  }
+}
 
 let modelsLoaded = false;
 let loadingPromise: Promise<void> | null = null;
@@ -10,12 +36,31 @@ export async function loadFaceModels(): Promise<void> {
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-    modelsLoaded = true;
+    try {
+      console.log("[FaceAPI] Starting to load face models...");
+      
+      // Ensure FaceAPI library is loaded first
+      if (!FaceAPI) {
+        await loadFaceAPILibrary();
+      }
+      
+      const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+      
+      // Load all models
+      await Promise.all([
+        FaceAPI.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        FaceAPI.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        FaceAPI.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      
+      modelsLoaded = true;
+      console.log("[FaceAPI] All face models loaded successfully");
+    } catch (e) {
+      console.error("[FaceAPI] Failed to load face models:", e);
+      modelsLoaded = false;
+      loadingPromise = null;
+      throw e;
+    }
   })();
 
   return loadingPromise;
@@ -24,12 +69,23 @@ export async function loadFaceModels(): Promise<void> {
 export async function getFaceDescriptor(
   input: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement
 ): Promise<Float32Array | null> {
-  await loadFaceModels();
-  const detection = await faceapi
-    .detectSingleFace(input, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-  return detection?.descriptor ?? null;
+  try {
+    await loadFaceModels();
+    
+    if (!FaceAPI) {
+      throw new Error("FaceAPI library not loaded");
+    }
+    
+    const detection = await FaceAPI
+      .detectSingleFace(input, new FaceAPI.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+    
+    return detection?.descriptor ?? null;
+  } catch (e) {
+    console.error("[FaceAPI] Error getting face descriptor:", e);
+    return null;
+  }
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -61,9 +117,18 @@ export async function getAveragedFaceDescriptor(
   const descriptors: Float32Array[] = [];
 
   for (let i = 0; i < attempts; i++) {
-    const descriptor = await getFaceDescriptor(input);
-    if (descriptor) descriptors.push(descriptor);
+    try {
+      const descriptor = await getFaceDescriptor(input);
+      if (descriptor) descriptors.push(descriptor);
+    } catch (e) {
+      console.warn(`[FaceAPI] Attempt ${i + 1} failed:`, e);
+    }
     if (i < attempts - 1) await wait(delayMs);
+  }
+
+  if (descriptors.length === 0) {
+    console.warn("[FaceAPI] No valid face descriptors generated from any attempt");
+    return null;
   }
 
   return averageFaceDescriptors(descriptors);
