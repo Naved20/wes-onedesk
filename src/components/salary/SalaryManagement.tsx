@@ -2817,7 +2817,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
                       size="sm"
                       variant={isAttendanceEditable ? "default" : "outline"}
                       onClick={() => setIsAttendanceEditable(!isAttendanceEditable)}
-                      className="h-7 text-xs"
+                      className="h-7 text-xs hidden"
                     >
                       {isAttendanceEditable ? (
                         <>
