@@ -13,21 +13,29 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log("[DEBUG] Edge function called");
+    
     const serviceAccountJson = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON");
     if (!serviceAccountJson) {
+      console.error("[ERROR] GOOGLE_SERVICE_ACCOUNT_JSON not found in environment");
       return new Response(
         JSON.stringify({ error: "GOOGLE_SERVICE_ACCOUNT_JSON environment variable is not configured" }),
         { status: 500, headers: corsHeaders }
       );
     }
 
+    console.log("[DEBUG] Service account JSON length:", serviceAccountJson.length);
+
     const serviceAccount = JSON.parse(serviceAccountJson);
+    console.log("[DEBUG] Service account parsed, email:", serviceAccount.client_email);
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const userName = (formData.get("userName") as string) || "User";
     const taskName = (formData.get("taskName") as string) || "Task";
     const submissionType = (formData.get("submissionType") as string) || "Submission";
+
+    console.log("[DEBUG] File received:", file?.name, "Size:", file?.size);
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided in form-data" }), {
@@ -36,18 +44,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    console.log("[DEBUG] Getting Google access token...");
     const accessToken = await getGoogleAccessToken(serviceAccount);
     if (!accessToken) {
+      console.error("[ERROR] Failed to get access token");
       return new Response(JSON.stringify({ error: "Failed to get Google Access Token" }), {
         status: 500,
         headers: corsHeaders,
       });
     }
+    
+    console.log("[DEBUG] Access token obtained successfully");
+    console.log("[DEBUG] Creating folder hierarchy...");
 
     // Folder hierarchy: ROOT_FOLDER_ID -> TaskName -> SubmissionType -> EmployeeName
     const taskFolderId = await getOrCreateFolder(taskName, ROOT_FOLDER_ID, accessToken);
     const typeFolderId = await getOrCreateFolder(submissionType, taskFolderId, accessToken);
     const userFolderId = await getOrCreateFolder(userName, typeFolderId, accessToken);
+
+    console.log("[DEBUG] Folders created, userFolderId:", userFolderId);
 
     const fileExt = file.name.split(".").pop() || "";
     const now = new Date();

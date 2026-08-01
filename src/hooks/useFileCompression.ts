@@ -96,12 +96,12 @@ export const useFileCompression = () => {
 
       console.log(`[VideoCompression] Compressing video with bitrate: ${videoBitrate}`);
 
-      // Compress video
+      // Compress video (ultrafast preset for speed)
       await ffmpeg.run(
         '-i', inputName,
         '-b:v', videoBitrate,
         '-c:v', 'libx264',
-        '-preset', 'medium',
+        '-preset', 'ultrafast',
         '-c:a', 'aac',
         '-b:a', '128k',
         outputName
