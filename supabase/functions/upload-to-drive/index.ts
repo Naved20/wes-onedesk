@@ -7,6 +7,7 @@ const corsHeaders = {
 // Root folder/shared-drive ID where everything goes
 const ROOT_FOLDER_ID = "19nsvyQaW1PLEA9DzKWQYib_FLikW3FF4";
 
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
