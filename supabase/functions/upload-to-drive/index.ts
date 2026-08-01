@@ -168,11 +168,13 @@ async function getOrCreateFolder(folderName: string, parentId: string, accessTok
 }
 
 function pemToDer(pem: string): Uint8Array {
-  const pemContents = pem
+  // Handle both actual newlines and escaped \n characters
+  let pemContents = pem
     .replace("-----BEGIN PRIVATE KEY-----", "")
     .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\\n/g, "")
-    .replace(/\s+/g, "");
+    .replace(/\\n/g, "\n")  // Convert escaped \n to actual newlines
+    .replace(/\n/g, "")     // Then remove all newlines
+    .replace(/\s+/g, "");   // Remove remaining whitespace
 
   const binary = atob(pemContents);
   const bytes = new Uint8Array(binary.length);
