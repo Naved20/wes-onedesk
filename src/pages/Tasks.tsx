@@ -386,34 +386,17 @@ const Tasks = () => {
       driveFormData.append("submissionType", submissionType);
 
       // Invoke Edge Function
-      const response = await fetch(
-        `${supabase.functions['_url']}/upload-to-drive`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${supabase.functions['_headers'].Authorization}`,
-            apikey: supabase.functions['_headers'].apikey,
-          },
-          body: driveFormData,
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("upload-to-drive", {
+        body: driveFormData,
+      });
 
       clearInterval(progressInterval);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[GoogleDriveUpload] Edge function raw error:', errorText);
-        try {
-          const errorJson = JSON.parse(errorText);
-          console.error('[GoogleDriveUpload] Edge function error JSON:', errorJson);
-          throw new Error(errorJson.error || errorText);
-        } catch (e) {
-          throw new Error(errorText);
-        }
+      if (error) {
+        console.error('[GoogleDriveUpload] Edge function error:', error);
+        throw error;
       }
-
-      const data = await response.json();
-
+      
       if (data?.error) {
         console.error('[GoogleDriveUpload] Edge function returned error:', data.error);
         console.error('[GoogleDriveUpload] Error details:', data.details);
