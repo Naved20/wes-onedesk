@@ -26,7 +26,8 @@ Deno.serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const userName = (formData.get("userName") as string) || "User";
-    const reportDate = (formData.get("reportDate") as string) || new Date().toISOString().split("T")[0];
+    const taskName = (formData.get("taskName") as string) || "Task";
+    const submissionType = (formData.get("submissionType") as string) || "Submission";
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided in form-data" }), {
@@ -43,9 +44,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Folder hierarchy: ROOT_FOLDER_ID -> Reports -> Employee_Name
-    const reportsFolderId = await getOrCreateFolder("Reports", ROOT_FOLDER_ID, accessToken);
-    const employeeFolderId = await getOrCreateFolder(userName, reportsFolderId, accessToken);
+    // Folder hierarchy: ROOT_FOLDER_ID -> TaskName -> SubmissionType -> EmployeeName
+    const taskFolderId = await getOrCreateFolder(taskName, ROOT_FOLDER_ID, accessToken);
+    const typeFolderId = await getOrCreateFolder(submissionType, taskFolderId, accessToken);
+    const userFolderId = await getOrCreateFolder(userName, typeFolderId, accessToken);
 
     const fileExt = file.name.split(".").pop() || "";
     const now = new Date();
@@ -54,8 +56,8 @@ Deno.serve(async (req) => {
 
     const sanitizeName = (str: string) => str.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_");
     
-    // File name format: Report_Date_EmployeeName_timestamp.ext
-    const newFileName = `Report_${sanitizeName(reportDate)}_${sanitizeName(userName)}_${timestamp}.${fileExt}`;
+    // File name format: SubmissionType_TaskName_EmployeeName_timestamp.ext
+    const newFileName = `${sanitizeName(submissionType)}_${sanitizeName(taskName)}_${sanitizeName(userName)}_${timestamp}.${fileExt}`;
 
     const uploadUrl =
       "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink";
@@ -103,7 +105,7 @@ Deno.serve(async (req) => {
     }
 
     const directViewLink = `https://drive.google.com/uc?export=view&id=${fileId}`;
-    const folderPath = `${taskName} > ${userName}`;
+    const folderPath = `${taskName} > ${submissionType} > ${userName}`;
 
     return new Response(
       JSON.stringify({
