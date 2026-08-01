@@ -7,7 +7,6 @@ const corsHeaders = {
 // Root folder/shared-drive ID where everything goes
 const ROOT_FOLDER_ID = "19nsvyQaW1PLEA9DzKWQYib_FLikW3FF4";
 
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -56,7 +55,7 @@ Deno.serve(async (req) => {
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
     const sanitizeName = (str: string) => str.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_");
-    
+
     // File name format: SubmissionType_TaskName_EmployeeName_timestamp.ext
     const newFileName = `${sanitizeName(submissionType)}_${sanitizeName(taskName)}_${sanitizeName(userName)}_${timestamp}.${fileExt}`;
 
