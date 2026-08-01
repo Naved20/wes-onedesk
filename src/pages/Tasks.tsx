@@ -45,6 +45,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TaskOperationStatusModal, type OperationStep } from "@/components/tasks/TaskOperationStatusModal";
+import { playSuccessBeep, playErrorBeep, playProcessingBeep } from "@/lib/audioFeedback";
 
 // Custom styles for Quill editor
 const editorStyle = `
@@ -205,6 +207,18 @@ const Tasks = () => {
   const [remarks, setRemarks] = useState<Record<string, TaskRemark[]>>({});
   const [assignments, setAssignments] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
   const [peerReviewers, setPeerReviewers] = useState<Record<string, Array<{ user_id: string; first_name: string; last_name: string }>>>({});
+  
+  // Status tracking for task operations
+  const [operationSteps, setOperationSteps] = useState<Array<{
+    step: string;
+    status: 'pending' | 'success' | 'error' | 'warning';
+    message?: string;
+    error?: string;
+    details?: string[];
+  }>>([]);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [operationType, setOperationType] = useState<'create' | 'edit'>('create');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [responseDialogOpen, setResponseDialogOpen] = useState(false);
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<TaskResponse | null>(null);
@@ -659,12 +673,33 @@ const Tasks = () => {
   const fetchBatchData = async (taskIds: string[]) => {
     if (!taskIds.length) return;
     
+    console.log('🔄 fetchBatchData called with taskIds:', taskIds);
+    
     try {
-      // 1. Fetch Assignments
-      const { data: assignmentsData } = await supabase
-        .from("task_assignments")
-        .select("task_id, user_id")
-        .in("task_id", taskIds);
+      // 1. Fetch ALL Assignments without limit (Supabase default is 1000, we need ALL)
+      let assignmentsData: any[] = [];
+      
+      // Fetch in smaller batches and increase per-query limit
+      const batchSize = 50;
+      for (let i = 0; i < taskIds.length; i += batchSize) {
+        const batch = taskIds.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("task_assignments")
+          .select("task_id, user_id")
+          .in("task_id", batch)
+          .limit(10000); // ✅ Increase limit to get ALL assignments
+        
+        if (data) {
+          assignmentsData = [...assignmentsData, ...data];
+        }
+      }
+      
+      console.log('📊 Assignments fetched:', assignmentsData);
+      
+      // Debug: Check if our specific task has assignments
+      const targetTaskId = '648794d0-cee5-42ec-a057-e81bd80544a2';
+      const targetAssignments = (assignmentsData || []).filter((a: any) => a.task_id === targetTaskId);
+      console.log(`🎯 Assignments for task ${targetTaskId}:`, targetAssignments);
       
       // 2. Fetch Responses
       const { data: responsesData } = await supabase
@@ -712,6 +747,7 @@ const Tasks = () => {
         const p = profileMap.get(a.user_id) || { first_name: "Unknown", last_name: "User" };
         newAssignments[a.task_id].push({ user_id: a.user_id, first_name: p.first_name, last_name: p.last_name });
       });
+      console.log('✅ Setting assignments state:', newAssignments);
       setAssignments(prev => ({ ...prev, ...newAssignments }));
       
       // Group responses
@@ -812,7 +848,7 @@ const Tasks = () => {
       // Fetch responses and assignments in batched queries for better performance
       if (newTasks && newTasks.length > 0) {
         const taskIds = newTasks.map(task => task.id);
-        fetchBatchData(taskIds).catch(console.error);
+        await fetchBatchData(taskIds).catch(console.error);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -1075,6 +1111,7 @@ const Tasks = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     // Strip HTML tags for validation
     const descriptionText = formData.description.replace(/<[^>]*>/g, '').trim();
     if (!formData.title.trim() || !descriptionText) {
@@ -1113,170 +1150,374 @@ const Tasks = () => {
       return;
     }
 
+    // Initialize status tracking
+    const steps: OperationStep[] = [];
+    setOperationSteps([]);
+    setOperationType('create');
+    setIsProcessing(true);
+    setShowStatusModal(true);
     setSubmitting(true);
+    
+    // Play processing beep
+    playProcessingBeep();
+    
+    let createdTaskId: string | null = null;
+    let hasErrors = false;
+
     try {
       let fileUrl = null;
       let fileName = null;
 
-      // Upload to Supabase Storage if file exists
+      // Step 1: File Upload (if exists)
       if (formData.file) {
-        const fileExt = formData.file.name.split('.').pop();
-        const filePath = `${crypto.randomUUID()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('tasks')
-          .upload(filePath, formData.file);
+        steps.push({
+          step: "File Upload",
+          status: "pending",
+          message: `Uploading file: ${formData.file.name}...`
+        });
+        setOperationSteps([...steps]);
 
-        if (uploadError) throw uploadError;
+        try {
+          const fileExt = formData.file.name.split('.').pop();
+          const filePath = `${crypto.randomUUID()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('tasks')
+            .upload(filePath, formData.file);
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('tasks')
-          .getPublicUrl(filePath);
+          if (uploadError) throw uploadError;
 
-        fileUrl = publicUrl;
-        fileName = formData.file.name;
+          const { data: { publicUrl } } = supabase.storage
+            .from('tasks')
+            .getPublicUrl(filePath);
+
+          fileUrl = publicUrl;
+          fileName = formData.file.name;
+          
+          steps[steps.length - 1] = {
+            ...steps[steps.length - 1],
+            status: "success",
+            message: `File uploaded successfully: ${fileName}`
+          };
+          setOperationSteps([...steps]);
+        } catch (error: any) {
+          steps[steps.length - 1] = {
+            ...steps[steps.length - 1],
+            status: "error",
+            message: "File upload failed",
+            error: error.message || String(error)
+          };
+          setOperationSteps([...steps]);
+          throw error;
+        }
       }
 
-      // Create the task
-      const { data: taskData, error: taskError } = await supabase
-        .from("tasks" as any)
-        .insert({
-          title: formData.title,
-          description: formData.description,
-          type: formData.type || null,
-          category: formData.category || null,
-          reward_amount: formData.reward_amount ? parseFloat(formData.reward_amount) : null,
-          due_date: formData.due_date || null,
-          file_url: fileUrl || formData.fileUrl || null,
-          file_name: fileName || formData.fileName || null,
-          created_by: user.id,
-          is_active: true,
-          review_assignment_type: formData.review_assignment_type,
-        })
-        .select()
-        .single();
+      // Step 2: Create Task
+      steps.push({
+        step: "Task Creation",
+        status: "pending",
+        message: `Creating task: "${formData.title}"...`
+      });
+      setOperationSteps([...steps]);
 
-      if (taskError) throw taskError;
+      try {
+        const { data: taskData, error: taskError } = await supabase
+          .from("tasks" as any)
+          .insert({
+            title: formData.title,
+            description: formData.description,
+            type: formData.type || null,
+            category: formData.category || null,
+            reward_amount: formData.reward_amount ? parseFloat(formData.reward_amount) : null,
+            due_date: formData.due_date || null,
+            file_url: fileUrl || formData.fileUrl || null,
+            file_name: fileName || formData.fileName || null,
+            created_by: user.id,
+            is_active: true,
+            review_assignment_type: formData.review_assignment_type,
+          })
+          .select()
+          .single();
 
-      // Create task assignments
+        if (taskError) throw taskError;
+        
+        createdTaskId = (taskData as any).id;
+        
+        steps[steps.length - 1] = {
+          ...steps[steps.length - 1],
+          status: "success",
+          message: "Task created successfully",
+          details: [`Task ID: ${createdTaskId}`]
+        };
+        setOperationSteps([...steps]);
+      } catch (error: any) {
+        steps[steps.length - 1] = {
+          ...steps[steps.length - 1],
+          status: "error",
+          message: "Task creation failed",
+          error: `Database Error: ${error.message || String(error)}\nCode: ${error.code || 'Unknown'}`
+        };
+        setOperationSteps([...steps]);
+        hasErrors = true;
+        throw error;
+      }
+
+      // Step 3: Create Task Assignments
+      let assignmentCount = 0;
+      let assignedUserIds: string[] = [];
+      
       if (formData.assign_to === "all") {
-        // Assign to all employees
-        const assignments = employees.map(emp => ({
-          task_id: (taskData as any).id,
-          user_id: emp.user_id,
-        }));
-
-        const { error: assignError } = await supabase
-          .from("task_assignments" as any)
-          .insert(assignments);
-
-        if (assignError) throw assignError;
+        assignedUserIds = employees.map(emp => emp.user_id);
+        assignmentCount = assignedUserIds.length;
       } else if (formData.assign_to === "groups") {
-        // Assign to all members of selected groups (union, dedup)
         const groupMemberIds = formData.assignment_group_ids
           .flatMap(gid => assignmentGroups.find(g => g.id === gid)?.member_ids || []);
-        const uniqueMemberIds = Array.from(new Set(groupMemberIds));
+        assignedUserIds = Array.from(new Set(groupMemberIds));
+        assignmentCount = assignedUserIds.length;
+      } else {
+        assignedUserIds = formData.assigned_user_ids;
+        assignmentCount = assignedUserIds.length;
+      }
+      
+      steps.push({
+        step: "Task Assignments",
+        status: "pending",
+        message: `Assigning task to ${assignmentCount} employee(s)...`,
+        details: assignedUserIds.map(uid => {
+          const emp = employees.find(e => e.user_id === uid);
+          return emp ? `${emp.first_name} ${emp.last_name} (${emp.email})` : uid;
+        })
+      });
+      setOperationSteps([...steps]);
 
-        if (uniqueMemberIds.length > 0) {
-          const assignments = uniqueMemberIds.map(uid => ({
-            task_id: (taskData as any).id,
-            user_id: uid,
+      try {
+        if (formData.assign_to === "all") {
+          const assignments = employees.map(emp => ({
+            task_id: createdTaskId,
+            user_id: emp.user_id,
           }));
+
           const { error: assignError } = await supabase
             .from("task_assignments" as any)
             .insert(assignments);
+
           if (assignError) throw assignError;
-        }
+        } else if (formData.assign_to === "groups") {
+          if (assignedUserIds.length > 0) {
+            const assignments = assignedUserIds.map(uid => ({
+              task_id: createdTaskId,
+              user_id: uid,
+            }));
+            const { error: assignError } = await supabase
+              .from("task_assignments" as any)
+              .insert(assignments);
+            if (assignError) throw assignError;
+          }
 
-        // Record which groups were assigned
-        const groupRefs = formData.assignment_group_ids.map(gid => ({
-          task_id: (taskData as any).id,
-          group_id: gid,
-        }));
-        const { error: grpError } = await (supabase as any)
-          .from("task_assignment_groups")
-          .insert(groupRefs);
-        if (grpError) throw grpError;
-      } else {
-        // Assign to selected employees
-        const assignments = formData.assigned_user_ids.map(userId => ({
-          task_id: (taskData as any).id,
-          user_id: userId,
-        }));
-
-        const { error: assignError } = await supabase
-          .from("task_assignments" as any)
-          .insert(assignments);
-
-        if (assignError) throw assignError;
-      }
-
-      // Handle peer reviewer assignments based on type
-      if (formData.review_assignment_type === "group" || formData.review_assignment_type === "mixed") {
-        // Snapshot peer reviewers from selected groups + individuals (union, dedup)
-        const groupMemberIds = formData.peer_reviewer_group_ids
-          .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
-        const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
-
-        if (allReviewerIds.length > 0) {
-          const reviewers = allReviewerIds.map(uid => ({
-            task_id: (taskData as any).id,
-            user_id: uid,
-          }));
-          const { error: revError } = await supabase
-            .from("task_peer_reviewers" as any)
-            .insert(reviewers);
-          if (revError) throw revError;
-        }
-
-        // Record which groups were assigned (for UI display & edit pre-select)
-        if (formData.peer_reviewer_group_ids.length > 0) {
-          const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
-            task_id: (taskData as any).id,
+          // Record which groups were assigned
+          const groupRefs = formData.assignment_group_ids.map(gid => ({
+            task_id: createdTaskId,
             group_id: gid,
           }));
           const { error: grpError } = await (supabase as any)
-            .from("task_peer_reviewer_groups")
+            .from("task_assignment_groups")
             .insert(groupRefs);
           if (grpError) throw grpError;
-        }
-      }
-
-      if (formData.review_assignment_type === "individual" || formData.review_assignment_type === "mixed") {
-        // Handle individual reviewer assignments for this specific task
-        if (formData.individual_reviewer_assignments.length > 0) {
-          // Add individual reviewers to task_peer_reviewers (deduplicate)
-          const reviewerIds = Array.from(new Set(formData.individual_reviewer_assignments.map(a => a.reviewer_id)));
-          const reviewers = reviewerIds.map(uid => ({
-            task_id: (taskData as any).id,
-            user_id: uid,
+        } else {
+          const assignments = formData.assigned_user_ids.map(userId => ({
+            task_id: createdTaskId,
+            user_id: userId,
           }));
+
+          const { error: assignError } = await supabase
+            .from("task_assignments" as any)
+            .insert(assignments);
+
+          if (assignError) throw assignError;
+        }
+        
+        steps[steps.length - 1] = {
+          ...steps[steps.length - 1],
+          status: "success",
+          message: `Successfully assigned task to ${assignmentCount} employee(s)`
+        };
+        setOperationSteps([...steps]);
+      } catch (error: any) {
+        steps[steps.length - 1] = {
+          ...steps[steps.length - 1],
+          status: "error",
+          message: "Assignment creation failed",
+          error: `Database Error: ${error.message || String(error)}\nCode: ${error.code || 'Unknown'}\n\nTask was created but assignments failed. Attempting cleanup...`
+        };
+        setOperationSteps([...steps]);
+        hasErrors = true;
+        
+        // Cleanup: Delete orphan task
+        if (createdTaskId) {
+          steps.push({
+            step: "Cleanup",
+            status: "pending",
+            message: "Deleting orphan task (assignments failed)..."
+          });
+          setOperationSteps([...steps]);
           
-          const { error: revError } = await supabase
-            .from("task_peer_reviewers" as any)
-            .insert(reviewers);
-          if (revError) throw revError;
+          try {
+            await supabase.from("tasks").delete().eq("id", createdTaskId);
+            steps[steps.length - 1] = {
+              ...steps[steps.length - 1],
+              status: "success",
+              message: "Orphan task cleaned up successfully"
+            };
+          } catch (cleanupError: any) {
+            steps[steps.length - 1] = {
+              ...steps[steps.length - 1],
+              status: "error",
+              message: "Cleanup failed",
+              error: `Could not delete orphan task: ${cleanupError.message}`
+            };
+          }
+          setOperationSteps([...steps]);
+        }
+        
+        throw error;
+      }
 
-          // Store the user-to-reviewer mapping for this task
-          const mappings = formData.individual_reviewer_assignments.map(assignment => ({
-            task_id: (taskData as any).id,
-            user_id: assignment.user_id,
-            reviewer_id: assignment.reviewer_id,
-            assigned_by: user.id,
-          }));
+      // Step 4: Peer Reviewer Assignments
+      let reviewerCount = 0;
+      const peerReviewerDetails: string[] = [];
+      
+      // Calculate reviewer count and collect details
+      if (formData.review_assignment_type === "group" || formData.review_assignment_type === "mixed") {
+        const groupMemberIds = formData.peer_reviewer_group_ids
+          .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+        const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
+        reviewerCount += allReviewerIds.length;
+        
+        allReviewerIds.forEach(uid => {
+          const emp = employees.find(e => e.user_id === uid);
+          if (emp) peerReviewerDetails.push(`${emp.first_name} ${emp.last_name} (Group/Individual)`);
+        });
+      }
+      
+      if (formData.review_assignment_type === "individual" || formData.review_assignment_type === "mixed") {
+        const individualReviewerIds = Array.from(new Set(formData.individual_reviewer_assignments.map(a => a.reviewer_id)));
+        reviewerCount += individualReviewerIds.length;
+        
+        individualReviewerIds.forEach(uid => {
+          const emp = employees.find(e => e.user_id === uid);
+          if (emp) peerReviewerDetails.push(`${emp.first_name} ${emp.last_name} (1:1 Assignment)`);
+        });
+      }
+      
+      if (reviewerCount > 0) {
+        steps.push({
+          step: "Peer Reviewer Assignments",
+          status: "pending",
+          message: `Assigning ${reviewerCount} peer reviewer(s)...`,
+          details: peerReviewerDetails
+        });
+        setOperationSteps([...steps]);
 
-          const { error: mapError } = await supabase
-            .from("individual_peer_reviewers" as any)
-            .insert(mappings);
-          if (mapError) throw mapError;
+        try {
+          // Handle peer reviewer assignments based on type
+          if (formData.review_assignment_type === "group" || formData.review_assignment_type === "mixed") {
+            // Snapshot peer reviewers from selected groups + individuals (union, dedup)
+            const groupMemberIds = formData.peer_reviewer_group_ids
+              .flatMap(gid => reviewerGroups.find(g => g.id === gid)?.member_ids || []);
+            const allReviewerIds = Array.from(new Set([...groupMemberIds, ...formData.peer_reviewer_ids]));
+
+            if (allReviewerIds.length > 0) {
+              const reviewers = allReviewerIds.map(uid => ({
+                task_id: createdTaskId,
+                user_id: uid,
+              }));
+              const { error: revError } = await supabase
+                .from("task_peer_reviewers" as any)
+                .insert(reviewers);
+              if (revError) throw revError;
+            }
+
+            // Record which groups were assigned (for UI display & edit pre-select)
+            if (formData.peer_reviewer_group_ids.length > 0) {
+              const groupRefs = formData.peer_reviewer_group_ids.map(gid => ({
+                task_id: createdTaskId,
+                group_id: gid,
+              }));
+              const { error: grpError } = await (supabase as any)
+                .from("task_peer_reviewer_groups")
+                .insert(groupRefs);
+              if (grpError) throw grpError;
+            }
+          }
+
+          if (formData.review_assignment_type === "individual" || formData.review_assignment_type === "mixed") {
+            // Handle individual reviewer assignments for this specific task
+            if (formData.individual_reviewer_assignments.length > 0) {
+              // Add individual reviewers to task_peer_reviewers (deduplicate)
+              const reviewerIds = Array.from(new Set(formData.individual_reviewer_assignments.map(a => a.reviewer_id)));
+              const reviewers = reviewerIds.map(uid => ({
+                task_id: createdTaskId,
+                user_id: uid,
+              }));
+              
+              const { error: revError } = await supabase
+                .from("task_peer_reviewers" as any)
+                .insert(reviewers);
+              if (revError) throw revError;
+
+              // Store the user-to-reviewer mapping for this task
+              const mappings = formData.individual_reviewer_assignments.map(assignment => ({
+                task_id: createdTaskId,
+                user_id: assignment.user_id,
+                reviewer_id: assignment.reviewer_id,
+                assigned_by: user.id,
+              }));
+
+              const { error: mapError } = await supabase
+                .from("individual_peer_reviewers" as any)
+                .insert(mappings);
+              if (mapError) throw mapError;
+            }
+          }
+          
+          steps[steps.length - 1] = {
+            ...steps[steps.length - 1],
+            status: "success",
+            message: `Successfully assigned ${reviewerCount} peer reviewer(s)`
+          };
+          setOperationSteps([...steps]);
+        } catch (error: any) {
+          steps[steps.length - 1] = {
+            ...steps[steps.length - 1],
+            status: "warning",
+            message: "Peer reviewer assignment had issues",
+            error: `Warning: ${error.message || String(error)}\nTask and assignments were created successfully, but some reviewers may not have been assigned.`
+          };
+          setOperationSteps([...steps]);
+          hasErrors = true;
+          // Don't throw - task is created, just log the issue
+          console.error("Peer reviewer assignment error:", error);
         }
       }
 
-      toast({
-        title: "Success",
-        description: `Task created and assigned to ${formData.assign_to === "all" ? "all employees" : `${formData.assigned_user_ids.length} employee(s)`}`,
-      });
+      // Final: Success!
+      if (!hasErrors) {
+        playSuccessBeep();
+        toast({
+          title: "Success",
+          description: `Task created and assigned to ${assignmentCount} employee(s)`,
+        });
+      } else {
+        playErrorBeep();
+        toast({
+          title: "Partial Success",
+          description: "Task created but some operations had errors. Check the status modal for details.",
+          variant: "destructive",
+        });
+      }
 
+      setIsProcessing(false);
+      
       setFormData({ 
         title: "", 
         description: "",
@@ -1296,14 +1537,25 @@ const Tasks = () => {
         individual_reviewer_assignments: [],
       });
       setOpen(false);
-      fetchTasks(true); // Reset and reload from beginning
+      await fetchTasks(true); // Reset and reload from beginning
+      
+      // Ensure assignments are loaded for newly created task
+      if (createdTaskId) {
+        await fetchBatchData([createdTaskId]);
+      }
     } catch (error) {
       console.error("Error creating task:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create task",
-        variant: "destructive",
-      });
+      playErrorBeep();
+      setIsProcessing(false);
+      
+      if (!hasErrors) {
+        // Only show this toast if we haven't already shown detailed error in steps
+        toast({
+          title: "Error",
+          description: "Failed to create task. Check the status modal for details.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1680,11 +1932,21 @@ const Tasks = () => {
   const openEditDialog = async (task: Task) => {
     setEditingTask(task);
     
-    // Fetch current assignments for this task
-    const currentAssignments = assignments[task.id] || [];
-    const assignedUserIds = currentAssignments.map(a => a.user_id);
+    // Fetch fresh assignment data directly from database
+    const { data: assignmentsData } = await supabase
+      .from("task_assignments" as any)
+      .select("user_id")
+      .eq("task_id", task.id);
     
-    const currentReviewers = peerReviewers[task.id] || [];
+    const assignedUserIds = (assignmentsData || []).map((a: any) => a.user_id);
+    
+    // Fetch fresh peer reviewer data
+    const { data: reviewersData } = await supabase
+      .from("task_peer_reviewers" as any)
+      .select("user_id")
+      .eq("task_id", task.id);
+    
+    const currentReviewerIds = (reviewersData || []).map((r: any) => r.user_id);
 
     // Fetch which groups were assigned to this task
     let groupIds: string[] = [];
@@ -1734,7 +1996,7 @@ const Tasks = () => {
       assign_to: assignedGroupIds.length > 0 ? "groups" : (assignedUserIds.length === employees.length ? "all" : "specific"),
       assigned_user_ids: assignedUserIds,
       assignment_group_ids: assignedGroupIds,
-      peer_reviewer_ids: currentReviewers.map(r => r.user_id),
+      peer_reviewer_ids: currentReviewerIds,
       peer_reviewer_group_ids: groupIds,
       review_assignment_type: (task as any).review_assignment_type || "group",
       individual_reviewer_assignments: individualAssignments,
@@ -3194,11 +3456,31 @@ const Tasks = () => {
               const taskResponses = responses[task.id] || [];
               const userResponse = taskResponses.find(r => r.user_id === user?.id);
               const isExpanded = expandedTaskIds.has(task.id);
-              const assignedCount = assignments[task.id]?.length || 0;
+              
+              // Use assignment count from state if available, otherwise calculate from responses
+              // This handles both old and newly created tasks
+              let assignedCount = assignments[task.id]?.length || 0;
+              if (assignedCount === 0 && taskResponses.length > 0) {
+                // If state is empty but we have responses, count unique users who responded
+                const uniqueRespondents = new Set(taskResponses.map(r => r.user_id));
+                assignedCount = uniqueRespondents.size;
+              }
+              
               const respondedCount = taskResponses.length;
               const completionPct = assignedCount ? Math.round((respondedCount / assignedCount) * 100) : 0;
               const reviewedCount = taskResponses.filter(r => (remarks[r.id] || []).length > 0).length;
               const reviewedPct = assignedCount ? Math.round((reviewedCount / assignedCount) * 100) : 0;
+
+              // Debug - show what data we have
+              if (task.id === '648794d0-cee5-42ec-a057-e81bd80544a2') {
+                console.log(`🔍 Task 648794d0...:`, {
+                  assignmentsInState: assignments[task.id]?.length || 0,
+                  assignedCount,
+                  taskResponsesCount: taskResponses.length,
+                  respondedCount,
+                  taskResponses: taskResponses.map(r => ({ user_id: r.user_id, status: r.status }))
+                });
+              }
 
               return (
                 <Fragment key={task.id}>
@@ -4917,6 +5199,15 @@ const Tasks = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Task Operation Status Modal */}
+      <TaskOperationStatusModal
+        open={showStatusModal}
+        onOpenChange={setShowStatusModal}
+        operationType={operationType}
+        steps={operationSteps}
+        isProcessing={isProcessing}
+      />
     </DashboardLayout>
   );
 };

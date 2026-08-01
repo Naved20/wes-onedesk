@@ -73,9 +73,10 @@ export function NotificationBell() {
     
     // Use a unique channel name to avoid conflicts
     const channelName = `notif-${user.id}-${Date.now()}`;
-    const channel = supabase.channel(channelName);
     
-    channel
+    // Create channel and configure it BEFORE subscribing
+    const channel = supabase
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -109,7 +110,7 @@ export function NotificationBell() {
           }
         }
       )
-      .subscribe();
+      .subscribe(); // Subscribe AFTER all .on() listeners are added
       
     return () => {
       supabase.removeChannel(channel);
