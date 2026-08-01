@@ -392,7 +392,17 @@ const Tasks = () => {
 
       clearInterval(progressInterval);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[GoogleDriveUpload] Edge function error:', error);
+        console.error('[GoogleDriveUpload] Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+      
+      if (data?.error) {
+        console.error('[GoogleDriveUpload] Edge function returned error:', data.error);
+        console.error('[GoogleDriveUpload] Error details:', data.details);
+        throw new Error(data.error);
+      }
 
       if (data && data.webViewLink) {
         console.log(`[GoogleDriveUpload] Upload success:`, data);

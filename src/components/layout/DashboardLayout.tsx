@@ -80,7 +80,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex items-center gap-2">
           <img src={wesLogo} alt="WES Foundation" className="h-8 w-8 rounded-full object-cover" />
           <h1 className="font-semibold text-lg">WES OneDesk</h1>
-          <p>V 2.1</p>
+         
         </div>
         <NotificationBell />
       </header>
@@ -111,7 +111,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex flex-col leading-tight">
               <h1 className="font-bold text-xl text-primary">WES OneDesk</h1>
               <span className="text-[10px] text-muted-foreground font-medium">
-                v 2.8.1.3
+                v 2.8.1.5
               </span>
 
             </div>
