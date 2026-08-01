@@ -273,6 +273,8 @@ const Tasks = () => {
   const [videoUploadStatus, setVideoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [articleUploadProgress, setArticleUploadProgress] = useState(0);
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
+  const [articleUploadPhase, setArticleUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
+  const [videoUploadPhase, setVideoUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
 
   // Reset statuses when dialog triggers or fields update
   useEffect(() => {
@@ -297,47 +299,22 @@ const Tasks = () => {
       setVideoUploadProgress(0);
     }
 
-    // Start with compression status
-    if (isArticle) {
-      setArticleUploadProgress(5);
-    } else {
-      setVideoUploadProgress(5);
-    }
-
-    // Better progress tracking - 3 phases:
-    // Phase 1: Compression (0-15%)
-    // Phase 2: Upload preparation (15-20%)
-    // Phase 3: Actual upload (20-100%)
-    
-    const startTime = Date.now();
-    let currentProgress = 0;
-    
-    const progressInterval = setInterval(() => {
-      const elapsedSeconds = (Date.now() - startTime) / 1000;
-      
-      // Estimate total upload time based on file size
-      // For reference: ~1 second per 10MB is typical
-      const estimatedTotalSeconds = Math.max(10, (file.size / (10 * 1024 * 1024)) * 1000);
-      
-      // Calculate progress based on elapsed time
-      // Cap at 95% until actual completion
-      const estimatedProgress = Math.min(95, (elapsedSeconds / estimatedTotalSeconds) * 100);
-      
-      currentProgress = Math.round(estimatedProgress);
-      
-      if (isArticle) {
-        setArticleUploadProgress(currentProgress);
-      } else {
-        setVideoUploadProgress(currentProgress);
-      }
-    }, 200);
-
     try {
       console.log(`[GoogleDriveUpload] Starting upload for ${field}: ${file.name}`);
       
-      // Compress file before upload
+      // ============================================
+      // PHASE 1: COMPRESSION (0-35%)
+      // ============================================
       console.log(`[Compression] Compressing ${file.name} (${formatBytes(file.size)})...`);
       
+      if (isArticle) {
+        setArticleUploadProgress(5);
+        setArticleUploadPhase('compression');
+      } else {
+        setVideoUploadProgress(5);
+        setVideoUploadPhase('compression');
+      }
+
       try {
         const compressionResult = await compressFile(file, {
           maxWidth: 1920,
@@ -357,12 +334,26 @@ const Tasks = () => {
         // Continue with original file if compression fails
       }
 
+      // After compression complete
       if (isArticle) {
-        setArticleUploadProgress(20);
+        setArticleUploadProgress(35);
       } else {
-        setVideoUploadProgress(20);
+        setVideoUploadProgress(35);
       }
+
+      // ============================================
+      // PHASE 2: PREPARATION (35-50%)
+      // ============================================
+      console.log(`[Preparation] Preparing upload...`);
       
+      if (isArticle) {
+        setArticleUploadProgress(40);
+        setArticleUploadPhase('preparation');
+      } else {
+        setVideoUploadProgress(40);
+        setVideoUploadPhase('preparation');
+      }
+
       // Fetch user profile info dynamically for the structured renaming/folders
       let profileName = "Unknown_User";
       if (user?.id) {
@@ -385,12 +376,43 @@ const Tasks = () => {
       driveFormData.append("userName", profileName);
       driveFormData.append("submissionType", submissionType);
 
+      if (isArticle) {
+        setArticleUploadProgress(50);
+        setArticleUploadPhase('upload');
+      } else {
+        setVideoUploadProgress(50);
+        setVideoUploadPhase('upload');
+      }
+
+      // ============================================
+      // PHASE 3: UPLOADING (50-95%)
+      // ============================================
+      console.log(`[Upload] Starting file upload to Google Drive...`);
+      
+      const uploadStartTime = Date.now();
+      const updateUploadProgress = () => {
+        // Smooth linear progress from 50% to 95% during upload
+        // Estimate upload time based on file size and network
+        const estimatedUploadSeconds = (file.size / (5 * 1024 * 1024)); // ~5 Mbps estimate
+        const elapsedSeconds = (Date.now() - uploadStartTime) / 1000;
+        const uploadProgress = Math.min(90, (elapsedSeconds / estimatedUploadSeconds) * 40); // 50% + (0-45%)
+        const totalProgress = 50 + uploadProgress;
+        
+        if (isArticle) {
+          setArticleUploadProgress(Math.round(totalProgress));
+        } else {
+          setVideoUploadProgress(Math.round(totalProgress));
+        }
+      };
+
+      const uploadProgressInterval = setInterval(updateUploadProgress, 200);
+
       // Invoke Edge Function
       const { data, error } = await supabase.functions.invoke("upload-to-drive", {
         body: driveFormData,
       });
 
-      clearInterval(progressInterval);
+      clearInterval(uploadProgressInterval);
 
       if (error) {
         console.error('[GoogleDriveUpload] Edge function error:', error);
@@ -401,6 +423,17 @@ const Tasks = () => {
         console.error('[GoogleDriveUpload] Edge function returned error:', data.error);
         console.error('[GoogleDriveUpload] Error details:', data.details);
         throw new Error(data.error);
+      }
+
+      // ============================================
+      // PHASE 4: FINALIZATION (95-100%)
+      // ============================================
+      if (isArticle) {
+        setArticleUploadProgress(95);
+        setArticleUploadPhase('complete');
+      } else {
+        setVideoUploadProgress(95);
+        setVideoUploadPhase('complete');
       }
 
       if (data && data.webViewLink) {
@@ -415,9 +448,11 @@ const Tasks = () => {
         if (isArticle) {
           setArticleUploadProgress(100);
           setArticleUploadStatus('success');
+          setArticleUploadPhase('complete');
         } else {
           setVideoUploadProgress(100);
           setVideoUploadStatus('success');
+          setVideoUploadPhase('complete');
         }
 
         toast({
@@ -428,7 +463,6 @@ const Tasks = () => {
         throw new Error("No webViewLink returned from Edge Function");
       }
     } catch (err) {
-      clearInterval(progressInterval);
       console.error(`[GoogleDriveUpload] Upload failed for ${field}:`, err);
       if (isArticle) {
         setArticleUploadStatus('error');
@@ -4422,6 +4456,13 @@ const Tasks = () => {
                           uploading={true}
                           error={null}
                           showSize={false}
+                          phase={articleUploadPhase}
+                          phaseDetails={`${articleUploadProgress}% - ${
+                            articleUploadPhase === 'compression' ? 'Compressing file...' :
+                            articleUploadPhase === 'preparation' ? 'Preparing for upload...' :
+                            articleUploadPhase === 'upload' ? 'Uploading to Google Drive...' :
+                            'Finalizing...'
+                          }`}
                         />
                       )}
 
@@ -4480,6 +4521,13 @@ const Tasks = () => {
                           uploading={true}
                           error={null}
                           showSize={false}
+                          phase={videoUploadPhase}
+                          phaseDetails={`${videoUploadProgress}% - ${
+                            videoUploadPhase === 'compression' ? 'Compressing video...' :
+                            videoUploadPhase === 'preparation' ? 'Preparing for upload...' :
+                            videoUploadPhase === 'upload' ? 'Uploading to Google Drive...' :
+                            'Finalizing...'
+                          }`}
                         />
                       )}
 

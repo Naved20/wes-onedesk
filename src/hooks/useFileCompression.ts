@@ -16,34 +16,52 @@ interface CompressionResult {
   originalName: string;
 }
 
-// Load FFmpeg dynamically
-let FFmpeg: any = null;
+// Load FFmpeg dynamically with proper error handling
+let FFmpegInstance: any = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
 
 const loadFFmpeg = async () => {
-  if (ffmpegLoaded) return true;
+  if (ffmpegLoaded && FFmpegInstance) return true;
   if (ffmpegLoading) {
     // Wait for ongoing load
     let attempts = 0;
-    while (ffmpegLoading && attempts < 50) {
+    while (ffmpegLoading && attempts < 100) {
       await new Promise(r => setTimeout(r, 100));
       attempts++;
     }
-    return ffmpegLoaded;
+    return ffmpegLoaded && !!FFmpegInstance;
   }
 
   ffmpegLoading = true;
   try {
-    const ffmpegMod: any = await import('@ffmpeg/ffmpeg');
-    const FFmpegClass = ffmpegMod.FFmpeg;
-    const fetchFile = ffmpegMod.fetchFile ?? (async (f: any) => new Uint8Array(await (f as Blob).arrayBuffer()));
-    FFmpeg = { FFmpeg: FFmpegClass, fetchFile };
-    await FFmpeg.FFmpeg.load();
+    console.log('[FFmpeg] Loading FFmpeg WASM module...');
+    
+    // Import FFmpeg modules
+    const { FFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
+    
+    console.log('[FFmpeg] FFmpeg class loaded:', typeof FFmpeg);
+    
+    // Create FFmpeg instance
+    const ffmpeg = new FFmpeg();
+    
+    console.log('[FFmpeg] FFmpeg instance created, loading core...');
+    
+    // Load FFmpeg core
+    await ffmpeg.load();
+    
+    console.log('[FFmpeg] FFmpeg core loaded successfully');
+    
+    FFmpegInstance = { instance: ffmpeg, fetchFile };
     ffmpegLoaded = true;
+    ffmpegLoading = false;
+    
     return true;
   } catch (err) {
     console.error('[FFmpeg] Failed to load:', err);
+    console.error('[FFmpeg] Error type:', err instanceof Error ? err.message : String(err));
+    FFmpegInstance = null;
+    ffmpegLoaded = false;
     ffmpegLoading = false;
     return false;
   }
@@ -64,6 +82,8 @@ export const useFileCompression = () => {
     try {
       const { videoBitrate = '500k', maxSizeKB = 100000 } = options;
 
+      console.log('[VideoCompression] Starting video compression...');
+      
       // Try to load FFmpeg
       const ffmpegAvailable = await loadFFmpeg();
       
@@ -78,10 +98,15 @@ export const useFileCompression = () => {
         };
       }
 
-      const { FFmpeg: FFmpegClass, fetchFile } = FFmpeg;
-      const ffmpeg = new FFmpegClass();
+      if (!FFmpegInstance) {
+        console.error('[VideoCompression] FFmpeg instance is null');
+        throw new Error('FFmpeg instance failed to initialize');
+      }
+
+      const { instance: ffmpeg, fetchFile } = FFmpegInstance;
       
       if (!ffmpeg.isLoaded()) {
+        console.log('[VideoCompression] Reloading FFmpeg...');
         await ffmpeg.load();
       }
 
@@ -90,13 +115,15 @@ export const useFileCompression = () => {
       const inputName = `input.${ext}`;
       const outputName = `output.mp4`;
 
+      console.log('[VideoCompression] Writing input file to FFmpeg FS...');
+      
       // Write input file to FFmpeg
       const fileData = await fetchFile(file);
       ffmpeg.FS('writeFile', inputName, fileData);
 
-      console.log(`[VideoCompression] Compressing video with bitrate: ${videoBitrate}`);
+      console.log(`[VideoCompression] Compressing with ultrafast preset and ${videoBitrate} bitrate...`);
 
-      // Compress video (ultrafast preset for speed)
+      // Compress video with ultrafast preset
       await ffmpeg.run(
         '-i', inputName,
         '-b:v', videoBitrate,
@@ -106,6 +133,8 @@ export const useFileCompression = () => {
         '-b:a', '128k',
         outputName
       );
+
+      console.log('[VideoCompression] Compression complete, reading output...');
 
       // Read compressed file
       const compressedData = ffmpeg.FS('readFile', outputName);
@@ -137,6 +166,7 @@ export const useFileCompression = () => {
       setCompressing(false);
       
       // Fallback: return original file
+      console.warn('[VideoCompression] Returning original file as fallback');
       return {
         file,
         originalSize: file.size,
@@ -145,7 +175,7 @@ export const useFileCompression = () => {
         originalName: file.name,
       };
     }
-  }, []);
+  }, [formatBytes]);
 
   // Compress image using canvas
   const compressImage = useCallback(async (
