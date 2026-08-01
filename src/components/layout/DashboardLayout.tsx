@@ -119,7 +119,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="text-[10px] text-muted-foreground font-medium">
                 v 2.8.1.7
               </span>
-
             </div>
         </div>
 
