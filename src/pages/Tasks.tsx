@@ -276,13 +276,55 @@ const Tasks = () => {
   const [articleUploadPhase, setArticleUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
   const [videoUploadPhase, setVideoUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
 
-  // Reset statuses when dialog triggers or fields update
+  // Reset upload states when dialog opens/closes or task changes
   useEffect(() => {
     if (responseDialogOpen) {
-      setArticleUploadStatus(responseFormData.article_link ? 'success' : 'idle');
-      setVideoUploadStatus(responseFormData.video_link ? 'success' : 'idle');
+      // When opening dialog, set status based on existing links
+      const taskResponse = selectedTask ? responses[selectedTask.id]?.find(r => r.user_id === user?.id) : null;
+      
+      // If there's an existing response for this task, load it
+      if (taskResponse) {
+        setResponseFormData({
+          response_text: taskResponse.response_text || "",
+          link: taskResponse.link || "",
+          article_link: taskResponse.article_link || "",
+          video_link: taskResponse.video_link || "",
+          file: null,
+        });
+        setArticleUploadStatus(taskResponse.article_link ? 'success' : 'idle');
+        setVideoUploadStatus(taskResponse.video_link ? 'success' : 'idle');
+      } else {
+        // New response - clear form
+        setResponseFormData({
+          response_text: "",
+          link: "",
+          article_link: "",
+          video_link: "",
+          file: null,
+        });
+        setArticleUploadStatus('idle');
+        setVideoUploadStatus('idle');
+      }
+      
+      // Reset uploading flags in case they're stuck
+      setIsUploadingArticle(false);
+      setIsUploadingVideo(false);
+      setArticleUploadProgress(0);
+      setVideoUploadProgress(0);
+    } else {
+      // When closing dialog, reset all upload states
+      setIsUploadingArticle(false);
+      setIsUploadingVideo(false);
+      setArticleUploadStatus('idle');
+      setVideoUploadStatus('idle');
+      setArticleUploadProgress(0);
+      setVideoUploadProgress(0);
+      setArticleUploadPhase('compression');
+      setVideoUploadPhase('compression');
     }
-  }, [responseDialogOpen, responseFormData.article_link, responseFormData.video_link]);
+  }, [responseDialogOpen, selectedTask?.id, user?.id, responses]);
+
+
 
   const handleGoogleDriveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'article_link' | 'video_link') => {
     let file = e.target.files?.[0];
