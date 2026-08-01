@@ -71,6 +71,15 @@ export const useFileCompression = () => {
   const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Format bytes utility - defined first
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
   // Compress video using FFmpeg
   const compressVideo = useCallback(async (
     file: File,
@@ -275,14 +284,6 @@ export const useFileCompression = () => {
       reader.readAsDataURL(file);
     });
   }, []);
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
 
   // Generic compression - detects file type
   const compressFile = useCallback(async (

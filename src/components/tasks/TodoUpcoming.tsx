@@ -110,8 +110,7 @@ export const TodoUpcoming = () => {
         .not('due_date', 'is', null)
         .gte('due_date', today.toISOString())
         .lt('due_date', endOfDay4.toISOString())
-        .order('due_date', { ascending: true })
-        .order('priority', { ascending: false });
+        .order('due_date', { ascending: true });
 
       if (taskError) throw taskError;
 
