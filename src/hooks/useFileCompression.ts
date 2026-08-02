@@ -40,14 +40,18 @@ const loadFFmpeg = async () => {
     console.log('[FFmpeg] createFFmpeg function loaded');
     
     // Create instance using factory function
-    const ffmpeg = createFFmpeg({ log: false });
+    // Use single-threaded core (no SharedArrayBuffer needed)
+    const ffmpeg = createFFmpeg({ 
+      log: false,
+      corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
     
-    console.log('[FFmpeg] FFmpeg instance created, loading core...');
+    console.log('[FFmpeg] FFmpeg instance created (single-threaded), loading core...');
     
     // Load FFmpeg core WASM
     await ffmpeg.load();
     
-    console.log('[FFmpeg] ✅ FFmpeg loaded successfully');
+    console.log('[FFmpeg] ✅ FFmpeg loaded successfully (single-threaded mode)');
     
     FFmpegInstance = { instance: ffmpeg, fetchFile };
     ffmpegLoaded = true;
