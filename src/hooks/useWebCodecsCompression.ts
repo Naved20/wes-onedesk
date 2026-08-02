@@ -49,6 +49,22 @@ export const useWebCodecsCompression = () => {
 
       console.log(`[WebCodecsCompression] Starting compression: ${file.name} (${formatBytes(file.size)})`);
 
+      // Detect device performance and adjust settings
+      const cores = navigator.hardwareConcurrency || 2;
+      const memory = (navigator as any).deviceMemory || 4;
+      
+      let adjustedFramerate = framerate;
+      let adjustedBitrate = bitrate;
+      
+      // Adjust settings based on device capability
+      if (cores < 4 || memory < 6) {
+        adjustedFramerate = Math.min(20, framerate); // Lower framerate for slower devices
+        adjustedBitrate = Math.min(400000, bitrate); // Lower bitrate
+        console.log(`[WebCodecsCompression] Low-performance device detected, using optimized settings`);
+      }
+      
+      console.log(`[WebCodecsCompression] Settings: ${adjustedFramerate}fps, ${adjustedBitrate}bps`);
+
       // Check WebCodecs support
       if (!isWebCodecsSupported()) {
         throw new Error('WebCodecs API not supported in this browser');
@@ -71,14 +87,24 @@ export const useWebCodecsCompression = () => {
       console.log(`[WebCodecsCompression] Video loaded: ${video.videoWidth}x${video.videoHeight}, duration: ${video.duration}s`);
 
       // Calculate target dimensions maintaining aspect ratio
-      let targetWidth = width;
-      let targetHeight = height;
+      let targetWidth = Math.min(width, video.videoWidth);  // Don't upscale
+      let targetHeight = Math.min(height, video.videoHeight); // Don't upscale
       
       const aspectRatio = video.videoWidth / video.videoHeight;
-      if (aspectRatio > targetWidth / targetHeight) {
-        targetHeight = Math.round(targetWidth / aspectRatio);
+      
+      // Only downscale if needed
+      if (video.videoWidth > width || video.videoHeight > height) {
+        if (aspectRatio > width / height) {
+          targetWidth = width;
+          targetHeight = Math.round(width / aspectRatio);
+        } else {
+          targetHeight = height;
+          targetWidth = Math.round(height * aspectRatio);
+        }
       } else {
-        targetWidth = Math.round(targetHeight * aspectRatio);
+        // Keep original dimensions if smaller
+        targetWidth = video.videoWidth;
+        targetHeight = video.videoHeight;
       }
 
       // Ensure dimensions are even (required for many codecs)
@@ -98,7 +124,7 @@ export const useWebCodecsCompression = () => {
       }
 
       // Use MediaRecorder with canvas stream for simpler compression
-      const stream = canvas.captureStream(framerate);
+      const stream = canvas.captureStream(adjustedFramerate);
       
       // Find best supported codec
       const codecs = [
@@ -126,7 +152,7 @@ export const useWebCodecsCompression = () => {
       const chunks: BlobPart[] = [];
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: selectedCodec,
-        videoBitsPerSecond: bitrate,
+        videoBitsPerSecond: adjustedBitrate,
       });
 
       mediaRecorder.ondataavailable = (event) => {
@@ -140,8 +166,16 @@ export const useWebCodecsCompression = () => {
         mediaRecorder.onerror = (event) => reject(new Error('MediaRecorder failed'));
       });
 
-      // Start recording
+      // Start recording with timeout protection
       mediaRecorder.start();
+
+      console.log(`[WebCodecsCompression] Starting compression of ${Math.round(video.duration)}s video...`);
+
+      // Add timeout protection (max 5 minutes for compression)
+      const compressionTimeout = setTimeout(() => {
+        console.warn('[WebCodecsCompression] Compression timeout, stopping...');
+        mediaRecorder.stop();
+      }, 5 * 60 * 1000); // 5 minutes max
 
       // Play video and draw frames
       video.currentTime = 0;
@@ -149,8 +183,15 @@ export const useWebCodecsCompression = () => {
 
       const drawFrames = () => {
         if (video.paused || video.ended) {
+          clearTimeout(compressionTimeout);
           mediaRecorder.stop();
           return;
+        }
+        
+        // Log progress every 10 seconds
+        if (Math.floor(video.currentTime) % 10 === 0 && Math.floor(video.currentTime) > 0) {
+          const progress = Math.round((video.currentTime / video.duration) * 100);
+          console.log(`[WebCodecsCompression] Progress: ${Math.floor(video.currentTime)}s / ${Math.round(video.duration)}s (${progress}%)`);
         }
         
         // Draw current frame to canvas (automatically resized)
