@@ -34,16 +34,17 @@ const loadFFmpeg = async () => {
   try {
     console.log('[FFmpeg] Loading FFmpeg WASM module v0.11.6 (stable)...');
     
-    const { FFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
+    // v0.11.6 uses createFFmpeg() factory function, NOT class
+    const { createFFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
     
-    console.log('[FFmpeg] FFmpeg class loaded');
+    console.log('[FFmpeg] createFFmpeg function loaded');
     
-    // v0.11.6 - direct instantiation (not FFmpeg.FFmpeg)
-    const ffmpeg = new FFmpeg();
+    // Create instance using factory function
+    const ffmpeg = createFFmpeg({ log: false });
     
-    console.log('[FFmpeg] Loading FFmpeg core...');
+    console.log('[FFmpeg] FFmpeg instance created, loading core...');
     
-    // v0.11.6 compatible load
+    // Load FFmpeg core WASM
     await ffmpeg.load();
     
     console.log('[FFmpeg] ✅ FFmpeg loaded successfully');
