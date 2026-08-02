@@ -3,9 +3,8 @@ import { useState, useCallback } from 'react';
 export interface CompressionOptions {
   maxWidth?: number;
   maxHeight?: number;
-  quality?: number; // 0-1 for images
-  maxSizeKB?: number; // Max size in KB
-  videoBitrate?: string; // Video bitrate like "500k", "1M"
+  quality?: number;
+  videoBitrate?: string;
 }
 
 interface CompressionResult {
@@ -16,7 +15,6 @@ interface CompressionResult {
   originalName: string;
 }
 
-// Load FFmpeg dynamically with proper error handling
 let FFmpegInstance: any = null;
 let ffmpegLoaded = false;
 let ffmpegLoading = false;
@@ -24,7 +22,6 @@ let ffmpegLoading = false;
 const loadFFmpeg = async () => {
   if (ffmpegLoaded && FFmpegInstance) return true;
   if (ffmpegLoading) {
-    // Wait for ongoing load
     let attempts = 0;
     while (ffmpegLoading && attempts < 100) {
       await new Promise(r => setTimeout(r, 100));
@@ -35,22 +32,21 @@ const loadFFmpeg = async () => {
 
   ffmpegLoading = true;
   try {
-    console.log('[FFmpeg] Loading FFmpeg WASM module...');
+    console.log('[FFmpeg] Loading FFmpeg WASM module v0.11.6 (stable)...');
     
-    // Import FFmpeg modules
     const { FFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
     
-    console.log('[FFmpeg] FFmpeg class loaded:', typeof FFmpeg);
+    console.log('[FFmpeg] FFmpeg class loaded');
     
-    // Create FFmpeg instance
-    const ffmpeg = new FFmpeg();
+    // v0.11.6 uses FFmpeg.FFmpeg constructor
+    const ffmpeg = new FFmpeg.FFmpeg();
     
-    console.log('[FFmpeg] FFmpeg instance created, loading core...');
+    console.log('[FFmpeg] Loading FFmpeg core...');
     
-    // Load FFmpeg core
+    // v0.11.6 compatible load
     await ffmpeg.load();
     
-    console.log('[FFmpeg] FFmpeg core loaded successfully');
+    console.log('[FFmpeg] ✅ FFmpeg loaded successfully');
     
     FFmpegInstance = { instance: ffmpeg, fetchFile };
     ffmpegLoaded = true;
@@ -58,8 +54,7 @@ const loadFFmpeg = async () => {
     
     return true;
   } catch (err) {
-    console.error('[FFmpeg] Failed to load:', err);
-    console.error('[FFmpeg] Error type:', err instanceof Error ? err.message : String(err));
+    console.error('[FFmpeg] ❌ Load failed:', err instanceof Error ? err.message : String(err));
     FFmpegInstance = null;
     ffmpegLoaded = false;
     ffmpegLoading = false;
@@ -71,7 +66,6 @@ export const useFileCompression = () => {
   const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Format bytes utility - defined first
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -80,7 +74,6 @@ export const useFileCompression = () => {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  // Compress video using FFmpeg
   const compressVideo = useCallback(async (
     file: File,
     options: CompressionOptions = {}
@@ -89,15 +82,14 @@ export const useFileCompression = () => {
     setError(null);
 
     try {
-      const { videoBitrate = '500k', maxSizeKB = 100000 } = options;
+      const { videoBitrate = '500k' } = options;
 
-      console.log('[VideoCompression] Starting video compression...');
+      console.log(`[VideoCompression] Starting compression: ${file.name} (${formatBytes(file.size)})`);
       
-      // Try to load FFmpeg
       const ffmpegAvailable = await loadFFmpeg();
       
       if (!ffmpegAvailable) {
-        console.warn('[VideoCompression] FFmpeg not available, using original file');
+        console.warn('[VideoCompression] FFmpeg unavailable, using original file');
         return {
           file,
           originalSize: file.size,
@@ -108,31 +100,22 @@ export const useFileCompression = () => {
       }
 
       if (!FFmpegInstance) {
-        console.error('[VideoCompression] FFmpeg instance is null');
         throw new Error('FFmpeg instance failed to initialize');
       }
 
       const { instance: ffmpeg, fetchFile } = FFmpegInstance;
       
-      if (!ffmpeg.isLoaded()) {
-        console.log('[VideoCompression] Reloading FFmpeg...');
-        await ffmpeg.load();
-      }
-
-      // Get file extension
       const ext = file.name.split('.').pop() || 'mp4';
       const inputName = `input.${ext}`;
       const outputName = `output.mp4`;
 
-      console.log('[VideoCompression] Writing input file to FFmpeg FS...');
+      console.log('[VideoCompression] Preparing file for compression...');
       
-      // Write input file to FFmpeg
       const fileData = await fetchFile(file);
       ffmpeg.FS('writeFile', inputName, fileData);
 
-      console.log(`[VideoCompression] Compressing with ultrafast preset and ${videoBitrate} bitrate...`);
+      console.log(`[VideoCompression] Compressing with ${videoBitrate} bitrate (ultrafast)...`);
 
-      // Compress video with ultrafast preset
       await ffmpeg.run(
         '-i', inputName,
         '-b:v', videoBitrate,
@@ -145,20 +128,23 @@ export const useFileCompression = () => {
 
       console.log('[VideoCompression] Compression complete, reading output...');
 
-      // Read compressed file
       const compressedData = ffmpeg.FS('readFile', outputName);
       const compressedBlob = new Blob([compressedData.buffer], { type: 'video/mp4' });
-      const compressedFile = new File([compressedBlob], `${file.name.split('.')[0]}_compressed.mp4`, { type: 'video/mp4' });
+      const compressedFile = new File(
+        [compressedBlob],
+        `${file.name.split('.')[0]}_compressed.mp4`,
+        { type: 'video/mp4' }
+      );
 
-      // Clean up
       ffmpeg.FS('unlink', inputName);
       ffmpeg.FS('unlink', outputName);
 
       const compressionRatio = file.size / compressedFile.size;
-      const savedSize = file.size - compressedFile.size;
-
-      console.log(`[VideoCompression] Success! Saved ${formatBytes(savedSize)} (${Math.round((1 - 1/compressionRatio) * 100)}% reduction)`);
-      console.log(`[VideoCompression] Original: ${formatBytes(file.size)}, Compressed: ${formatBytes(compressedFile.size)}`);
+      const reduction = Math.round((1 - 1/compressionRatio) * 100);
+      const savedBytes = file.size - compressedFile.size;
+      
+      console.log(`[VideoCompression] ✅ Success! Reduced by ${reduction}%`);
+      console.log(`[VideoCompression] Original: ${formatBytes(file.size)} → Compressed: ${formatBytes(compressedFile.size)} (Saved ${formatBytes(savedBytes)})`);
 
       setCompressing(false);
       return {
@@ -169,13 +155,12 @@ export const useFileCompression = () => {
         originalName: file.name,
       };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Video compression failed';
-      console.error('[VideoCompression] Error:', errorMessage);
-      setError(errorMessage);
+      const errorMsg = err instanceof Error ? err.message : 'Compression failed';
+      console.error('[VideoCompression] ❌ Error:', errorMsg);
+      setError(errorMsg);
       setCompressing(false);
       
-      // Fallback: return original file
-      console.warn('[VideoCompression] Returning original file as fallback');
+      console.warn('[VideoCompression] Falling back to original file');
       return {
         file,
         originalSize: file.size,
@@ -186,7 +171,6 @@ export const useFileCompression = () => {
     }
   }, [formatBytes]);
 
-  // Compress image using canvas
   const compressImage = useCallback(async (
     file: File,
     options: CompressionOptions = {}
@@ -198,7 +182,7 @@ export const useFileCompression = () => {
       const {
         maxWidth = 1920,
         maxHeight = 1080,
-        quality = 0.8,
+        quality = 0.85,
       } = options;
 
       const reader = new FileReader();
@@ -207,7 +191,6 @@ export const useFileCompression = () => {
         try {
           const img = new Image();
           img.onload = () => {
-            // Calculate new dimensions
             let width = img.width;
             let height = img.height;
 
@@ -217,26 +200,23 @@ export const useFileCompression = () => {
               height = Math.round(height * ratio);
             }
 
-            // Create canvas and compress
             const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
 
             if (!ctx) {
-              throw new Error('Could not get canvas context');
+              throw new Error('Canvas context failed');
             }
 
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Convert to blob
             canvas.toBlob(
               (blob) => {
                 if (!blob) {
-                  throw new Error('Could not compress image');
+                  throw new Error('Image compression failed');
                 }
 
-                // Create new file from blob
                 const compressedFile = new File(
                   [blob],
                   file.name,
@@ -244,6 +224,10 @@ export const useFileCompression = () => {
                 );
 
                 const compressionRatio = file.size / blob.size;
+                const reduction = Math.round((1 - 1/compressionRatio) * 100);
+                
+                console.log(`[ImageCompression] ✅ Reduced by ${reduction}%`);
+                console.log(`[ImageCompression] Original: ${formatBytes(file.size)} → Compressed: ${formatBytes(blob.size)}`);
 
                 resolve({
                   file: compressedFile,
@@ -261,43 +245,40 @@ export const useFileCompression = () => {
           };
 
           img.onerror = () => {
-            setError('Failed to load image');
+            setError('Image load failed');
             setCompressing(false);
-            reject(new Error('Failed to load image'));
+            reject(new Error('Image load failed'));
           };
 
           img.src = event.target?.result as string;
         } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Compression failed';
-          setError(errorMessage);
+          const errorMsg = err instanceof Error ? err.message : 'Compression failed';
+          setError(errorMsg);
           setCompressing(false);
           reject(err);
         }
       };
 
       reader.onerror = () => {
-        setError('Failed to read file');
+        setError('File read failed');
         setCompressing(false);
-        reject(new Error('Failed to read file'));
+        reject(new Error('File read failed'));
       };
 
       reader.readAsDataURL(file);
     });
-  }, []);
+  }, [formatBytes]);
 
-  // Generic compression - detects file type
   const compressFile = useCallback(async (
     file: File,
     options: CompressionOptions = {}
   ): Promise<CompressionResult> => {
     const mimeType = file.type.toLowerCase();
 
-    // Image compression
     if (mimeType.startsWith('image/')) {
       return compressImage(file, options);
     }
 
-    // Video compression with FFmpeg
     if (mimeType.startsWith('video/')) {
       return compressVideo(file, options);
     }
