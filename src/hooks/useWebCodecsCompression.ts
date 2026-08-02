@@ -45,7 +45,6 @@ export const useWebCodecsCompression = () => {
         height = 720,
         bitrate = 500000, // 500kbps
         framerate = 25,
-        quality = 28 // Good balance of quality/size
       } = options;
 
       console.log(`[WebCodecsCompression] Starting compression: ${file.name} (${formatBytes(file.size)})`);
@@ -55,31 +54,12 @@ export const useWebCodecsCompression = () => {
         throw new Error('WebCodecs API not supported in this browser');
       }
 
-      // Check codec support
-      const codecConfig = {
-        codec: 'avc1.42E01E', // H.264 Baseline
-        width,
-        height,
-        bitrate,
-        framerate,
-      };
-
-      const encoderSupport = await VideoEncoder.isConfigSupported(codecConfig);
-      if (!encoderSupport.supported) {
-        console.warn('[WebCodecsCompression] H.264 not supported, trying VP9...');
-        codecConfig.codec = 'vp09.00.10.08'; // VP9
-        const vp9Support = await VideoEncoder.isConfigSupported(codecConfig);
-        if (!vp9Support.supported) {
-          throw new Error('No supported video codecs available');
-        }
-      }
-
-      console.log(`[WebCodecsCompression] Using codec: ${codecConfig.codec}`);
-
-      // Create video element for decoding
+      // Create video element
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
+      video.crossOrigin = 'anonymous';
+      
       const videoURL = URL.createObjectURL(file);
       video.src = videoURL;
 
@@ -101,9 +81,13 @@ export const useWebCodecsCompression = () => {
         targetWidth = Math.round(targetHeight * aspectRatio);
       }
 
+      // Ensure dimensions are even (required for many codecs)
+      targetWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth - 1;
+      targetHeight = targetHeight % 2 === 0 ? targetHeight : targetHeight - 1;
+
       console.log(`[WebCodecsCompression] Target dimensions: ${targetWidth}x${targetHeight}`);
 
-      // Setup canvas for frame extraction
+      // Setup canvas for video processing
       const canvas = document.createElement('canvas');
       canvas.width = targetWidth;
       canvas.height = targetHeight;
@@ -113,99 +97,85 @@ export const useWebCodecsCompression = () => {
         throw new Error('Canvas context not available');
       }
 
-      // Encoded chunks storage
-      const encodedChunks: EncodedVideoChunk[] = [];
-
-      // Create encoder
-      const encoder = new VideoEncoder({
-        output: (chunk) => {
-          encodedChunks.push(chunk);
-        },
-        error: (error) => {
-          console.error('[WebCodecsCompression] Encoder error:', error);
-          throw error;
-        }
-      });
-
-      // Configure encoder
-      encoder.configure({
-        codec: codecConfig.codec,
-        width: targetWidth,
-        height: targetHeight,
-        bitrate: bitrate,
-        framerate: framerate,
-        bitrateMode: 'variable' as any,
-        latencyMode: 'quality' as any,
-      });
-
-      console.log('[WebCodecsCompression] Encoder configured, processing frames...');
-
-      // Process video frames
-      const frameDuration = 1000000 / framerate; // microseconds
-      const totalFrames = Math.floor(video.duration * framerate);
-      let processedFrames = 0;
-
-      for (let i = 0; i < totalFrames; i++) {
-        const timeInSeconds = i / framerate;
-        
-        // Seek to specific time
-        video.currentTime = timeInSeconds;
-        await new Promise(resolve => {
-          video.onseeked = resolve;
-        });
-
-        // Draw frame to canvas (resized)
-        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-
-        // Create VideoFrame from canvas
-        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-        const videoFrame = new VideoFrame(imageData, {
-          timestamp: i * frameDuration,
-          duration: frameDuration,
-        });
-
-        // Encode frame
-        const keyFrame = i % 30 === 0; // Keyframe every 30 frames
-        encoder.encode(videoFrame, { keyFrame });
-
-        // Clean up frame
-        videoFrame.close();
-        
-        processedFrames++;
-        
-        // Progress logging
-        if (processedFrames % 25 === 0 || processedFrames === totalFrames) {
-          console.log(`[WebCodecsCompression] Progress: ${processedFrames}/${totalFrames} frames (${Math.round(processedFrames/totalFrames*100)}%)`);
-        }
-      }
-
-      // Finish encoding
-      await encoder.flush();
-      encoder.close();
-
-      console.log(`[WebCodecsCompression] Encoding complete. ${encodedChunks.length} chunks created.`);
-
-      // Create MP4 container (simplified - just concatenate chunks)
-      const totalSize = encodedChunks.reduce((size, chunk) => size + chunk.byteLength, 0);
-      const compressedData = new Uint8Array(totalSize);
+      // Use MediaRecorder with canvas stream for simpler compression
+      const stream = canvas.captureStream(framerate);
       
-      let offset = 0;
-      for (const chunk of encodedChunks) {
-        const data = new Uint8Array(chunk.byteLength);
-        chunk.copyTo(data);
-        compressedData.set(data, offset);
-        offset += chunk.byteLength;
+      // Find best supported codec
+      const codecs = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8', 
+        'video/webm',
+        'video/mp4;codecs=h264',
+        'video/mp4'
+      ];
+      
+      let selectedCodec = '';
+      for (const codec of codecs) {
+        if (MediaRecorder.isTypeSupported(codec)) {
+          selectedCodec = codec;
+          break;
+        }
       }
+      
+      if (!selectedCodec) {
+        throw new Error('No supported video codec found');
+      }
+
+      console.log(`[WebCodecsCompression] Using MediaRecorder with: ${selectedCodec}`);
+
+      const chunks: BlobPart[] = [];
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: selectedCodec,
+        videoBitsPerSecond: bitrate,
+      });
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      const compressionPromise = new Promise<void>((resolve, reject) => {
+        mediaRecorder.onstop = () => resolve();
+        mediaRecorder.onerror = (event) => reject(new Error('MediaRecorder failed'));
+      });
+
+      // Start recording
+      mediaRecorder.start();
+
+      // Play video and draw frames
+      video.currentTime = 0;
+      await video.play();
+
+      const drawFrames = () => {
+        if (video.paused || video.ended) {
+          mediaRecorder.stop();
+          return;
+        }
+        
+        // Draw current frame to canvas (automatically resized)
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+        
+        // Continue drawing frames
+        requestAnimationFrame(drawFrames);
+      };
+
+      // Start drawing frames when video plays
+      drawFrames();
+
+      // Wait for compression to complete
+      await compressionPromise;
+
+      console.log(`[WebCodecsCompression] Compression complete, creating file...`);
 
       // Create compressed file
-      const mimeType = codecConfig.codec.startsWith('avc1') ? 'video/mp4' : 'video/webm';
-      const extension = codecConfig.codec.startsWith('avc1') ? 'mp4' : 'webm';
+      const compressedBlob = new Blob(chunks, { type: selectedCodec });
+      const extension = selectedCodec.includes('webm') ? 'webm' : 'mp4';
       
-      const compressedBlob = new Blob([compressedData], { type: mimeType });
       const compressedFile = new File(
         [compressedBlob],
         `${file.name.split('.')[0]}_compressed.${extension}`,
-        { type: mimeType }
+        { type: selectedCodec }
       );
 
       // Calculate compression results
