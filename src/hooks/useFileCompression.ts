@@ -38,8 +38,8 @@ const loadFFmpeg = async () => {
     
     console.log('[FFmpeg] FFmpeg class loaded');
     
-    // v0.11.6 uses FFmpeg.FFmpeg constructor
-    const ffmpeg = new FFmpeg.FFmpeg();
+    // v0.11.6 - direct instantiation (not FFmpeg.FFmpeg)
+    const ffmpeg = new FFmpeg();
     
     console.log('[FFmpeg] Loading FFmpeg core...');
     

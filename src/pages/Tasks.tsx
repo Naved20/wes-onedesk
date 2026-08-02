@@ -275,6 +275,8 @@ const Tasks = () => {
   const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [articleUploadPhase, setArticleUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
   const [videoUploadPhase, setVideoUploadPhase] = useState<'compression' | 'preparation' | 'upload' | 'complete'>('compression');
+  const [articleUploadError, setArticleUploadError] = useState<string | null>(null);
+  const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
 
   // Reset upload states when dialog opens/closes or task changes
   useEffect(() => {
@@ -306,11 +308,13 @@ const Tasks = () => {
         setVideoUploadStatus('idle');
       }
       
-      // Reset uploading flags in case they're stuck
+      // Reset uploading flags and errors
       setIsUploadingArticle(false);
       setIsUploadingVideo(false);
       setArticleUploadProgress(0);
       setVideoUploadProgress(0);
+      setArticleUploadError(null);
+      setVideoUploadError(null);
     } else {
       // When closing dialog, reset all upload states
       setIsUploadingArticle(false);
@@ -321,6 +325,8 @@ const Tasks = () => {
       setVideoUploadProgress(0);
       setArticleUploadPhase('compression');
       setVideoUploadPhase('compression');
+      setArticleUploadError(null);
+      setVideoUploadError(null);
     }
   }, [responseDialogOpen, selectedTask?.id, user?.id, responses]);
 
@@ -505,15 +511,20 @@ const Tasks = () => {
         throw new Error("No webViewLink returned from Edge Function");
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error(`[GoogleDriveUpload] Upload failed for ${field}:`, err);
+      
       if (isArticle) {
         setArticleUploadStatus('error');
+        setArticleUploadError(errorMessage);
       } else {
         setVideoUploadStatus('error');
+        setVideoUploadError(errorMessage);
       }
+      
       toast({
         title: "Upload Failed",
-        description: `Failed to upload ${isArticle ? 'file' : 'video'}. Please try again.`,
+        description: `Failed to upload ${isArticle ? 'file' : 'video'}: ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
@@ -4496,7 +4507,7 @@ const Tasks = () => {
                           fileName="Article/Notes File"
                           percentage={articleUploadProgress}
                           uploading={true}
-                          error={null}
+                          error={articleUploadError}
                           showSize={false}
                           phase={articleUploadPhase}
                           phaseDetails={`${articleUploadProgress}% - ${
@@ -4505,6 +4516,16 @@ const Tasks = () => {
                             articleUploadPhase === 'upload' ? 'Uploading to Google Drive...' :
                             'Finalizing...'
                           }`}
+                        />
+                      )}
+
+                      {articleUploadStatus === 'error' && (
+                        <UploadProgress
+                          fileName="Article/Notes File"
+                          percentage={articleUploadProgress}
+                          uploading={false}
+                          error={articleUploadError}
+                          showSize={false}
                         />
                       )}
 
@@ -4561,7 +4582,7 @@ const Tasks = () => {
                           fileName="Video File"
                           percentage={videoUploadProgress}
                           uploading={true}
-                          error={null}
+                          error={videoUploadError}
                           showSize={false}
                           phase={videoUploadPhase}
                           phaseDetails={`${videoUploadProgress}% - ${
@@ -4570,6 +4591,16 @@ const Tasks = () => {
                             videoUploadPhase === 'upload' ? 'Uploading to Google Drive...' :
                             'Finalizing...'
                           }`}
+                        />
+                      )}
+
+                      {videoUploadStatus === 'error' && (
+                        <UploadProgress
+                          fileName="Video File"
+                          percentage={videoUploadProgress}
+                          uploading={false}
+                          error={videoUploadError}
+                          showSize={false}
                         />
                       )}
 
