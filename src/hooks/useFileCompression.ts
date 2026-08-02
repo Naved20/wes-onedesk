@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useWebCodecsCompression } from './useWebCodecsCompression';
 
 export interface CompressionOptions {
   maxWidth?: number;
@@ -15,61 +16,17 @@ interface CompressionResult {
   originalName: string;
 }
 
-let FFmpegInstance: any = null;
-let ffmpegLoaded = false;
-let ffmpegLoading = false;
-
-const loadFFmpeg = async () => {
-  if (ffmpegLoaded && FFmpegInstance) return true;
-  if (ffmpegLoading) {
-    let attempts = 0;
-    while (ffmpegLoading && attempts < 100) {
-      await new Promise(r => setTimeout(r, 100));
-      attempts++;
-    }
-    return ffmpegLoaded && !!FFmpegInstance;
-  }
-
-  ffmpegLoading = true;
-  try {
-    console.log('[FFmpeg] Loading FFmpeg WASM module v0.11.6 (stable)...');
-    
-    // v0.11.6 uses createFFmpeg() factory function, NOT class
-    const { createFFmpeg, fetchFile } = await import('@ffmpeg/ffmpeg');
-    
-    console.log('[FFmpeg] createFFmpeg function loaded');
-    
-    // Create instance using factory function
-    // Use single-threaded core (no SharedArrayBuffer needed)
-    const ffmpeg = createFFmpeg({ 
-      log: false,
-      corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
-    
-    console.log('[FFmpeg] FFmpeg instance created (single-threaded), loading core...');
-    
-    // Load FFmpeg core WASM
-    await ffmpeg.load();
-    
-    console.log('[FFmpeg] ✅ FFmpeg loaded successfully (single-threaded mode)');
-    
-    FFmpegInstance = { instance: ffmpeg, fetchFile };
-    ffmpegLoaded = true;
-    ffmpegLoading = false;
-    
-    return true;
-  } catch (err) {
-    console.error('[FFmpeg] ❌ Load failed:', err instanceof Error ? err.message : String(err));
-    FFmpegInstance = null;
-    ffmpegLoaded = false;
-    ffmpegLoading = false;
-    return false;
-  }
-};
-
 export const useFileCompression = () => {
   const [compressing, setCompressing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Use WebCodecs for video compression
+  const { 
+    compressVideo: webCodecsCompress, 
+    compressing: webCodecsCompressing,
+    error: webCodecsError,
+    isWebCodecsSupported 
+  } = useWebCodecsCompression();
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -87,14 +44,20 @@ export const useFileCompression = () => {
     setError(null);
 
     try {
-      const { videoBitrate = '500k' } = options;
+      const { maxWidth = 1280, maxHeight = 720, videoBitrate = '500k' } = options;
+      
+      // Convert bitrate string to number
+      let bitrateNum = 500000; // Default 500kbps
+      if (videoBitrate.endsWith('k')) {
+        bitrateNum = parseInt(videoBitrate) * 1000;
+      } else if (videoBitrate.endsWith('M')) {
+        bitrateNum = parseInt(videoBitrate) * 1000000;
+      }
 
-      console.log(`[VideoCompression] Starting compression: ${file.name} (${formatBytes(file.size)})`);
-      
-      const ffmpegAvailable = await loadFFmpeg();
-      
-      if (!ffmpegAvailable) {
-        console.warn('[VideoCompression] FFmpeg unavailable, using original file');
+      console.log(`[VideoCompression] Using WebCodecs API for: ${file.name} (${formatBytes(file.size)})`);
+
+      if (!isWebCodecsSupported()) {
+        console.warn('[VideoCompression] WebCodecs not supported, using original file');
         return {
           file,
           originalSize: file.size,
@@ -104,63 +67,19 @@ export const useFileCompression = () => {
         };
       }
 
-      if (!FFmpegInstance) {
-        throw new Error('FFmpeg instance failed to initialize');
-      }
-
-      const { instance: ffmpeg, fetchFile } = FFmpegInstance;
-      
-      const ext = file.name.split('.').pop() || 'mp4';
-      const inputName = `input.${ext}`;
-      const outputName = `output.mp4`;
-
-      console.log('[VideoCompression] Preparing file for compression...');
-      
-      const fileData = await fetchFile(file);
-      ffmpeg.FS('writeFile', inputName, fileData);
-
-      console.log(`[VideoCompression] Compressing with ${videoBitrate} bitrate (ultrafast)...`);
-
-      await ffmpeg.run(
-        '-i', inputName,
-        '-b:v', videoBitrate,
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        outputName
-      );
-
-      console.log('[VideoCompression] Compression complete, reading output...');
-
-      const compressedData = ffmpeg.FS('readFile', outputName);
-      const compressedBlob = new Blob([compressedData.buffer], { type: 'video/mp4' });
-      const compressedFile = new File(
-        [compressedBlob],
-        `${file.name.split('.')[0]}_compressed.mp4`,
-        { type: 'video/mp4' }
-      );
-
-      ffmpeg.FS('unlink', inputName);
-      ffmpeg.FS('unlink', outputName);
-
-      const compressionRatio = file.size / compressedFile.size;
-      const reduction = Math.round((1 - 1/compressionRatio) * 100);
-      const savedBytes = file.size - compressedFile.size;
-      
-      console.log(`[VideoCompression] ✅ Success! Reduced by ${reduction}%`);
-      console.log(`[VideoCompression] Original: ${formatBytes(file.size)} → Compressed: ${formatBytes(compressedFile.size)} (Saved ${formatBytes(savedBytes)})`);
+      const result = await webCodecsCompress(file, {
+        width: maxWidth,
+        height: maxHeight,
+        bitrate: bitrateNum,
+        framerate: 25,
+        quality: 28,
+      });
 
       setCompressing(false);
-      return {
-        file: compressedFile,
-        originalSize: file.size,
-        compressedSize: compressedFile.size,
-        compressionRatio,
-        originalName: file.name,
-      };
+      return result;
+
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Compression failed';
+      const errorMsg = err instanceof Error ? err.message : 'Video compression failed';
       console.error('[VideoCompression] ❌ Error:', errorMsg);
       setError(errorMsg);
       setCompressing(false);
@@ -174,7 +93,7 @@ export const useFileCompression = () => {
         originalName: file.name,
       };
     }
-  }, [formatBytes]);
+  }, [webCodecsCompress, isWebCodecsSupported]);
 
   const compressImage = useCallback(async (
     file: File,
@@ -299,8 +218,8 @@ export const useFileCompression = () => {
   }, [compressImage, compressVideo]);
 
   return {
-    compressing,
-    error,
+    compressing: compressing || webCodecsCompressing,
+    error: error || webCodecsError,
     compressFile,
     compressImage,
     compressVideo,
