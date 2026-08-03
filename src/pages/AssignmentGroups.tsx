@@ -450,11 +450,14 @@ export default function AssignmentGroups() {
                     />
                     <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded-lg p-3">
                       {employees
-                        .filter(emp => 
-                          `${emp.first_name} ${emp.last_name} ${emp.email}`
+                        .filter(emp => {
+                          const firstName = (emp.first_name || "").trim();
+                          const lastName = (emp.last_name || "").trim();
+                          const email = (emp.email || "").trim();
+                          return `${firstName} ${lastName} ${email}`
                             .toLowerCase()
-                            .includes(memberSearchQuery.toLowerCase())
-                        )
+                            .includes(memberSearchQuery.toLowerCase());
+                        })
                         .map((employee) => (
                           <div
                             key={employee.user_id}

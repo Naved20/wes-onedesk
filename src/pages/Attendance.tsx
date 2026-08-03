@@ -164,13 +164,18 @@ export default function Attendance() {
         const shiftMap = new Map(shifts?.map(s => [s.id, s.name]) || []);
 
         const profileMap = new Map(
-          profiles?.map(p => [
-            p.user_id, 
-            { 
-              name: `${p.first_name} ${p.last_name}`,
-              institution: p.institution_assignment 
-            }
-          ]) || []
+          profiles?.map(p => {
+            const firstName = (p.first_name || "Unknown").trim();
+            const lastName = (p.last_name || "").trim();
+            const fullName = `${firstName} ${lastName}`.trim() || "Unknown User";
+            return [
+              p.user_id, 
+              { 
+                name: fullName,
+                institution: p.institution_assignment 
+              }
+            ];
+          }) || []
         );
 
         const recordsWithNames = attendanceData.map(record => ({
@@ -554,11 +559,16 @@ export default function Attendance() {
 
       if (error) throw error;
 
-      const employees = data?.map(p => ({
-        user_id: p.user_id,
-        name: `${p.first_name} ${p.last_name}`,
-        institution: p.institution_assignment
-      })) || [];
+      const employees = data?.map(p => {
+        const firstName = (p.first_name || "Unknown").trim();
+        const lastName = (p.last_name || "").trim();
+        const fullName = `${firstName} ${lastName}`.trim() || "Unknown User";
+        return {
+          user_id: p.user_id,
+          name: fullName,
+          institution: p.institution_assignment
+        };
+      }) || [];
 
       setAllEmployees(employees);
     } catch (error) {

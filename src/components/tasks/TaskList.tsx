@@ -144,7 +144,10 @@ export const TaskList = () => {
   const getEmployeeName = (userId: string | null) => {
     if (!userId) return 'Unassigned';
     const employee = employees.find(e => e.user_id === userId);
-    return employee ? `${employee.first_name} ${employee.last_name}` : 'Unknown';
+    if (!employee) return 'Unknown';
+    const firstName = (employee.first_name || "").trim();
+    const lastName = (employee.last_name || "").trim();
+    return `${firstName} ${lastName}`.trim() || 'Unknown';
   };
 
   const filteredTasks = tasks.filter(task => {

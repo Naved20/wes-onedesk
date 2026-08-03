@@ -152,7 +152,10 @@ export function EarningsAnalytics() {
         
         transformedEarnings.push({
           earning_name: taskType,
-          amount: parseFloat(earning.amount) || 0,
+          amount: (() => {
+            const amt = parseFloat(String(earning.amount || 0).trim());
+            return isNaN(amt) ? 0 : amt;
+          })(),
           user_id: earning.user_id,
           first_name: emp?.first_name || "Unknown",
           last_name: emp?.last_name || "",
@@ -183,8 +186,11 @@ export function EarningsAnalytics() {
     .filter(e => e.year === selectedYear)
     .forEach((earning) => {
       if (!personEarnings[earning.user_id]) {
+        const firstName = (earning.first_name || "Unknown").trim();
+        const lastName = (earning.last_name || "").trim();
+        const fullName = `${firstName} ${lastName}`.trim();
         personEarnings[earning.user_id] = {
-          name: `${earning.first_name} ${earning.last_name}`,
+          name: fullName || "Unknown User",
           total: 0,
           byType: {},
           byMonth: {},
@@ -217,8 +223,10 @@ export function EarningsAnalytics() {
       const month = monthEarnings[monthKey];
       month.total += earning.amount;
       month.byType[earning.earning_name] = (month.byType[earning.earning_name] || 0) + earning.amount;
-      month.byPerson[`${earning.first_name} ${earning.last_name}`] =
-        (month.byPerson[`${earning.first_name} ${earning.last_name}`] || 0) + earning.amount;
+      
+      const personName = `${earning.first_name || "Unknown"} ${earning.last_name || ""}`.trim() || "Unknown User";
+      month.byPerson[personName] =
+        (month.byPerson[personName] || 0) + earning.amount;
     });
 
   // Calculate totals for selected month or entire year
@@ -236,7 +244,7 @@ export function EarningsAnalytics() {
 
   const earningsByPerson: Record<string, number> = {};
   filteredEarnings.forEach((e) => {
-    const name = `${e.first_name} ${e.last_name}`;
+    const name = `${e.first_name || "Unknown"} ${e.last_name || ""}`.trim() || "Unknown User";
     earningsByPerson[name] = (earningsByPerson[name] || 0) + e.amount;
   });
 

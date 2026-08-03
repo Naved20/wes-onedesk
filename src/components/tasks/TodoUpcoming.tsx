@@ -198,7 +198,7 @@ export const TodoUpcoming = () => {
               {task.priority}
             </Badge>
             <Badge variant="outline" className="text-xs">
-              {task.status.replace('_', ' ')}
+              {(task.status || 'unknown').replace('_', ' ')}
             </Badge>
           </div>
         </div>

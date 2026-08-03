@@ -56,9 +56,12 @@ export const getTasksCompletedLeaderboard = async (): Promise<LeaderboardEntry[]
     const leaderboard = Object.entries(taskCounts)
       .map(([userId, count]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: count,
         };
       })
@@ -122,9 +125,12 @@ export const getReviewsCompletedLeaderboard = async (): Promise<LeaderboardEntry
     const leaderboard = Object.entries(reviewCounts)
       .map(([userId, count]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: count,
         };
       })
@@ -179,7 +185,19 @@ export const getHighestEarningsLeaderboard = async (): Promise<LeaderboardEntry[
         .eq("user_id", userId);
 
       if (!earningError && userEarnings) {
-        earningsTotal[userId] = userEarnings.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+        earningsTotal[userId] = userEarnings.reduce((sum, e) => {
+          // Defensive: handle null, undefined, or invalid amount
+          if (e?.amount === null || e?.amount === undefined) {
+            console.warn(`[Earnings] Null amount for user ${userId}:`, e);
+            return sum;
+          }
+          const parsedAmount = parseFloat(String(e.amount).trim());
+          if (isNaN(parsedAmount)) {
+            console.warn(`[Earnings] Invalid amount for user ${userId}:`, e.amount);
+            return sum;
+          }
+          return sum + parsedAmount;
+        }, 0);
       }
     }
 
@@ -187,9 +205,12 @@ export const getHighestEarningsLeaderboard = async (): Promise<LeaderboardEntry[
     const leaderboard = Object.entries(earningsTotal)
       .map(([userId, total]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: Math.round(total * 100) / 100,
         };
       })
@@ -266,10 +287,13 @@ export const getBestAttendanceLeaderboard = async (): Promise<LeaderboardEntry[]
     const leaderboard = Object.entries(attendanceStats)
       .map(([userId, stats]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         const percentage = stats.total > 0 ? (stats.present / stats.total) * 100 : 0;
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: Math.round(percentage * 100) / 100,
         };
       })
@@ -333,9 +357,12 @@ export const getMostApprovedTasksLeaderboard = async (): Promise<LeaderboardEntr
     const leaderboard = Object.entries(approvedCounts)
       .map(([userId, count]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: count,
         };
       })
@@ -425,10 +452,13 @@ export const getFastestTaskCompletionLeaderboard = async (): Promise<Leaderboard
     const leaderboard = Object.entries(completionTimes)
       .map(([userId, times]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: Math.round(avgTime * 100) / 100,
         };
       })
@@ -488,17 +518,32 @@ export const getMostWorkingHoursLeaderboard = async (): Promise<LeaderboardEntry
     // Sum working hours per user
     const hoursTotal: Record<string, number> = {};
     (attendance as any[] || []).forEach((record: any) => {
-      const hours = parseFloat(record.working_hours?.toString() || "0");
-      hoursTotal[record.user_id] = (hoursTotal[record.user_id] || 0) + hours;
+      // Defensive: handle null, undefined, or invalid working_hours
+      if (record?.user_id === null || record?.user_id === undefined) {
+        return;
+      }
+      if (record?.working_hours === null || record?.working_hours === undefined) {
+        hoursTotal[record.user_id] = (hoursTotal[record.user_id] || 0);
+        return;
+      }
+      const hours = parseFloat(String(record.working_hours).trim());
+      if (!isNaN(hours)) {
+        hoursTotal[record.user_id] = (hoursTotal[record.user_id] || 0) + hours;
+      } else {
+        console.warn(`[WorkingHours] Invalid hours for user ${record.user_id}:`, record.working_hours);
+      }
     });
 
     // Convert to leaderboard format and sort
     const leaderboard = Object.entries(hoursTotal)
       .map(([userId, total]) => {
         const emp = employeeMap[userId];
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const userName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           userId,
-          userName: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown User",
+          userName,
           value: Math.round(total * 100) / 100,
         };
       })

@@ -637,9 +637,12 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
       // Map employee names to salary records
       const recordsWithNames = (salaryData || []).map(record => {
         const emp = empData?.find(e => e.user_id === record.user_id);
+        const firstName = (emp?.first_name || "Unknown").trim();
+        const lastName = (emp?.last_name || "").trim();
+        const fullName = `${firstName} ${lastName}`.trim() || "Unknown";
         return {
           ...record,
-          employee_name: emp ? `${emp.first_name} ${emp.last_name}` : "Unknown",
+          employee_name: fullName,
         };
       });
 

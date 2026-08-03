@@ -79,7 +79,11 @@ export function SalaryStatusWidget({ userId, isAdmin }: SalaryStatusWidgetProps)
         .eq("is_active", true);
 
       const employeeMap = new Map(
-        employees?.map(e => [e.user_id, `${e.first_name} ${e.last_name}`]) || []
+        employees?.map(e => {
+          const firstName = (e.first_name || "").trim();
+          const lastName = (e.last_name || "").trim();
+          return [e.user_id, `${firstName} ${lastName}`.trim() || "Unknown"];
+        }) || []
       );
 
       const records = salaries || [];

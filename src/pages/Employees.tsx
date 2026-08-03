@@ -457,8 +457,10 @@ export default function Employees() {
   };
 
   const filteredEmployees = employees.filter((emp) => {
-    // Search filter
-    const matchesSearch = `${emp.first_name} ${emp.last_name} ${emp.email}`
+    // Search filter - safely handle null names
+    const firstName = (emp.first_name || "").trim();
+    const lastName = (emp.last_name || "").trim();
+    const matchesSearch = `${firstName} ${lastName} ${emp.email || ""}`
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
     
@@ -503,8 +505,8 @@ export default function Employees() {
 
     switch (sortBy) {
       case "name":
-        aValue = `${a.first_name} ${a.last_name}`.toLowerCase();
-        bValue = `${b.first_name} ${b.last_name}`.toLowerCase();
+        aValue = `${(a.first_name || "").trim()} ${(a.last_name || "").trim()}`.toLowerCase();
+        bValue = `${(b.first_name || "").trim()} ${(b.last_name || "").trim()}`.toLowerCase();
         break;
       case "email":
         aValue = a.email?.toLowerCase() || "";
