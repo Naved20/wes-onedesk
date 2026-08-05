@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CalendarDays, AlertTriangle, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface LeaveBalance {
   casual_leaves_used: number;
@@ -9,6 +12,11 @@ interface LeaveBalance {
   emergency_leaves_used: number;
   lop_leaves_used: number;
   half_day_leaves_used: number;
+  casual_leaves_entitled?: number;
+  medical_leaves_entitled?: number;
+  emergency_leaves_entitled?: number;
+  lop_leaves_entitled?: number;
+  half_day_leaves_entitled?: number;
 }
 
 interface LeaveBalanceCardProps {
@@ -16,7 +24,11 @@ interface LeaveBalanceCardProps {
   loading?: boolean;
 }
 
-const BALANCE_LIMIT = 6;
+interface LeavePolicyConfig {
+  leave_type: string;
+  monthly_balance: number;
+  code: string;
+}
 
 interface LeaveGroupConfig {
   code: string;
@@ -31,14 +43,14 @@ interface LeaveGroupConfig {
   bgColor: string;
 }
 
-const LEAVE_GROUPS: LeaveGroupConfig[] = [
+const DEFAULT_LEAVE_GROUPS: LeaveGroupConfig[] = [
   {
     code: "PL",
     label: "Paid Leave",
     totalBalance: 12,
     types: [
-      { key: "casual_leaves_used", label: "Casual Leave", limit: BALANCE_LIMIT },
-      { key: "medical_leaves_used", label: "Medical Leave", limit: BALANCE_LIMIT },
+      { key: "casual_leaves_used", label: "Casual Leave", limit: 6 },
+      { key: "medical_leaves_used", label: "Medical Leave", limit: 6 },
     ],
     color: "text-green-600",
     bgColor: "bg-green-500",
@@ -48,8 +60,8 @@ const LEAVE_GROUPS: LeaveGroupConfig[] = [
     label: "Leave",
     totalBalance: 12,
     types: [
-      { key: "emergency_leaves_used", label: "Emergency Leave", limit: BALANCE_LIMIT },
-      { key: "lop_leaves_used", label: "LOP", limit: BALANCE_LIMIT },
+      { key: "emergency_leaves_used", label: "Emergency Leave", limit: 6 },
+      { key: "lop_leaves_used", label: "LOP", limit: 6 },
     ],
     color: "text-amber-600",
     bgColor: "bg-amber-500",
@@ -59,21 +71,169 @@ const LEAVE_GROUPS: LeaveGroupConfig[] = [
     label: "Half Day",
     totalBalance: 6,
     types: [
-      { key: "half_day_leaves_used", label: "Half-Day Leave", limit: BALANCE_LIMIT },
+      { key: "half_day_leaves_used", label: "Half-Day Leave", limit: 6 },
     ],
     color: "text-blue-600",
     bgColor: "bg-blue-500",
   },
 ];
 
-export function LeaveBalanceCard({ balance, loading }: LeaveBalanceCardProps) {
-  if (loading) {
+export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalanceCardProps) {
+  const [leaveGroups, setLeaveGroups] = useState<LeaveGroupConfig[]>(DEFAULT_LEAVE_GROUPS);
+  const [actualBalance, setActualBalance] = useState<LeaveBalance | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      fetchEmployeeActualBalance();
+    }
+  }, [user]);
+
+  const fetchEmployeeActualBalance = async () => {
+    if (!user) return;
+    
+    try {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+
+      // Get employee's actual balance from leave_balances table
+      const { data: employeeBalance, error } = await supabase
+        .from("leave_balances")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("month", month)
+        .eq("year", year)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      // If no record exists, create default balance record
+      if (!employeeBalance) {
+        const { data: newBalance, error: insertError } = await supabase
+          .from("leave_balances")
+          .insert({
+            user_id: user.id,
+            month,
+            year,
+            casual_leaves_used: 0,
+            medical_leaves_used: 0,
+            emergency_leaves_used: 0,
+            lop_leaves_used: 0,
+            half_day_leaves_used: 0,
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        
+        // Set actual balance to the newly created record
+        setActualBalance({
+          casual_leaves_used: 0,
+          medical_leaves_used: 0,
+          emergency_leaves_used: 0,
+          lop_leaves_used: 0,
+          half_day_leaves_used: 0,
+        });
+      } else {
+      // Set actual balance from fetched employee data
+        setActualBalance({
+          casual_leaves_used: employeeBalance.casual_leaves_used || 0,
+          medical_leaves_used: employeeBalance.medical_leaves_used || 0,
+          emergency_leaves_used: employeeBalance.emergency_leaves_used || 0,
+          lop_leaves_used: employeeBalance.lop_leaves_used || 0,
+          half_day_leaves_used: employeeBalance.half_day_leaves_used || 0,
+          casual_leaves_entitled: (employeeBalance as any).casual_leaves_entitled || 6,
+          medical_leaves_entitled: (employeeBalance as any).medical_leaves_entitled || 6,
+          emergency_leaves_entitled: (employeeBalance as any).emergency_leaves_entitled || 6,
+          lop_leaves_entitled: (employeeBalance as any).lop_leaves_entitled || 6,
+          half_day_leaves_entitled: (employeeBalance as any).half_day_leaves_entitled || 6,
+        });
+      }
+
+      // Get policy defaults for entitled amounts (no longer used, using employee balance instead)
+      // Kept for reference but not used
+      const { data: policies, error: policyError } = await supabase
+        .from("leave_balance_config")
+        .select("leave_type, monthly_balance, code");
+
+      if (policyError) console.log("Policy fetch note:", policyError);
+
+        // Get actual usage from employee balance
+      const casualUsed = Number(employeeBalance?.casual_leaves_used) || 0;
+      const medicalUsed = Number(employeeBalance?.medical_leaves_used) || 0;
+      const emergencyUsed = Number(employeeBalance?.emergency_leaves_used) || 0;
+      const lopUsed = Number(employeeBalance?.lop_leaves_used) || 0;
+      const halfDayUsed = Number(employeeBalance?.half_day_leaves_used) || 0;
+
+      // Get entitled amounts from employee balance (NOT from policy)
+      const casualEntitled = Number((employeeBalance as any)?.casual_leaves_entitled) || 6;
+      const medicalEntitled = Number((employeeBalance as any)?.medical_leaves_entitled) || 6;
+      const emergencyEntitled = Number((employeeBalance as any)?.emergency_leaves_entitled) || 6;
+      const lopEntitled = Number((employeeBalance as any)?.lop_leaves_entitled) || 6;
+      const halfDayEntitled = Number((employeeBalance as any)?.half_day_leaves_entitled) || 6;
+
+      // Build dynamic groups with actual employee balance
+      const dynamicGroups: LeaveGroupConfig[] = [];
+
+      // PL (Paid Leave) - Casual + Medical
+      const plBalance = casualEntitled + medicalEntitled;
+      dynamicGroups.push({
+        code: "PL",
+        label: "Paid Leave",
+        totalBalance: plBalance,
+        types: [
+          { key: "casual_leaves_used", label: "Casual Leave", limit: casualEntitled },
+          { key: "medical_leaves_used", label: "Medical Leave", limit: medicalEntitled },
+        ],
+        color: "text-green-600",
+        bgColor: "bg-green-500",
+      });
+
+      // LE (Leave) - Emergency + LOP
+      const leBalance = emergencyEntitled + lopEntitled;
+      dynamicGroups.push({
+        code: "LE",
+        label: "Leave",
+        totalBalance: leBalance,
+        types: [
+          { key: "emergency_leaves_used", label: "Emergency Leave", limit: emergencyEntitled },
+          { key: "lop_leaves_used", label: "LOP", limit: lopEntitled },
+        ],
+        color: "text-amber-600",
+        bgColor: "bg-amber-500",
+      });
+
+      // HD (Half Day)
+      dynamicGroups.push({
+        code: "HD",
+        label: "Half Day",
+        totalBalance: halfDayEntitled,
+        types: [
+          { key: "half_day_leaves_used", label: "Half-Day Leave", limit: halfDayEntitled },
+        ],
+        color: "text-blue-600",
+        bgColor: "bg-blue-500",
+      });
+
+      setLeaveGroups(dynamicGroups);
+
+    } catch (error) {
+      console.error("Error fetching employee balance:", error);
+      setLeaveGroups(DEFAULT_LEAVE_GROUPS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (parentLoading || loading) {
     return (
       <Card className="md:col-span-3">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
-            Leave Balance
+            Monthly Leave Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -89,7 +249,7 @@ export function LeaveBalanceCard({ balance, loading }: LeaveBalanceCardProps) {
   }
 
   const getUsed = (key: keyof LeaveBalance) => {
-    return Number(balance?.[key]) || 0;
+    return Number(actualBalance?.[key]) || 0;  // ✅ Use actualBalance from leave_balances table
   };
 
   return (
@@ -103,7 +263,7 @@ export function LeaveBalanceCard({ balance, loading }: LeaveBalanceCardProps) {
       <CardContent className="space-y-5">
         {/* Leave Groups */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {LEAVE_GROUPS.map((group) => {
+          {leaveGroups.map((group) => {
             const totalUsed = group.types.reduce(
               (sum, t) => sum + getUsed(t.key),
               0

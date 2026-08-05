@@ -14,6 +14,8 @@ import { LeaveBalanceCard } from "@/components/leaves/LeaveBalanceCard";
 import { LeaveApplicationForm } from "@/components/leaves/LeaveApplicationForm";
 import { LeaveApprovalDialog } from "@/components/leaves/LeaveApprovalDialog";
 import { BulkLeaveApproval } from "@/components/leaves/BulkLeaveApproval";
+import { AdminLeaveBalance } from "@/components/leaves/AdminLeaveBalance";
+import { LeavePolicySummary } from "@/components/leaves/LeavePolicySummary";
 
 interface LeaveBalance {
   casual_leaves_used: number;
@@ -21,6 +23,11 @@ interface LeaveBalance {
   emergency_leaves_used: number;
   lop_leaves_used: number;
   half_day_leaves_used: number;
+  casual_leaves_entitled?: number;
+  medical_leaves_entitled?: number;
+  emergency_leaves_entitled?: number;
+  lop_leaves_entitled?: number;
+  half_day_leaves_entitled?: number;
 }
 
 interface LeaveWithEmployee {
@@ -98,6 +105,12 @@ export default function Leaves() {
           emergency_leaves_used: Number((data as any).emergency_leaves_used) || 0,
           lop_leaves_used: Number((data as any).lop_leaves_used) || 0,
           half_day_leaves_used: Number((data as any).half_day_leaves_used) || 0,
+          // Add entitled amounts
+          casual_leaves_entitled: Number((data as any).casual_leaves_entitled) || 6,
+          medical_leaves_entitled: Number((data as any).medical_leaves_entitled) || 6,
+          emergency_leaves_entitled: Number((data as any).emergency_leaves_entitled) || 6,
+          lop_leaves_entitled: Number((data as any).lop_leaves_entitled) || 6,
+          half_day_leaves_entitled: Number((data as any).half_day_leaves_entitled) || 6,
         });
       } else {
         // Create new balance record
@@ -119,6 +132,11 @@ export default function Leaves() {
             emergency_leaves_used: 0,
             lop_leaves_used: 0,
             half_day_leaves_used: 0,
+            casual_leaves_entitled: 6,
+            medical_leaves_entitled: 6,
+            emergency_leaves_entitled: 6,
+            lop_leaves_entitled: 6,
+            half_day_leaves_entitled: 6,
           });
         } else if (newBalance) {
           setLeaveBalance({
@@ -127,6 +145,12 @@ export default function Leaves() {
             emergency_leaves_used: Number((newBalance as any).emergency_leaves_used) || 0,
             lop_leaves_used: Number((newBalance as any).lop_leaves_used) || 0,
             half_day_leaves_used: Number((newBalance as any).half_day_leaves_used) || 0,
+            // Add entitled amounts
+            casual_leaves_entitled: Number((newBalance as any).casual_leaves_entitled) || 6,
+            medical_leaves_entitled: Number((newBalance as any).medical_leaves_entitled) || 6,
+            emergency_leaves_entitled: Number((newBalance as any).emergency_leaves_entitled) || 6,
+            lop_leaves_entitled: Number((newBalance as any).lop_leaves_entitled) || 6,
+            half_day_leaves_entitled: Number((newBalance as any).half_day_leaves_entitled) || 6,
           });
         }
       }
@@ -371,8 +395,10 @@ export default function Leaves() {
 
   const isManagerOrAdmin = role === "admin" || role === "manager";
 
-  // Calculate casual remaining for backward compat prop
-  const casualRemaining = leaveBalance ? Math.max(0, 6 - leaveBalance.casual_leaves_used) : 6;
+  // Calculate casual remaining for backward compat prop - use entitled from DB if available
+  const casualRemaining = leaveBalance 
+    ? Math.max(0, (leaveBalance.casual_leaves_entitled || 6) - leaveBalance.casual_leaves_used) 
+    : 6;
 
   return (
     <DashboardLayout>
@@ -394,78 +420,7 @@ export default function Leaves() {
         {role === "employee" && (
           <div className="grid grid-cols-1 gap-4">
             <LeaveBalanceCard balance={leaveBalance} loading={balanceLoading} />
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Leave Policy Summary</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Leave Type</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Advance Notice</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Max Days</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Balance</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Salary Impact</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Code</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Proof</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b">
-                        <td className="py-2 px-2 font-medium">Casual / Paid Leave</td>
-                        <td className="py-2 px-2">4 Days Before</td>
-                        <td className="py-2 px-2">2 Days</td>
-                        <td className="py-2 px-2">6</td>
-                        <td className="py-2 px-2 text-green-600">Paid Time Off</td>
-                        <td className="py-2 px-2"><Badge variant="outline">PL</Badge></td>
-                        <td className="py-2 px-2">At Request</td>
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-2 px-2 font-medium">Medical Leave</td>
-                        <td className="py-2 px-2">Same Day</td>
-                        <td className="py-2 px-2">2 Days</td>
-                        <td className="py-2 px-2">6</td>
-                        <td className="py-2 px-2 text-green-600">Paid Time Off</td>
-                        <td className="py-2 px-2"><Badge variant="outline">PL</Badge></td>
-                        <td className="py-2 px-2">At Request</td>
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-2 px-2 font-medium">Emergency Leave</td>
-                        <td className="py-2 px-2">Same Day</td>
-                        <td className="py-2 px-2">1 Day</td>
-                        <td className="py-2 px-2">6</td>
-                        <td className="py-2 px-2 text-amber-600">1 LOP</td>
-                        <td className="py-2 px-2"><Badge variant="outline">LE</Badge></td>
-                        <td className="py-2 px-2">After 2 Days</td>
-                      </tr>
-                      <tr className="border-b">
-                        <td className="py-2 px-2 font-medium">Leave Without Pay / LOP</td>
-                        <td className="py-2 px-2">Next Day</td>
-                        <td className="py-2 px-2">1 Day</td>
-                        <td className="py-2 px-2">6</td>
-                        <td className="py-2 px-2 text-amber-600">1 LOP</td>
-                        <td className="py-2 px-2"><Badge variant="outline">LE</Badge></td>
-                        <td className="py-2 px-2">At Request</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-2 font-medium">Half-Day Leave</td>
-                        <td className="py-2 px-2">1 Day Before</td>
-                        <td className="py-2 px-2">1 Day</td>
-                        <td className="py-2 px-2">6</td>
-                        <td className="py-2 px-2 text-amber-600">0.5 LOP</td>
-                        <td className="py-2 px-2"><Badge variant="outline">HD</Badge></td>
-                        <td className="py-2 px-2">At Request</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                  <p><strong>PL Total Balance:</strong> 12 (Casual 6 + Medical 6) | <strong>LE Total Balance:</strong> 12 (Emergency 6 + LOP 6) | <strong>HD Total Balance:</strong> 6</p>
-                </div>
-              </CardContent>
-            </Card>
+            <LeavePolicySummary />
           </div>
         )}
 
@@ -478,6 +433,7 @@ export default function Leaves() {
                 Pending ({pendingLeaves.length})
               </TabsTrigger>
               <TabsTrigger value="all">All Requests</TabsTrigger>
+              <TabsTrigger value="balance">Leave Balance</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pending">
@@ -581,6 +537,10 @@ export default function Leaves() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="balance">
+              <AdminLeaveBalance />
             </TabsContent>
           </Tabs>
         ) : (

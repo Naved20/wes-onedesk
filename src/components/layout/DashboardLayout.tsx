@@ -82,11 +82,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       <div className="flex flex-col leading-tight">
               <h1 className="font-bold text-xl text-primary">WES OneDesk</h1>
               <span className="text-[10px] text-muted-foreground font-medium">
-                v 2.8.3.1
+                v 2.8.5.6
               </span>
-
             </div>
-         
         </div>
         <NotificationBell />
       </header>
@@ -117,7 +115,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex flex-col leading-tight">
               <h1 className="font-bold text-xl text-primary">WES OneDesk</h1>
               <span className="text-[10px] text-muted-foreground font-medium">
-                v 2.8.3.1
+                v 2.8.5.6
               </span>
             </div>
         </div>

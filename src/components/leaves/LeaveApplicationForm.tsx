@@ -24,77 +24,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { differenceInDays, format, addDays, isSunday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { leaveNotifications } from "@/lib/notificationService";
+import { getAllLeavePolicies, type LeaveType, type LeavePolicyData } from "@/lib/leavePolicyService";
 
-type LeaveType = "casual" | "medical" | "emergency" | "lop" | "half_day";
-
-// Leave policy configuration matching the new policy table
-const LEAVE_POLICY: Record<LeaveType, {
-  label: string;
-  code: string;
-  advanceDays: number;
-  maxDaysAtTime: number;
-  balance: number;
-  salaryImpact: string;
-  salaryImpactShort: string;
-  proofSubmission: string;
-  purpose: string;
-}> = {
-  casual: {
-    label: "Casual Leave",
-    code: "PL",
-    advanceDays: 4,
-    maxDaysAtTime: 2,
-    balance: 6,
-    salaryImpact: "Paid Time Off",
-    salaryImpactShort: "No deduction",
-    proofSubmission: "At Request Time",
-    purpose: "Planned personal work or short planned absence",
-  },
-  medical: {
-    label: "Medical Leave",
-    code: "PL",
-    advanceDays: 0,
-    maxDaysAtTime: 2,
-    balance: 6,
-    salaryImpact: "Paid Time Off",
-    salaryImpactShort: "No deduction",
-    proofSubmission: "At Request Time",
-    purpose: "Planned leave earned after qualifying service period",
-  },
-  emergency: {
-    label: "Emergency Leave",
-    code: "LE",
-    advanceDays: 0,
-    maxDaysAtTime: 1,
-    balance: 6,
-    salaryImpact: "1 LOP",
-    salaryImpactShort: "1 day salary deduction",
-    proofSubmission: "After 2 Days",
-    purpose: "Sudden unavoidable emergency",
-  },
-  lop: {
-    label: "Leave Without Pay / LOP",
-    code: "LE",
-    advanceDays: 1,
-    maxDaysAtTime: 1,
-    balance: 6,
-    salaryImpact: "1 LOP",
-    salaryImpactShort: "1 day salary deduction",
-    proofSubmission: "At Request Time",
-    purpose: "Unpaid leave or absence not covered under paid leave",
-  },
-  half_day: {
-    label: "Half-Day Leave",
-    code: "HD",
-    advanceDays: 1,
-    maxDaysAtTime: 1,
-    balance: 6,
-    salaryImpact: "0.5 LOP",
-    salaryImpactShort: "Half day salary deduction",
-    proofSubmission: "At Request Time",
-    purpose: "Leave for half working day",
-  },
-};
+// Use dynamic policy loading
+let LEAVE_POLICY: Record<LeaveType, LeavePolicyData> = {};
 
 interface LeaveBalances {
   casual: number;
@@ -129,24 +62,40 @@ export function LeaveApplicationForm({
   const [submitting, setSubmitting] = useState(false);
   const [validationMessage, setValidationMessage] = useState<{ type: "error" | "warning" | "info"; message: string } | null>(null);
   const [workingDays, setWorkingDays] = useState(0);
+  const [policiesLoading, setPoliciesLoading] = useState(true);
 
   const policy = LEAVE_POLICY[leaveType];
 
+  // Load leave policies from database on component mount
+  useEffect(() => {
+    const loadPolicies = async () => {
+      try {
+        const policies = await getAllLeavePolicies();
+        LEAVE_POLICY = policies;
+      } catch (error) {
+        console.error("Error loading policies:", error);
+      } finally {
+        setPoliciesLoading(false);
+      }
+    };
+    loadPolicies();
+  }, []);
+
   // Get remaining balance for current leave type
   const getRemainingBalance = (type: LeaveType) => {
-    if (!leaveBalancesUsed) return LEAVE_POLICY[type].balance;
+    if (!leaveBalancesUsed) return LEAVE_POLICY[type]?.balance || 6;
     const used = leaveBalancesUsed[type] || 0;
-    return Math.max(0, LEAVE_POLICY[type].balance - used);
+    return Math.max(0, (LEAVE_POLICY[type]?.balance || 6) - used);
   };
 
   const currentRemaining = getRemainingBalance(leaveType);
 
   // For single-day leave types, auto-sync end date with start date
   useEffect(() => {
-    if ((policy.maxDaysAtTime === 1 || leaveType === "half_day") && startDate) {
+    if (policy && (policy.maxDaysAtTime === 1 || leaveType === "half_day") && startDate) {
       setEndDate(startDate);
     }
-  }, [leaveType, startDate, policy.maxDaysAtTime]);
+  }, [leaveType, startDate, policy]);
 
   // Calculate working days when dates change
   useEffect(() => {
@@ -189,7 +138,7 @@ export function LeaveApplicationForm({
   }, [startDate, endDate, leaveType, workingDays, leaveBalancesUsed]);
 
   const validateLeave = () => {
-    if (!startDate) {
+    if (!startDate || !policy) {
       setValidationMessage(null);
       return;
     }
@@ -337,46 +286,58 @@ export function LeaveApplicationForm({
     setWorkingDays(0);
   };
 
-  const minStartDate = format(
-    addDays(new Date(), policy.advanceDays),
-    "yyyy-MM-dd"
-  );
+  const minStartDate = policy
+    ? format(addDays(new Date(), policy.advanceDays), "yyyy-MM-dd")
+    : format(new Date(), "yyyy-MM-dd");
 
-  const isSingleDayOnly = policy.maxDaysAtTime === 1;
-  const isFormDisabled = currentRemaining <= 0;
+  const isSingleDayOnly = policy ? policy.maxDaysAtTime === 1 : false;
+  const isFormDisabled = currentRemaining <= 0 || !policy;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Apply for Leave</DialogTitle>
-          <DialogDescription className="flex items-center gap-2">
-            <Calendar className="h-4 w-4" />
-            <span>
-              {policy.label}:{" "}
-              <Badge variant={currentRemaining > 0 ? "secondary" : "destructive"}>
-                {currentRemaining}/{policy.balance} remaining
-              </Badge>
-              <Badge variant="outline" className="ml-1 text-xs">
-                {policy.code}
-              </Badge>
-              {isSingleDayOnly && (
-                <span className="text-xs ml-2">(Single day only)</span>
-              )}
-            </span>
-          </DialogDescription>
+          {policy ? (
+            <DialogDescription className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span>
+                {policy.label}:{" "}
+                <Badge variant={currentRemaining > 0 ? "secondary" : "destructive"}>
+                  {currentRemaining}/{policy.balance} remaining
+                </Badge>
+                <Badge variant="outline" className="ml-1 text-xs">
+                  {policy.code}
+                </Badge>
+                {isSingleDayOnly && (
+                  <span className="text-xs ml-2">(Single day only)</span>
+                )}
+              </span>
+            </DialogDescription>
+          ) : (
+            <DialogDescription>
+              <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+              Loading leave policies...
+            </DialogDescription>
+          )}
         </DialogHeader>
 
-        {isFormDisabled && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              You have exhausted your {policy.label} quota ({policy.balance}/{policy.balance} used). Please choose a different leave type.
-            </AlertDescription>
-          </Alert>
-        )}
+        {policiesLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            {isFormDisabled && policy && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  You have exhausted your {policy.label} quota ({policy.balance}/{policy.balance} used). Please choose a different leave type.
+                </AlertDescription>
+              </Alert>
+            )}
 
-        <div className="grid gap-4 py-4">
+            <div className="space-y-4 py-4">
           {/* Leave Type */}
           <div className="grid gap-2">
             <Label>Leave Type</Label>
@@ -518,7 +479,9 @@ export function LeaveApplicationForm({
               <AlertDescription>{validationMessage.message}</AlertDescription>
             </Alert>
           )}
-        </div>
+            </div>
+          </>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
