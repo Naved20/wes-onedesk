@@ -87,6 +87,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
         </div>
         <NotificationBell />
+        
       </header>
 
       {/* Sidebar overlay for mobile */}
