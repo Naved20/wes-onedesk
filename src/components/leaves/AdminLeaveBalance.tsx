@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Users, TrendingUp, FileText, Clock } from "lucide-react";
+import { Settings, Users, FileText, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -10,9 +10,6 @@ import { LeavePolicyConfig } from "./AdminLeaveBalance/LeavePolicyConfig";
 import { BalanceResetSettings } from "./AdminLeaveBalance/BalanceResetSettings";
 import { EmployeeLeaveBalanceManagement } from "./AdminLeaveBalance/EmployeeLeaveBalanceManagement";
 import { LeaveRulesConfig } from "./AdminLeaveBalance/LeaveRulesConfig";
-import { AdminApprovalRules } from "./AdminLeaveBalance/AdminApprovalRules";
-import { SalaryRulesConfig } from "./AdminLeaveBalance/SalaryRulesConfig";
-import { LeaveAnalytics } from "./AdminLeaveBalance/LeaveAnalytics";
 
 export function AdminLeaveBalance() {
   const [activeTab, setActiveTab] = useState("policy");
@@ -28,7 +25,7 @@ export function AdminLeaveBalance() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-4">
           <TabsTrigger value="policy" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">Policy</span>
@@ -44,18 +41,6 @@ export function AdminLeaveBalance() {
           <TabsTrigger value="rules" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Rules</span>
-          </TabsTrigger>
-          <TabsTrigger value="approval" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Approval</span>
-          </TabsTrigger>
-          <TabsTrigger value="salary" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Salary</span>
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Analytics</span>
           </TabsTrigger>
         </TabsList>
 
@@ -73,18 +58,6 @@ export function AdminLeaveBalance() {
 
         <TabsContent value="rules" className="space-y-4">
           <LeaveRulesConfig />
-        </TabsContent>
-
-        <TabsContent value="approval" className="space-y-4">
-          <AdminApprovalRules />
-        </TabsContent>
-
-        <TabsContent value="salary" className="space-y-4">
-          <SalaryRulesConfig />
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <LeaveAnalytics />
         </TabsContent>
       </Tabs>
     </div>

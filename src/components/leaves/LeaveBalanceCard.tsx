@@ -19,6 +19,11 @@ interface LeaveBalance {
   half_day_leaves_entitled?: number;
 }
 
+interface LeaveUsageKey {
+  used: keyof LeaveBalance;
+  entitled: keyof LeaveBalance;
+}
+
 interface LeaveBalanceCardProps {
   balance: LeaveBalance | null;
   loading?: boolean;
@@ -35,9 +40,9 @@ interface LeaveGroupConfig {
   label: string;
   totalBalance: number;
   types: {
-    key: keyof LeaveBalance;
+    used: keyof LeaveBalance;
+    entitled: keyof LeaveBalance;
     label: string;
-    limit: number;
   }[];
   color: string;
   bgColor: string;
@@ -49,8 +54,8 @@ const DEFAULT_LEAVE_GROUPS: LeaveGroupConfig[] = [
     label: "Paid Leave",
     totalBalance: 12,
     types: [
-      { key: "casual_leaves_used", label: "Casual Leave", limit: 6 },
-      { key: "medical_leaves_used", label: "Medical Leave", limit: 6 },
+      { used: "casual_leaves_used", entitled: "casual_leaves_entitled", label: "Casual Leave" },
+      { used: "medical_leaves_used", entitled: "medical_leaves_entitled", label: "Medical Leave" },
     ],
     color: "text-green-600",
     bgColor: "bg-green-500",
@@ -60,8 +65,8 @@ const DEFAULT_LEAVE_GROUPS: LeaveGroupConfig[] = [
     label: "Leave",
     totalBalance: 12,
     types: [
-      { key: "emergency_leaves_used", label: "Emergency Leave", limit: 6 },
-      { key: "lop_leaves_used", label: "LOP", limit: 6 },
+      { used: "emergency_leaves_used", entitled: "emergency_leaves_entitled", label: "Emergency Leave" },
+      { used: "lop_leaves_used", entitled: "lop_leaves_entitled", label: "LOP" },
     ],
     color: "text-amber-600",
     bgColor: "bg-amber-500",
@@ -71,7 +76,7 @@ const DEFAULT_LEAVE_GROUPS: LeaveGroupConfig[] = [
     label: "Half Day",
     totalBalance: 6,
     types: [
-      { key: "half_day_leaves_used", label: "Half-Day Leave", limit: 6 },
+      { used: "half_day_leaves_used", entitled: "half_day_leaves_entitled", label: "Half-Day Leave" },
     ],
     color: "text-blue-600",
     bgColor: "bg-blue-500",
@@ -88,7 +93,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
     if (user) {
       fetchEmployeeActualBalance();
     }
-  }, [user]);
+  }, [user, balance]); // Re-fetch when parent balance updates
 
   const fetchEmployeeActualBalance = async () => {
     if (!user) return;
@@ -99,7 +104,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
       const year = now.getFullYear();
 
       // Get employee's actual balance from leave_balances table
-      const { data: employeeBalance, error } = await supabase
+      let { data: employeeBalance, error } = await supabase
         .from("leave_balances")
         .select("*")
         .eq("user_id", user.id)
@@ -109,7 +114,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
 
       if (error) throw error;
 
-      // If no record exists, create default balance record
+      // If no record exists, create default balance record with default entitled values
       if (!employeeBalance) {
         const { data: newBalance, error: insertError } = await supabase
           .from("leave_balances")
@@ -122,57 +127,42 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
             emergency_leaves_used: 0,
             lop_leaves_used: 0,
             half_day_leaves_used: 0,
+            casual_leaves_entitled: 6,
+            medical_leaves_entitled: 6,
+            emergency_leaves_entitled: 6,
+            lop_leaves_entitled: 6,
+            half_day_leaves_entitled: 6,
           })
           .select()
           .single();
 
         if (insertError) throw insertError;
-        
-        // Set actual balance to the newly created record
-        setActualBalance({
-          casual_leaves_used: 0,
-          medical_leaves_used: 0,
-          emergency_leaves_used: 0,
-          lop_leaves_used: 0,
-          half_day_leaves_used: 0,
-        });
-      } else {
-      // Set actual balance from fetched employee data
-        setActualBalance({
-          casual_leaves_used: employeeBalance.casual_leaves_used || 0,
-          medical_leaves_used: employeeBalance.medical_leaves_used || 0,
-          emergency_leaves_used: employeeBalance.emergency_leaves_used || 0,
-          lop_leaves_used: employeeBalance.lop_leaves_used || 0,
-          half_day_leaves_used: employeeBalance.half_day_leaves_used || 0,
-          casual_leaves_entitled: (employeeBalance as any).casual_leaves_entitled || 6,
-          medical_leaves_entitled: (employeeBalance as any).medical_leaves_entitled || 6,
-          emergency_leaves_entitled: (employeeBalance as any).emergency_leaves_entitled || 6,
-          lop_leaves_entitled: (employeeBalance as any).lop_leaves_entitled || 6,
-          half_day_leaves_entitled: (employeeBalance as any).half_day_leaves_entitled || 6,
-        });
+        employeeBalance = newBalance;
       }
 
-      // Get policy defaults for entitled amounts (no longer used, using employee balance instead)
-      // Kept for reference but not used
-      const { data: policies, error: policyError } = await supabase
-        .from("leave_balance_config")
-        .select("leave_type, monthly_balance, code");
+      // Use parent balance if available (more recent), otherwise use fetched data
+      const finalBalance = balance || employeeBalance;
 
-      if (policyError) console.log("Policy fetch note:", policyError);
+      // Set actual balance from employee data
+      setActualBalance({
+        casual_leaves_used: Number(finalBalance.casual_leaves_used) || 0,
+        medical_leaves_used: Number((finalBalance as any).medical_leaves_used) || 0,
+        emergency_leaves_used: Number((finalBalance as any).emergency_leaves_used) || 0,
+        lop_leaves_used: Number((finalBalance as any).lop_leaves_used) || 0,
+        half_day_leaves_used: Number((finalBalance as any).half_day_leaves_used) || 0,
+        casual_leaves_entitled: Number((finalBalance as any).casual_leaves_entitled) || 6,
+        medical_leaves_entitled: Number((finalBalance as any).medical_leaves_entitled) || 6,
+        emergency_leaves_entitled: Number((finalBalance as any).emergency_leaves_entitled) || 6,
+        lop_leaves_entitled: Number((finalBalance as any).lop_leaves_entitled) || 6,
+        half_day_leaves_entitled: Number((finalBalance as any).half_day_leaves_entitled) || 6,
+      });
 
-        // Get actual usage from employee balance
-      const casualUsed = Number(employeeBalance?.casual_leaves_used) || 0;
-      const medicalUsed = Number(employeeBalance?.medical_leaves_used) || 0;
-      const emergencyUsed = Number(employeeBalance?.emergency_leaves_used) || 0;
-      const lopUsed = Number(employeeBalance?.lop_leaves_used) || 0;
-      const halfDayUsed = Number(employeeBalance?.half_day_leaves_used) || 0;
-
-      // Get entitled amounts from employee balance (NOT from policy)
-      const casualEntitled = Number((employeeBalance as any)?.casual_leaves_entitled) || 6;
-      const medicalEntitled = Number((employeeBalance as any)?.medical_leaves_entitled) || 6;
-      const emergencyEntitled = Number((employeeBalance as any)?.emergency_leaves_entitled) || 6;
-      const lopEntitled = Number((employeeBalance as any)?.lop_leaves_entitled) || 6;
-      const halfDayEntitled = Number((employeeBalance as any)?.half_day_leaves_entitled) || 6;
+      // Get entitled amounts from employee balance
+      const casualEntitled = Number((finalBalance as any)?.casual_leaves_entitled) || 6;
+      const medicalEntitled = Number((finalBalance as any)?.medical_leaves_entitled) || 6;
+      const emergencyEntitled = Number((finalBalance as any)?.emergency_leaves_entitled) || 6;
+      const lopEntitled = Number((finalBalance as any)?.lop_leaves_entitled) || 6;
+      const halfDayEntitled = Number((finalBalance as any)?.half_day_leaves_entitled) || 6;
 
       // Build dynamic groups with actual employee balance
       const dynamicGroups: LeaveGroupConfig[] = [];
@@ -184,8 +174,8 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         label: "Paid Leave",
         totalBalance: plBalance,
         types: [
-          { key: "casual_leaves_used", label: "Casual Leave", limit: casualEntitled },
-          { key: "medical_leaves_used", label: "Medical Leave", limit: medicalEntitled },
+          { used: "casual_leaves_used", entitled: "casual_leaves_entitled", label: "Casual Leave" },
+          { used: "medical_leaves_used", entitled: "medical_leaves_entitled", label: "Medical Leave" },
         ],
         color: "text-green-600",
         bgColor: "bg-green-500",
@@ -198,8 +188,8 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         label: "Leave",
         totalBalance: leBalance,
         types: [
-          { key: "emergency_leaves_used", label: "Emergency Leave", limit: emergencyEntitled },
-          { key: "lop_leaves_used", label: "LOP", limit: lopEntitled },
+          { used: "emergency_leaves_used", entitled: "emergency_leaves_entitled", label: "Emergency Leave" },
+          { used: "lop_leaves_used", entitled: "lop_leaves_entitled", label: "LOP" },
         ],
         color: "text-amber-600",
         bgColor: "bg-amber-500",
@@ -211,7 +201,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         label: "Half Day",
         totalBalance: halfDayEntitled,
         types: [
-          { key: "half_day_leaves_used", label: "Half-Day Leave", limit: halfDayEntitled },
+          { used: "half_day_leaves_used", entitled: "half_day_leaves_entitled", label: "Half-Day Leave" },
         ],
         color: "text-blue-600",
         bgColor: "bg-blue-500",
@@ -233,7 +223,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
-            Monthly Leave Balance
+            Leave Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -257,7 +247,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <CalendarDays className="h-4 w-4" />
-          Monthly Leave Balance
+          Leave Balance
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -265,11 +255,15 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {leaveGroups.map((group) => {
             const totalUsed = group.types.reduce(
-              (sum, t) => sum + getUsed(t.key),
+              (sum, t) => sum + getUsed(t.used),
               0
             );
-            const totalRemaining = Math.max(0, group.totalBalance - totalUsed);
-            const usagePercent = (totalUsed / group.totalBalance) * 100;
+            const totalEntitled = group.types.reduce(
+              (sum, t) => sum + (Number(actualBalance?.[t.entitled]) || 0),
+              0
+            );
+            const totalRemaining = Math.max(0, totalEntitled - totalUsed);
+            const usagePercent = totalEntitled > 0 ? (totalUsed / totalEntitled) * 100 : 0;
 
             return (
               <div
@@ -287,7 +281,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <Badge
                     variant={totalRemaining > 0 ? "secondary" : "destructive"}
                   >
-                    {totalUsed}/{group.totalBalance}
+                    {totalRemaining}/{totalEntitled}
                   </Badge>
                 </div>
 
@@ -310,11 +304,12 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                 {/* Individual Type Breakdown */}
                 <div className="space-y-1 pt-1 border-t">
                   {group.types.map((t) => {
-                    const used = getUsed(t.key);
-                    const remaining = Math.max(0, t.limit - used);
+                    const used = getUsed(t.used);
+                    const limit = Number(actualBalance?.[t.entitled]) || 0;
+                    const remaining = Math.max(0, limit - used);
                     return (
                       <div
-                        key={t.key}
+                        key={t.used}
                         className="flex justify-between items-center text-xs"
                       >
                         <span className="text-muted-foreground">
@@ -327,7 +322,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                               : "text-foreground"
                           }
                         >
-                          {used}/{t.limit} used
+                          {remaining}/{limit} remaining
                         </span>
                       </div>
                     );

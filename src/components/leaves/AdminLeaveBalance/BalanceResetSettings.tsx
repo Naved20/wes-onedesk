@@ -12,18 +12,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, Calendar } from "lucide-react";
+import { Loader2, AlertCircle, Calendar, Play } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format, addMonths, addQuarters, addHours } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ResetSettings {
+  id?: string;
   resetFrequency: "monthly" | "quarterly" | "half_yearly" | "yearly" | "never";
-  resetMonth?: number; // 1-12
-  resetDay?: number; // 1-31
-  resetTime?: string; // HH:mm
+  resetMonth?: number;
+  resetDay?: number;
+  resetTime?: string;
   carryForwardEnabled: boolean;
   maxCarryForward: number;
-  carryForwardExpiry: number; // days
+  carryForwardExpiry: number;
+}
+
+interface DBResetSettings {
+  id: string;
+  reset_frequency: string;
+  reset_month: number | null;
+  reset_day: number;
+  reset_time: string;
+  carry_forward_enabled: boolean;
+  max_carry_forward: number;
+  carry_forward_expiry: number;
+  last_reset_date: string | null;
+  next_reset_date: string | null;
+  is_active: boolean;
 }
 
 const DEFAULT_RESET_SETTINGS: ResetSettings = {
@@ -41,6 +57,8 @@ export function BalanceResetSettings() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nextResetDate, setNextResetDate] = useState<Date | null>(null);
+  const [lastResetDate, setLastResetDate] = useState<Date | null>(null);
+  const [resettingNow, setResettingNow] = useState(false);
 
   useEffect(() => {
     loadSavedSettings();
@@ -53,26 +71,67 @@ export function BalanceResetSettings() {
   const loadSavedSettings = async () => {
     setLoading(true);
     try {
-      // Load from localStorage (in production, load from database)
-      const savedSettings = localStorage.getItem("leave_reset_settings");
-      
-      if (savedSettings) {
-        const parsedSettings = JSON.parse(savedSettings);
+      // Load from Supabase database
+      const { data, error } = await supabase
+        .from("leave_reset_settings")
+        .select("*")
+        .eq("is_active", true)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 = no rows found, which is okay for first time
+        throw error;
+      }
+
+      if (data) {
+        const dbSettings = data as DBResetSettings;
         setSettings({
-          resetFrequency: parsedSettings.reset_frequency || DEFAULT_RESET_SETTINGS.resetFrequency,
-          resetMonth: parsedSettings.reset_month || DEFAULT_RESET_SETTINGS.resetMonth,
-          resetDay: parsedSettings.reset_day || DEFAULT_RESET_SETTINGS.resetDay,
-          resetTime: parsedSettings.reset_time || DEFAULT_RESET_SETTINGS.resetTime,
-          carryForwardEnabled: parsedSettings.carry_forward_enabled || DEFAULT_RESET_SETTINGS.carryForwardEnabled,
-          maxCarryForward: parsedSettings.max_carry_forward || DEFAULT_RESET_SETTINGS.maxCarryForward,
-          carryForwardExpiry: parsedSettings.carry_forward_expiry || DEFAULT_RESET_SETTINGS.carryForwardExpiry,
+          id: dbSettings.id,
+          resetFrequency: dbSettings.reset_frequency as any,
+          resetMonth: dbSettings.reset_month,
+          resetDay: dbSettings.reset_day,
+          resetTime: dbSettings.reset_time,
+          carryForwardEnabled: dbSettings.carry_forward_enabled,
+          maxCarryForward: dbSettings.max_carry_forward,
+          carryForwardExpiry: dbSettings.carry_forward_expiry,
         });
-        
-        console.log("Loaded reset settings:", parsedSettings);
+
+        if (dbSettings.last_reset_date) {
+          setLastResetDate(new Date(dbSettings.last_reset_date));
+        }
+      } else {
+        // First time - create default settings
+        const { data: newSettings, error: insertError } = await supabase
+          .from("leave_reset_settings")
+          .insert({
+            reset_frequency: DEFAULT_RESET_SETTINGS.resetFrequency,
+            reset_month: DEFAULT_RESET_SETTINGS.resetMonth,
+            reset_day: DEFAULT_RESET_SETTINGS.resetDay,
+            reset_time: DEFAULT_RESET_SETTINGS.resetTime,
+            carry_forward_enabled: DEFAULT_RESET_SETTINGS.carryForwardEnabled,
+            max_carry_forward: DEFAULT_RESET_SETTINGS.maxCarryForward,
+            carry_forward_expiry: DEFAULT_RESET_SETTINGS.carryForwardExpiry,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        if (newSettings) {
+          setSettings({
+            id: newSettings.id,
+            ...DEFAULT_RESET_SETTINGS,
+          });
+        }
       }
     } catch (error) {
       console.error("Error loading reset settings:", error);
-      // Use default settings on error
+      toast({
+        title: "Error",
+        description: "Failed to load reset settings",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -160,8 +219,7 @@ export function BalanceResetSettings() {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      // Save to database - create a leave_reset_settings table or store in existing config
-      const resetConfig = {
+      const updateData = {
         reset_frequency: settings.resetFrequency,
         reset_month: settings.resetMonth || 1,
         reset_day: settings.resetDay || 1,
@@ -169,28 +227,99 @@ export function BalanceResetSettings() {
         carry_forward_enabled: settings.carryForwardEnabled,
         max_carry_forward: settings.maxCarryForward,
         carry_forward_expiry: settings.carryForwardExpiry,
-        updated_at: new Date().toISOString(),
       };
 
-      // For now, save to localStorage as a quick solution
-      // In production, you'd save to a proper database table
-      localStorage.setItem("leave_reset_settings", JSON.stringify(resetConfig));
-      
-      console.log("Reset settings saved:", resetConfig);
-      
+      if (settings.id) {
+        // Update existing settings
+        const { error } = await supabase
+          .from("leave_reset_settings")
+          .update(updateData)
+          .eq("id", settings.id);
+
+        if (error) throw error;
+      } else {
+        // Insert new settings
+        const { data, error } = await supabase
+          .from("leave_reset_settings")
+          .insert({
+            ...updateData,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setSettings({ ...settings, id: data.id });
+        }
+      }
+
       toast({
         title: "Success",
-        description: "Reset settings saved successfully. Changes will take effect immediately.",
+        description: "Reset settings saved successfully.",
       });
+
+      calculateNextResetDate();
     } catch (error) {
       console.error("Error saving reset settings:", error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Failed to save reset settings. Please try again.",
         variant: "destructive",
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetNow = async () => {
+    if (!confirm("Are you sure you want to reset all leave balances now? This action cannot be undone.")) {
+      return;
+    }
+
+    setResettingNow(true);
+    try {
+      // Call the reset function via API
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-leave-balances`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+        body: JSON.stringify({
+          trigger_type: "manual",
+          frequency: settings.resetFrequency,
+          carryForwardEnabled: settings.carryForwardEnabled,
+          maxCarryForward: settings.maxCarryForward,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to reset balances");
+      }
+
+      toast({
+        title: "Success",
+        description: `Reset completed! ${result.employees_affected} employees affected.`,
+      });
+
+      // Update last reset date
+      setLastResetDate(new Date());
+
+      // Reload settings to get updated last_reset_date
+      await loadSavedSettings();
+    } catch (error) {
+      console.error("Error resetting balances:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to reset balances",
+        variant: "destructive",
+      });
+    } finally {
+      setResettingNow(false);
     }
   };
 
@@ -315,6 +444,15 @@ export function BalanceResetSettings() {
             </Alert>
           )}
 
+          {lastResetDate && (
+            <Alert>
+              <Calendar className="h-4 w-4" />
+              <AlertDescription>
+                Last reset: <strong>{format(lastResetDate, "MMMM dd, yyyy HH:mm")}</strong>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {settings.resetFrequency === "never" && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -392,15 +530,19 @@ export function BalanceResetSettings() {
             )}
           </div>
 
-          {/* Save Button */}
-          <Button
-            onClick={handleSaveSettings}
-            disabled={saving || loading}
-            className="w-full gap-2"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Save Reset Settings
-          </Button>
+          {/* Action Buttons */}
+          <div >
+            <Button
+              onClick={handleSaveSettings}
+              disabled={saving || loading}
+              className="gap-2"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Reset Settings
+            </Button>
+
+
+          </div>
           </>
           )}
         </CardContent>

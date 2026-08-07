@@ -94,22 +94,22 @@ export function EmployeeLeaveBalanceManagement() {
         const lop = Number(balance?.lop_leaves_used) || 0;
         const halfDay = Number(balance?.half_day_leaves_used) || 0;
 
-        // Default policy (from leave_balance_config) - each type gets 6 leaves
-        const defaultCasualLimit = 6;
-        const defaultMedicalLimit = 6;
-        const defaultEmergencyLimit = 6;
-        const defaultLopLimit = 6;
-        const defaultHalfDayLimit = 6;
+        // Get entitled from database or default to 6
+        const casualLimit = Number(balance?.casual_leaves_entitled) || 6;
+        const medicalLimit = Number(balance?.medical_leaves_entitled) || 6;
+        const emergencyLimit = Number(balance?.emergency_leaves_entitled) || 6;
+        const lopLimit = Number(balance?.lop_leaves_entitled) || 6;
+        const halfDayLimit = Number(balance?.half_day_leaves_entitled) || 6;
 
         // Individual available counts (remaining)
-        const casualRemaining = Math.max(0, defaultCasualLimit - casual);
-        const medicalRemaining = Math.max(0, defaultMedicalLimit - medical);
-        const emergencyRemaining = Math.max(0, defaultEmergencyLimit - emergency);
-        const lopRemaining = Math.max(0, defaultLopLimit - lop);
-        const halfDayRemaining = Math.max(0, defaultHalfDayLimit - halfDay);
+        const casualRemaining = Math.max(0, casualLimit - casual);
+        const medicalRemaining = Math.max(0, medicalLimit - medical);
+        const emergencyRemaining = Math.max(0, emergencyLimit - emergency);
+        const lopRemaining = Math.max(0, lopLimit - lop);
+        const halfDayRemaining = Math.max(0, halfDayLimit - halfDay);
 
         const usedTotal = casual + medical + emergency + lop + halfDay;
-        const totalAvailable = defaultCasualLimit + defaultMedicalLimit + defaultEmergencyLimit + defaultLopLimit + defaultHalfDayLimit; // 30
+        const totalAvailable = casualLimit + medicalLimit + emergencyLimit + lopLimit + halfDayLimit;
         const remainingTotal = Math.max(0, totalAvailable - usedTotal);
 
         return {

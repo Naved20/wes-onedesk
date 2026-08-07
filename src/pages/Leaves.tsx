@@ -294,8 +294,10 @@ export default function Leaves() {
       await updateLeaveBalance(leave);
 
       toast({ title: "Approved", description: "Leave request approved successfully." });
-      fetchLeaves();
-      if (role === "employee") fetchLeaveBalance();
+      
+      // Refresh all data
+      await fetchLeaves();
+      await fetchLeaveBalance(); // Force refresh balance regardless of role
     } catch (error) {
       console.error("Error approving:", error);
       toast({ title: "Error", description: "Failed to approve leave", variant: "destructive" });
@@ -323,18 +325,42 @@ export default function Leaves() {
   };
 
   const handleBulkApprove = async (ids: string[]) => {
-    const { error } = await supabase
-      .from("leaves")
-      .update({
-        status: "approved",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-      })
-      .in("id", ids);
+    try {
+      // Get all leaves to update their balances
+      const leavesToApprove = leaves.filter(l => ids.includes(l.id));
+      
+      const { error } = await supabase
+        .from("leaves")
+        .update({
+          status: "approved",
+          approved_by: user?.id,
+          approved_at: new Date().toISOString(),
+        })
+        .in("id", ids);
 
-    if (error) throw error;
-    fetchLeaves();
-    if (role === "employee") fetchLeaveBalance();
+      if (error) throw error;
+      
+      // Update balance for each approved leave
+      for (const leave of leavesToApprove) {
+        await updateLeaveBalance(leave);
+      }
+      
+      toast({ 
+        title: "Approved", 
+        description: `${ids.length} leave request(s) approved successfully.` 
+      });
+      
+      // Refresh all data
+      await fetchLeaves();
+      await fetchLeaveBalance();
+    } catch (error) {
+      console.error("Error bulk approving:", error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to approve leaves", 
+        variant: "destructive" 
+      });
+    }
   };
 
   const handleBulkReject = async (ids: string[], reason: string) => {
@@ -353,7 +379,7 @@ export default function Leaves() {
   const getStatusBadge = (leave: LeaveWithEmployee) => {
     if (leave.auto_rejected) {
       return (
-        <Badge variant="destructive" className="flex items-center gap-1">
+        <Badge variant="destructive" >
           <AlertTriangle className="h-3 w-3" />
           Auto-Rejected
         </Badge>
