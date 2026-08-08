@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, Calendar, Play } from "lucide-react";
+import { Loader2, Calendar, Play, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { format, addMonths, addQuarters, addHours } from "date-fns";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ResetSettings {
@@ -43,7 +43,7 @@ interface DBResetSettings {
 }
 
 const DEFAULT_RESET_SETTINGS: ResetSettings = {
-  resetFrequency: "monthly",
+  resetFrequency: "yearly",
   resetMonth: 1,
   resetDay: 1,
   resetTime: "00:00",
@@ -139,78 +139,20 @@ export function BalanceResetSettings() {
 
   const calculateNextResetDate = () => {
     const today = new Date();
-    let nextDate: Date | null = null;
-
-    switch (settings.resetFrequency) {
-      case "monthly":
-        nextDate = new Date(
-          today.getFullYear(),
-          today.getMonth() + 1,
-          settings.resetDay || 1
-        );
-        if (nextDate <= today) {
-          nextDate = addMonths(nextDate, 1);
-        }
-        break;
-
-      case "quarterly":
-        const quarterMonths = [1, 4, 7, 10];
-        const currentQuarter = Math.floor(today.getMonth() / 3);
-        let nextQuarterMonth = quarterMonths[currentQuarter];
-        let nextYear = today.getFullYear();
-
-        if (
-          today.getMonth() > nextQuarterMonth ||
-          (today.getMonth() === nextQuarterMonth &&
-            today.getDate() >= (settings.resetDay || 1))
-        ) {
-          const nextQuarterIndex = (currentQuarter + 1) % 4;
-          nextQuarterMonth = quarterMonths[nextQuarterIndex];
-          nextYear += nextQuarterIndex === 0 ? 1 : 0;
-        }
-
-        nextDate = new Date(nextYear, nextQuarterMonth, settings.resetDay || 1);
-        break;
-
-      case "half_yearly":
-        const halfYearlyMonths = [
-          settings.resetMonth || 1,
-          (settings.resetMonth || 1) + 6,
-        ];
-        const currentHalfYear = today.getMonth() < 6 ? 0 : 1;
-        let nextHalfMonth = halfYearlyMonths[currentHalfYear];
-        let nextHalfYear = today.getFullYear();
-
-        if (
-          today.getMonth() > nextHalfMonth - 1 ||
-          (today.getMonth() === nextHalfMonth - 1 &&
-            today.getDate() >= (settings.resetDay || 1))
-        ) {
-          nextHalfMonth = halfYearlyMonths[1 - currentHalfYear];
-          nextHalfYear += currentHalfYear === 0 ? 0 : 1;
-        }
-
-        nextDate = new Date(nextHalfYear, nextHalfMonth - 1, settings.resetDay || 1);
-        break;
-
-      case "yearly":
-        nextDate = new Date(
-          today.getFullYear(),
-          (settings.resetMonth || 1) - 1,
-          settings.resetDay || 1
-        );
-        if (nextDate <= today) {
-          nextDate = new Date(
-            today.getFullYear() + 1,
-            (settings.resetMonth || 1) - 1,
-            settings.resetDay || 1
-          );
-        }
-        break;
-
-      case "never":
-        nextDate = null;
-        break;
+    
+    // Always yearly reset
+    let nextDate = new Date(
+      today.getFullYear(),
+      (settings.resetMonth || 1) - 1,
+      settings.resetDay || 1
+    );
+    
+    if (nextDate <= today) {
+      nextDate = new Date(
+        today.getFullYear() + 1,
+        (settings.resetMonth || 1) - 1,
+        settings.resetDay || 1
+      );
     }
 
     setNextResetDate(nextDate);
@@ -274,7 +216,7 @@ export function BalanceResetSettings() {
   };
 
   const handleResetNow = async () => {
-    if (!confirm("Are you sure you want to reset all leave balances now? This action cannot be undone.")) {
+    if (!confirm("Are you sure you want to reset all leave balances for the entire year? This action cannot be undone.")) {
       return;
     }
 
@@ -292,7 +234,7 @@ export function BalanceResetSettings() {
         throw new Error("Supabase URL not configured");
       }
 
-      // Call the reset function via API
+      // Call the reset function via API - always with "yearly" frequency
       const response = await fetch(`${supabaseUrl}/functions/v1/reset-leave-balances`, {
         method: "POST",
         headers: {
@@ -301,7 +243,7 @@ export function BalanceResetSettings() {
         },
         body: JSON.stringify({
           trigger_type: "manual",
-          frequency: settings.resetFrequency,
+          frequency: "yearly",
           carryForwardEnabled: settings.carryForwardEnabled,
           maxCarryForward: settings.maxCarryForward,
           carryForwardExpiry: settings.carryForwardExpiry,
@@ -316,7 +258,7 @@ export function BalanceResetSettings() {
 
       toast({
         title: "Success",
-        description: `Reset completed! ${result.employees_affected || 0} employees affected.`,
+        description: `Yearly reset completed! ${result.employees_affected || 0} employees affected for all 12 months.`,
       });
 
       // Update last reset date
@@ -353,33 +295,18 @@ export function BalanceResetSettings() {
             </div>
           ) : (
             <>
-              {/* Reset Frequency */}
-              <div className="space-y-3">
+          {/* Frequency is always YEARLY - no need to show selector */}
+          <div className="space-y-3 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <Label className="text-base font-semibold">Reset Frequency</Label>
-            <Select
-              value={settings.resetFrequency}
-              onValueChange={(value: any) =>
-                setSettings({ ...settings, resetFrequency: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="quarterly">Quarterly</SelectItem>
-                <SelectItem value="half_yearly">Half-Yearly</SelectItem>
-                <SelectItem value="yearly">Yearly</SelectItem>
-                <SelectItem value="never">Never Reset</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Select how often employee leave balances should reset
-            </p>
+            <div className="text-sm">
+              <Badge className="bg-blue-600">Yearly Reset</Badge>
+              <p className="text-xs text-muted-foreground mt-2">
+                Leave balances reset once a year for all 12 months
+              </p>
+            </div>
           </div>
 
-          {/* Reset Schedule Settings */}
-          {settings.resetFrequency !== "never" && (
+          {/* Reset Schedule Settings - only for yearly */}
             <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
               <h3 className="font-semibold text-sm">Reset Schedule</h3>
 
@@ -444,7 +371,6 @@ export function BalanceResetSettings() {
                 </div>
               </div>
             </div>
-          )}
 
           {/* Next Reset Date */}
           {nextResetDate && (
@@ -462,15 +388,6 @@ export function BalanceResetSettings() {
               <Calendar className="h-4 w-4" />
               <AlertDescription>
                 Last reset: <strong>{format(lastResetDate, "MMMM dd, yyyy HH:mm")}</strong>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {settings.resetFrequency === "never" && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Balances will never reset. Employees will keep accumulating leave indefinitely.
               </AlertDescription>
             </Alert>
           )}

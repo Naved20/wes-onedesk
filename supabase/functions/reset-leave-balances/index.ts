@@ -87,31 +87,28 @@ serve(async (req) => {
     }
 
     const now = new Date();
-    const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
     let totalLeavesCarriedForward = 0;
     const resetPromises = [];
     const notificationPromises = [];
-    let successCount = 0;
-    let failureCount = 0;
 
     // For each employee
     for (const employee of employees) {
       try {
-        // Get previous month balance
-        const previousMonth = currentMonth === 1 ? 12 : currentMonth - 1;
-        const previousYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+        // Get previous month balance (for carry forward calculation)
+        const previousMonth = now.getMonth(); // 0-based, so Dec = 11, Jan = 0
+        const previousYear = previousMonth === 0 ? currentYear - 1 : currentYear;
 
         const { data: previousBalance } = await supabase
           .from("leave_balances")
           .select("*")
           .eq("user_id", employee.user_id)
-          .eq("month", previousMonth)
+          .eq("month", previousMonth === 0 ? 12 : previousMonth)
           .eq("year", previousYear)
           .single();
 
-        // Calculate unused leaves from previous period
+        // Calculate unused leaves from previous period (for carry forward)
         let carryForwardAmount = 0;
         if (body.carryForwardEnabled && previousBalance) {
           const casualUsed = previousBalance.casual_leaves_used || 0;
@@ -131,66 +128,67 @@ serve(async (req) => {
           totalLeavesCarriedForward += carryForwardAmount;
         }
 
-        // Check if current month balance exists
-        const { data: currentBalance, error: currentError } = await supabase
-          .from("leave_balances")
-          .select("*")
-          .eq("user_id", employee.user_id)
-          .eq("month", currentMonth)
-          .eq("year", currentYear)
-          .single();
+        // For yearly reset: create/update entries for ALL 12 months of the current year
+        for (let month = 1; month <= 12; month++) {
+          // Check if month balance exists
+          const { data: monthBalance, error: monthError } = await supabase
+            .from("leave_balances")
+            .select("*")
+            .eq("user_id", employee.user_id)
+            .eq("month", month)
+            .eq("year", currentYear)
+            .single();
 
-        if (currentError?.code === "PGRST116") {
-          // No record exists, create one
-          resetPromises.push(
-            supabase.from("leave_balances").insert({
-              user_id: employee.user_id,
-              month: currentMonth,
-              year: currentYear,
-              casual_leaves_used: 0,
-              medical_leaves_used: 0,
-              emergency_leaves_used: 0,
-              lop_leaves_used: 0,
-              half_day_leaves_used: carryForwardAmount > 0 ? carryForwardAmount : 0,
-              casual_leaves_entitled: 6,
-              medical_leaves_entitled: 6,
-              emergency_leaves_entitled: 6,
-              lop_leaves_entitled: 6,
-            })
-          );
-        } else if (currentBalance) {
-          // Update existing record - reset used, keep entitled
-          resetPromises.push(
-            supabase
-              .from("leave_balances")
-              .update({
+          if (monthError?.code === "PGRST116") {
+            // No record exists, create one
+            // Only apply carry forward to the first month (January)
+            resetPromises.push(
+              supabase.from("leave_balances").insert({
+                user_id: employee.user_id,
+                month,
+                year: currentYear,
                 casual_leaves_used: 0,
                 medical_leaves_used: 0,
                 emergency_leaves_used: 0,
                 lop_leaves_used: 0,
-                half_day_leaves_used: carryForwardAmount > 0 ? carryForwardAmount : 0,
+                half_day_leaves_used: month === 1 && carryForwardAmount > 0 ? carryForwardAmount : 0,
+                casual_leaves_entitled: 6,
+                medical_leaves_entitled: 6,
+                emergency_leaves_entitled: 6,
+                lop_leaves_entitled: 6,
               })
-              .eq("id", currentBalance.id)
-          );
+            );
+          } else if (monthBalance) {
+            // Update existing record - reset used
+            resetPromises.push(
+              supabase
+                .from("leave_balances")
+                .update({
+                  casual_leaves_used: 0,
+                  medical_leaves_used: 0,
+                  emergency_leaves_used: 0,
+                  lop_leaves_used: 0,
+                  half_day_leaves_used: month === 1 && carryForwardAmount > 0 ? carryForwardAmount : 0,
+                })
+                .eq("id", monthBalance.id)
+            );
+          }
         }
 
         // Create notification for this employee
-        const notificationMessage = `Your leave balance has been reset for ${getMonthName(currentMonth)}. ${carryForwardAmount > 0 ? `${carryForwardAmount} days carried forward.` : ""}`;
+        const notificationMessage = `Your leave balance has been reset for ${currentYear}. All 12 months have been refreshed. ${carryForwardAmount > 0 ? `${carryForwardAmount} days carried forward to January.` : ""}`;
         notificationPromises.push(
           supabase.from("notifications").insert({
             user_id: employee.user_id,
-            title: "Leave Balance Reset",
+            title: "Yearly Leave Balance Reset",
             message: notificationMessage,
             type: "leave_reset",
             read: false,
             created_at: now.toISOString(),
           }).catch(err => console.error(`Failed to create notification for ${employee.user_id}:`, err))
         );
-
-        successCount++;
       } catch (error) {
         console.error(`Error processing employee ${employee.user_id}:`, error);
-        failureCount++;
       }
     }
 
@@ -225,33 +223,20 @@ serve(async (req) => {
     // Log to history
     await supabase.from("leave_reset_history").insert({
       reset_date: now.toISOString(),
-      frequency: body.frequency || "manual",
+      frequency: "yearly",
       employees_affected: employees.length,
       leaves_carried_forward: totalLeavesCarriedForward,
       status: "completed",
     });
-
-    // Send notification to all employees
-    const { data: allUsers } = await supabase
-      .from("employee_profiles")
-      .select("user_id")
-      .in(
-        "user_id",
-        employees.map((e) => e.user_id)
-      );
-
-    if (allUsers && allUsers.length > 0) {
-      // Notifications already sent via notificationPromises above
-      console.log(`Notifications sent to ${allUsers.length} employees`);
-    }
 
     return new Response(
       JSON.stringify({
         success: true,
         employees_affected: employees.length,
         leaves_carried_forward: totalLeavesCarriedForward,
+        months_reset: 12,
         reset_date: now.toISOString(),
-        message: `Successfully reset balances for ${employees.length} employees`,
+        message: `Successfully reset yearly balances for ${employees.length} employees. All 12 months updated.`,
       }),
       { status: 200, headers: corsHeaders }
     );
@@ -266,7 +251,7 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseKey);
       await supabase.from("leave_reset_history").insert({
         reset_date: new Date().toISOString(),
-        frequency: "manual",
+        frequency: "yearly",
         employees_affected: 0,
         status: "failed",
         error_message: error instanceof Error ? error.message : String(error),
@@ -291,57 +276,22 @@ function getMonthName(month: number): string {
   return months[month - 1] || `Month ${month}`;
 }
 
-// Helper function to calculate next reset date
+// Helper function to calculate next reset date (yearly)
 function calculateNextResetDate(settings: any): Date {
   const today = new Date();
-  let nextDate = new Date();
-
-  switch (settings.reset_frequency) {
-    case "monthly":
-      nextDate = new Date(today.getFullYear(), today.getMonth() + 1, settings.reset_day || 1);
-      if (nextDate <= today) {
-        nextDate = new Date(today.getFullYear(), today.getMonth() + 2, settings.reset_day || 1);
-      }
-      break;
-
-    case "quarterly":
-      const quarterMonths = [1, 4, 7, 10];
-      const currentQuarter = Math.floor(today.getMonth() / 3);
-      let nextQuarterMonth = quarterMonths[currentQuarter];
-      let nextYear = today.getFullYear();
-
-      if (today.getMonth() > nextQuarterMonth || (today.getMonth() === nextQuarterMonth && today.getDate() >= (settings.reset_day || 1))) {
-        const nextQuarterIndex = (currentQuarter + 1) % 4;
-        nextQuarterMonth = quarterMonths[nextQuarterIndex];
-        nextYear += nextQuarterIndex === 0 ? 1 : 0;
-      }
-
-      nextDate = new Date(nextYear, nextQuarterMonth, settings.reset_day || 1);
-      break;
-
-    case "half_yearly":
-      const halfYearlyMonths = [settings.reset_month || 1, (settings.reset_month || 1) + 6];
-      const currentHalfYear = today.getMonth() < 6 ? 0 : 1;
-      let nextHalfMonth = halfYearlyMonths[currentHalfYear];
-      let nextHalfYear = today.getFullYear();
-
-      if (today.getMonth() > nextHalfMonth - 1 || (today.getMonth() === nextHalfMonth - 1 && today.getDate() >= (settings.reset_day || 1))) {
-        nextHalfMonth = halfYearlyMonths[1 - currentHalfYear];
-        nextHalfYear += currentHalfYear === 0 ? 0 : 1;
-      }
-
-      nextDate = new Date(nextHalfYear, nextHalfMonth - 1, settings.reset_day || 1);
-      break;
-
-    case "yearly":
-      nextDate = new Date(today.getFullYear(), (settings.reset_month || 1) - 1, settings.reset_day || 1);
-      if (nextDate <= today) {
-        nextDate = new Date(today.getFullYear() + 1, (settings.reset_month || 1) - 1, settings.reset_day || 1);
-      }
-      break;
-
-    default:
-      nextDate = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+  
+  let nextDate = new Date(
+    today.getFullYear(),
+    (settings.reset_month || 1) - 1,
+    settings.reset_day || 1
+  );
+  
+  if (nextDate <= today) {
+    nextDate = new Date(
+      today.getFullYear() + 1,
+      (settings.reset_month || 1) - 1,
+      settings.reset_day || 1
+    );
   }
 
   return nextDate;
