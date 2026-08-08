@@ -34,7 +34,11 @@ BEGIN
     NEW.salary_deduction_percent := 50;
   ELSIF NEW.leave_type = 'unplanned'::leave_type THEN
     NEW.salary_deduction_percent := 100;
-  ELSIF NEW.leave_type = 'casual'::leave_type OR NEW.leave_type = 'emergency'::leave_type THEN
+  ELSIF NEW.leave_type = 'lop'::leave_type THEN
+    NEW.salary_deduction_percent := 100;
+  ELSIF NEW.leave_type = 'half_day'::leave_type THEN
+    NEW.salary_deduction_percent := 50;
+  ELSIF NEW.leave_type = 'casual'::leave_type OR NEW.leave_type = 'medical'::leave_type OR NEW.leave_type = 'emergency'::leave_type THEN
     NEW.salary_deduction_percent := 0;
   END IF;
   
@@ -122,8 +126,8 @@ BEGIN
     END IF;
   END IF;
   
-  -- Check weekly limit - REMOVED, should use LeaveRulesConfig
-  -- The frontend validation in LeaveApplicationForm uses LeaveRulesConfig.max_per_week
+  -- Check weekly limit - uses LeaveRulesConfig max_per_week (validated on frontend)
+  -- Database validation focuses on basic eligibility only
   
   RETURN json_build_object(
     'eligible', true,
@@ -132,3 +136,4 @@ BEGIN
   );
 END;
 $function$;
+
