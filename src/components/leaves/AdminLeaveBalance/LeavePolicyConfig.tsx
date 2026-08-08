@@ -12,13 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2, Edit2, RotateCcw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,8 +19,6 @@ import { supabase } from "@/integrations/supabase/client";
 interface LeavePolicy {
   leaveType: string;
   monthlyBalance: number;
-  maxPerRequest: number;
-  advanceNotice: number;
   salaryImpact: number;
   carryForwardAllowed: boolean;
 }
@@ -36,40 +27,30 @@ const DEFAULT_POLICIES: LeavePolicy[] = [
   {
     leaveType: "Casual",
     monthlyBalance: 6,
-    maxPerRequest: 2,
-    advanceNotice: 4,
     salaryImpact: 0,
     carryForwardAllowed: false,
   },
   {
     leaveType: "Medical",
     monthlyBalance: 6,
-    maxPerRequest: 2,
-    advanceNotice: 0,
     salaryImpact: 0,
     carryForwardAllowed: false,
   },
   {
     leaveType: "Emergency",
     monthlyBalance: 6,
-    maxPerRequest: 1,
-    advanceNotice: 0,
     salaryImpact: 100,
     carryForwardAllowed: false,
   },
   {
     leaveType: "LOP",
     monthlyBalance: 6,
-    maxPerRequest: 1,
-    advanceNotice: 1,
     salaryImpact: 100,
     carryForwardAllowed: false,
   },
   {
     leaveType: "Half Day",
     monthlyBalance: 6,
-    maxPerRequest: 1,
-    advanceNotice: 1,
     salaryImpact: 50,
     carryForwardAllowed: false,
   },
@@ -95,23 +76,18 @@ export function LeavePolicyConfig() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Map database records to policy format
         const dbPolicies = data.map((p: any) => ({
           leaveType: p.leave_type.charAt(0).toUpperCase() + p.leave_type.slice(1),
           monthlyBalance: p.monthly_balance,
-          maxPerRequest: p.max_per_request,
-          advanceNotice: p.advance_notice,
           salaryImpact: p.salary_impact_percent,
           carryForwardAllowed: p.carry_forward_allowed || false,
         }));
         setPolicies(dbPolicies);
       } else {
-        // If no policies exist, create defaults
         await createDefaultPolicies();
       }
     } catch (error) {
       console.error("Error fetching policies:", error);
-      // Fall back to defaults on error
       setPolicies(DEFAULT_POLICIES);
     } finally {
       setLoading(false);
@@ -123,8 +99,6 @@ export function LeavePolicyConfig() {
       const defaultData = DEFAULT_POLICIES.map(p => ({
         leave_type: p.leaveType.toLowerCase(),
         monthly_balance: p.monthlyBalance,
-        max_per_request: p.maxPerRequest,
-        advance_notice: p.advanceNotice,
         salary_impact_percent: p.salaryImpact,
         carry_forward_allowed: p.carryForwardAllowed,
       }));
@@ -133,7 +107,7 @@ export function LeavePolicyConfig() {
         .from("leave_balance_config")
         .insert(defaultData);
 
-      if (error && error.code !== "23505") throw error; // 23505 is unique constraint violation
+      if (error && error.code !== "23505") throw error;
       setPolicies(DEFAULT_POLICIES);
     } catch (error) {
       console.error("Error creating default policies:", error);
@@ -150,14 +124,11 @@ export function LeavePolicyConfig() {
     
     setSaving(true);
     try {
-      // Save to Supabase leave_balance_config table
       const { error } = await supabase
         .from("leave_balance_config")
         .upsert({
           leave_type: editingPolicy.leaveType.toLowerCase(),
           monthly_balance: editingPolicy.monthlyBalance,
-          max_per_request: editingPolicy.maxPerRequest,
-          advance_notice: editingPolicy.advanceNotice,
           salary_impact_percent: editingPolicy.salaryImpact,
           carry_forward_allowed: editingPolicy.carryForwardAllowed,
         }, {
@@ -166,14 +137,13 @@ export function LeavePolicyConfig() {
 
       if (error) throw error;
 
-      // Update policy in state
       setPolicies(policies.map(p => 
         p.leaveType === editingPolicy.leaveType ? editingPolicy : p
       ));
       
       toast({
         title: "Success",
-        description: `${editingPolicy.leaveType} policy updated successfully. Changes will reflect for employees immediately.`,
+        description: `${editingPolicy.leaveType} policy updated successfully.`,
       });
       
       setDialogOpen(false);
@@ -215,7 +185,7 @@ export function LeavePolicyConfig() {
           <div>
             <CardTitle>Leave Policy Configuration</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure default leave policies for each leave type
+              Configure monthly balance and salary impact for each leave type
             </p>
           </div>
           <Button
@@ -229,7 +199,7 @@ export function LeavePolicyConfig() {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className=" grid grid-cols-2 md:grid-cols-3 gap-4 ">
             {policies.map((policy) => (
               <div
                 key={policy.leaveType}
@@ -239,8 +209,7 @@ export function LeavePolicyConfig() {
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-lg">{policy.leaveType}</h3>
                     <Badge variant="outline">
-                      {policy.monthlyBalance} days/month
-                    </Badge>
+                      {policy.monthlyBalance} days                    </Badge>
                   </div>
                   <Button
                     variant="ghost"
@@ -253,29 +222,13 @@ export function LeavePolicyConfig() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                <div className=" gap-4 text-sm">
                   <div>
                     <p className="text-muted-foreground">Balance</p>
                     <p className="font-semibold">{policy.monthlyBalance} days</p>
                   </div>
-                  <div>
-                    <p className="text-muted-foreground">Max Per Request</p>
-                    <p className="font-semibold">{policy.maxPerRequest} days</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Advance Notice</p>
-                    <p className="font-semibold">{policy.advanceNotice} days</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Salary Impact</p>
-                    <p className="font-semibold">{policy.salaryImpact}%</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Carry Forward</p>
-                    <Badge variant={policy.carryForwardAllowed ? "default" : "secondary"}>
-                      {policy.carryForwardAllowed ? "Allowed" : "Not Allowed"}
-                    </Badge>
-                  </div>
+
+                  
                 </div>
               </div>
             ))}
@@ -320,7 +273,7 @@ function EditPolicyDialog({
         <DialogHeader>
           <DialogTitle>Edit {policy.leaveType} Policy</DialogTitle>
           <DialogDescription>
-            Configure settings for {policy.leaveType} leave
+            Configure balance and salary deduction for {policy.leaveType} leave
           </DialogDescription>
         </DialogHeader>
 
@@ -336,38 +289,6 @@ function EditPolicyDialog({
                 onPolicyChange({
                   ...policy,
                   monthlyBalance: parseInt(e.target.value) || 0,
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <Label>Max Leave Per Request (days)</Label>
-            <Input
-              type="number"
-              min="1"
-              max={policy.monthlyBalance}
-              value={policy.maxPerRequest}
-              onChange={(e) =>
-                onPolicyChange({
-                  ...policy,
-                  maxPerRequest: parseInt(e.target.value) || 0,
-                })
-              }
-            />
-          </div>
-
-          <div>
-            <Label>Advance Notice Required (days)</Label>
-            <Input
-              type="number"
-              min="0"
-              max="30"
-              value={policy.advanceNotice}
-              onChange={(e) =>
-                onPolicyChange({
-                  ...policy,
-                  advanceNotice: parseInt(e.target.value) || 0,
                 })
               }
             />
@@ -393,23 +314,7 @@ function EditPolicyDialog({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="carryForward"
-              checked={policy.carryForwardAllowed}
-              onChange={(e) =>
-                onPolicyChange({
-                  ...policy,
-                  carryForwardAllowed: e.target.checked,
-                })
-              }
-              className="rounded border-gray-300"
-            />
-            <Label htmlFor="carryForward" className="cursor-pointer">
-              Allow Carry Forward to Next Month
-            </Label>
-          </div>
+          
         </div>
 
         <DialogFooter>
