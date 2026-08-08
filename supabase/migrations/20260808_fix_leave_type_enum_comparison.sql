@@ -62,6 +62,7 @@ END;
 $$;
 
 -- Fix validate_leave_request function with enum casts
+-- Removed hardcoded 1-day casual leave restriction (now uses leave_rules_config)
 CREATE OR REPLACE FUNCTION public.validate_leave_request()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -74,15 +75,6 @@ DECLARE
 BEGIN
   -- Calculate working days
   v_working_days := calculate_working_days(NEW.start_date, NEW.end_date);
-  
-  -- ENFORCE: Casual leaves must be exactly 1 day per application
-  IF NEW.leave_type = 'casual'::leave_type AND NEW.start_date != NEW.end_date THEN
-    NEW.auto_rejected := true;
-    NEW.auto_rejection_reason := 'Casual leaves are limited to exactly 1 day per application';
-    NEW.status := 'rejected';
-    NEW.working_days_count := v_working_days;
-    RETURN NEW;
-  END IF;
   
   -- Adjust for half day
   IF NEW.is_half_day THEN
@@ -126,6 +118,7 @@ END;
 $function$;
 
 -- Fix check_leave_eligibility function with enum casts
+-- NOW USES RULES FROM leave_rules_config TABLE INSTEAD OF HARDCODING
 CREATE OR REPLACE FUNCTION public.check_leave_eligibility(p_user_id uuid, p_start_date date, p_end_date date, p_leave_type leave_type, p_is_emergency boolean DEFAULT false)
 RETURNS json
 LANGUAGE plpgsql
@@ -135,62 +128,122 @@ AS $function$
 DECLARE
   v_month INTEGER := EXTRACT(MONTH FROM p_start_date);
   v_year INTEGER := EXTRACT(YEAR FROM p_start_date);
-  v_casual_used NUMERIC;
+  v_month_used NUMERIC;
   v_week_start DATE;
   v_week_leaves INTEGER;
   v_advance_days INTEGER;
   v_working_days INTEGER;
+  v_rule RECORD;
+  v_leave_type_str TEXT;
 BEGIN
+  -- Convert leave_type enum to text for database lookup
+  v_leave_type_str := p_leave_type::TEXT;
+  
+  -- Get rules for this leave type from leave_rules_config
+  SELECT max_per_request, max_per_week, max_per_month, min_gap_between_requests, advance_notice_days
+  INTO v_rule
+  FROM leave_rules_config
+  WHERE leave_type = v_leave_type_str;
+  
+  -- If no rule found, allow the leave (fail open)
+  IF v_rule IS NULL THEN
+    RETURN json_build_object(
+      'eligible', true,
+      'reason', NULL,
+      'working_days', calculate_working_days(p_start_date, p_end_date)
+    );
+  END IF;
+  
   -- Calculate advance notice days
   v_advance_days := p_start_date - CURRENT_DATE;
   
   -- Calculate working days for this request
   v_working_days := calculate_working_days(p_start_date, p_end_date);
   
-  -- ENFORCE: Casual leaves must be exactly 1 day per application
-  IF p_leave_type = 'casual'::leave_type AND v_working_days > 1 THEN
+  -- 1. Check max per request
+  IF v_working_days > v_rule.max_per_request THEN
     RETURN json_build_object(
       'eligible', false,
-      'reason', 'Casual leaves are limited to exactly 1 day per application',
+      'reason', 'Maximum ' || v_rule.max_per_request || ' days per request allowed. You requested ' || v_working_days || ' days.',
       'working_days', v_working_days
     );
   END IF;
   
-  -- For casual leaves, check 3-day advance notice (unless emergency)
-  IF p_leave_type = 'casual'::leave_type AND NOT p_is_emergency AND v_advance_days < 3 THEN
+  -- 2. Check advance notice (if required)
+  IF v_rule.advance_notice_days > 0 AND NOT p_is_emergency AND v_advance_days < v_rule.advance_notice_days THEN
     RETURN json_build_object(
       'eligible', false,
-      'reason', 'Casual leaves require minimum 3 days advance notice',
+      'reason', 'This leave requires minimum ' || v_rule.advance_notice_days || ' days advance notice. You are applying with only ' || v_advance_days || ' days notice.',
       'working_days', v_working_days
     );
   END IF;
   
-  -- Check casual leave limit (2 per month)
-  IF p_leave_type = 'casual'::leave_type THEN
-    SELECT COALESCE(casual_leaves_used, 0)
-    INTO v_casual_used
+  -- 3. Check monthly limit
+  -- Get current month's used days for this leave type
+  v_month_used := 0;
+  IF v_leave_type_str = 'casual' THEN
+    SELECT COALESCE(casual_leaves_used, 0) INTO v_month_used
     FROM leave_balances
-    WHERE user_id = p_user_id
-      AND month = v_month
-      AND year = v_year;
-    
-    IF v_casual_used IS NULL THEN
-      v_casual_used := 0;
-    END IF;
-    
-    -- Check if this request would exceed the limit (max 2 casual leaves per month)
-    IF v_casual_used + v_working_days > 2 THEN
+    WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  ELSIF v_leave_type_str = 'medical' THEN
+    SELECT COALESCE(medical_leaves_used, 0) INTO v_month_used
+    FROM leave_balances
+    WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  ELSIF v_leave_type_str = 'emergency' THEN
+    SELECT COALESCE(emergency_leaves_used, 0) INTO v_month_used
+    FROM leave_balances
+    WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  ELSIF v_leave_type_str = 'lop' THEN
+    SELECT COALESCE(lop_leaves_used, 0) INTO v_month_used
+    FROM leave_balances
+    WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  ELSIF v_leave_type_str = 'half_day' THEN
+    SELECT COALESCE(half_day_leaves_used, 0) INTO v_month_used
+    FROM leave_balances
+    WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  END IF;
+  
+  IF v_month_used IS NULL THEN
+    v_month_used := 0;
+  END IF;
+  
+  IF v_month_used + v_working_days > v_rule.max_per_month THEN
+    RETURN json_build_object(
+      'eligible', false,
+      'reason', 'Monthly ' || v_leave_type_str || ' leave limit (' || v_rule.max_per_month || ' days) would be exceeded. You have used ' || CAST(v_month_used AS INTEGER) || ' day(s) and are requesting ' || v_working_days || ' more day(s).',
+      'working_days', v_working_days
+    );
+  END IF;
+  
+  -- 4. Check weekly limit
+  v_week_start := date_trunc('week', p_start_date)::DATE;
+  -- Count existing leaves in same week for this leave type
+  SELECT COUNT(*)
+  INTO v_week_leaves
+  FROM leaves
+  WHERE user_id = p_user_id
+    AND leave_type = p_leave_type
+    AND status IN ('approved', 'pending')
+    AND auto_rejected = false
+    AND start_date >= v_week_start
+    AND start_date < v_week_start + INTERVAL '7 days'
+    AND id IS NOT NULL; -- Existing leaves only
+  
+  -- Sum up working days from existing leaves in the same week
+  -- We'll check if adding this request would exceed max_per_week
+  IF v_week_leaves > 0 THEN
+    -- For simplicity: if there's already a leave this week, flag it if requesting more than allowed
+    -- More precise calculation would sum working days from existing leaves
+    IF v_rule.max_per_week <= 1 THEN
       RETURN json_build_object(
         'eligible', false,
-        'reason', 'Monthly casual leave limit (2 days) reached. You have used ' || CAST(v_casual_used AS INTEGER) || ' day(s) and are requesting ' || CAST(v_working_days AS INTEGER) || ' more day(s). Maximum allowed: 2 days per month.',
+        'reason', 'Maximum ' || v_rule.max_per_week || ' ' || v_leave_type_str || ' leave application(s) per week allowed. You already have a pending/approved leave this week.',
         'working_days', v_working_days
       );
     END IF;
   END IF;
   
-  -- Check weekly limit - uses LeaveRulesConfig max_per_week (validated on frontend)
-  -- Database validation focuses on basic eligibility only
-  
+  -- All checks passed
   RETURN json_build_object(
     'eligible', true,
     'reason', NULL,

@@ -392,73 +392,7 @@ export function BalanceResetSettings() {
             </Alert>
           )}
 
-          {/* Carry Forward Settings */}
-          <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
-            <h3 className="font-semibold text-sm">Carry Forward Settings</h3>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="carryForward"
-                checked={settings.carryForwardEnabled}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    carryForwardEnabled: e.target.checked,
-                  })
-                }
-                className="rounded border-gray-300"
-              />
-              <Label htmlFor="carryForward" className="cursor-pointer">
-                Enable Carry Forward of Unused Leaves
-              </Label>
-            </div>
-
-            {settings.carryForwardEnabled && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Maximum Days to Carry Forward</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="30"
-                    value={settings.maxCarryForward}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        maxCarryForward: parseInt(e.target.value) || 0,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    0 = No limit
-                  </p>
-                </div>
-
-                <div>
-                  <Label>Carry Forward Expiry (days)</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={settings.carryForwardExpiry}
-                    onChange={(e) =>
-                      setSettings({
-                        ...settings,
-                        carryForwardExpiry: parseInt(e.target.value) || 365,
-                      })
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Carried forward leaves expire after this many days
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!settings.carryForwardEnabled && (
-              <Badge variant="secondary">Carry Forward Disabled</Badge>
-            )}
-          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-2">
