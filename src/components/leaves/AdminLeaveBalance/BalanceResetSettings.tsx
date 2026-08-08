@@ -280,18 +280,31 @@ export function BalanceResetSettings() {
 
     setResettingNow(true);
     try {
+      // Get session first to avoid race conditions
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        throw new Error("Authentication failed. Please log in again.");
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error("Supabase URL not configured");
+      }
+
       // Call the reset function via API
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-leave-balances`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/reset-leave-balances`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           trigger_type: "manual",
           frequency: settings.resetFrequency,
           carryForwardEnabled: settings.carryForwardEnabled,
           maxCarryForward: settings.maxCarryForward,
+          carryForwardExpiry: settings.carryForwardExpiry,
         }),
       });
 
@@ -303,7 +316,7 @@ export function BalanceResetSettings() {
 
       toast({
         title: "Success",
-        description: `Reset completed! ${result.employees_affected} employees affected.`,
+        description: `Reset completed! ${result.employees_affected || 0} employees affected.`,
       });
 
       // Update last reset date
@@ -531,7 +544,7 @@ export function BalanceResetSettings() {
           </div>
 
           {/* Action Buttons */}
-          <div >
+          <div className="flex gap-2">
             <Button
               onClick={handleSaveSettings}
               disabled={saving || loading}
@@ -541,7 +554,16 @@ export function BalanceResetSettings() {
               Save Reset Settings
             </Button>
 
-
+            <Button
+              onClick={handleResetNow}
+              disabled={resettingNow || loading}
+              variant="secondary"
+              className="gap-2"
+            >
+              {resettingNow && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Play className="h-4 w-4" />
+              Reset Now
+            </Button>
           </div>
           </>
           )}

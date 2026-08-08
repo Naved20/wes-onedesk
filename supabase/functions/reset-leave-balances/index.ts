@@ -92,6 +92,9 @@ serve(async (req) => {
 
     let totalLeavesCarriedForward = 0;
     const resetPromises = [];
+    const notificationPromises = [];
+    let successCount = 0;
+    let failureCount = 0;
 
     // For each employee
     for (const employee of employees) {
@@ -148,12 +151,11 @@ serve(async (req) => {
               medical_leaves_used: 0,
               emergency_leaves_used: 0,
               lop_leaves_used: 0,
-              half_day_leaves_used: 0,
+              half_day_leaves_used: carryForwardAmount > 0 ? carryForwardAmount : 0,
               casual_leaves_entitled: 6,
               medical_leaves_entitled: 6,
               emergency_leaves_entitled: 6,
               lop_leaves_entitled: 6,
-              half_day_leaves_used: carryForwardAmount > 0 ? carryForwardAmount : 0,
             })
           );
         } else if (currentBalance) {
@@ -171,13 +173,35 @@ serve(async (req) => {
               .eq("id", currentBalance.id)
           );
         }
+
+        // Create notification for this employee
+        const notificationMessage = `Your leave balance has been reset for ${getMonthName(currentMonth)}. ${carryForwardAmount > 0 ? `${carryForwardAmount} days carried forward.` : ""}`;
+        notificationPromises.push(
+          supabase.from("notifications").insert({
+            user_id: employee.user_id,
+            title: "Leave Balance Reset",
+            message: notificationMessage,
+            type: "leave_reset",
+            read: false,
+            created_at: now.toISOString(),
+          }).catch(err => console.error(`Failed to create notification for ${employee.user_id}:`, err))
+        );
+
+        successCount++;
       } catch (error) {
-        console.error(`Error resetting balance for employee ${employee.user_id}:`, error);
+        console.error(`Error processing employee ${employee.user_id}:`, error);
+        failureCount++;
       }
     }
 
     // Execute all reset operations
-    await Promise.all(resetPromises);
+    await Promise.all(resetPromises).catch(err => {
+      console.error("Error executing reset operations:", err);
+      throw new Error(`Failed to reset balances: ${err.message}`);
+    });
+
+    // Send all notifications
+    await Promise.allSettled(notificationPromises);
 
     // Update leave_reset_settings with next reset date
     const { data: settings } = await supabase
@@ -209,7 +233,7 @@ serve(async (req) => {
 
     // Send notification to all employees
     const { data: allUsers } = await supabase
-      .from("user_fcm_tokens")
+      .from("employee_profiles")
       .select("user_id")
       .in(
         "user_id",
@@ -217,22 +241,8 @@ serve(async (req) => {
       );
 
     if (allUsers && allUsers.length > 0) {
-      // Send push notifications
-      for (const record of allUsers) {
-        try {
-          await supabase
-            .from("notifications")
-            .insert({
-              user_id: record.user_id,
-              title: "Leave Balance Reset",
-              message: `Your leave balance has been reset. ${carryForwardAmount > 0 ? `${carryForwardAmount} days carried forward.` : ""}`,
-              type: "leave_reset",
-              read: false,
-            });
-        } catch (error) {
-          console.error(`Failed to send notification to ${record.user_id}:`, error);
-        }
-      }
+      // Notifications already sent via notificationPromises above
+      console.log(`Notifications sent to ${allUsers.length} employees`);
     }
 
     return new Response(
@@ -271,6 +281,15 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to get month name
+function getMonthName(month: number): string {
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  return months[month - 1] || `Month ${month}`;
+}
 
 // Helper function to calculate next reset date
 function calculateNextResetDate(settings: any): Date {
