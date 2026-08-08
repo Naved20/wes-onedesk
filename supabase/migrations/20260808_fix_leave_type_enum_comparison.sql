@@ -1,5 +1,67 @@
 -- Fix: Cast leave_type comparisons to enum type in trigger functions
+-- Also add handling for new leave types: medical, lop, half_day
+-- This fixes the "operator does not exist: character varying = leave_type" error
 
+-- Fix the update_leave_balance_on_approval trigger function
+CREATE OR REPLACE FUNCTION public.update_leave_balance_on_approval()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_month INTEGER;
+  v_year INTEGER;
+  v_days NUMERIC;
+BEGIN
+  -- Only process when status changes to approved
+  IF NEW.status = 'approved' AND (OLD.status IS NULL OR OLD.status != 'approved') THEN
+    v_month := EXTRACT(MONTH FROM NEW.start_date);
+    v_year := EXTRACT(YEAR FROM NEW.start_date);
+    v_days := COALESCE(NEW.working_days_count, 1);
+    
+    -- Ensure balance record exists
+    PERFORM get_or_create_leave_balance(NEW.user_id, v_year, v_month);
+    
+    -- Update the appropriate balance based on leave type (with enum casting)
+    IF NEW.leave_type = 'casual'::leave_type OR NEW.leave_type = 'emergency'::leave_type THEN
+      UPDATE leave_balances
+      SET casual_leaves_used = casual_leaves_used + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'medical'::leave_type THEN
+      UPDATE leave_balances
+      SET medical_leaves_used = COALESCE(medical_leaves_used, 0) + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'lop'::leave_type THEN
+      UPDATE leave_balances
+      SET lop_leaves_used = COALESCE(lop_leaves_used, 0) + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'half_day'::leave_type THEN
+      UPDATE leave_balances
+      SET half_day_leaves_used = COALESCE(half_day_leaves_used, 0) + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'sick'::leave_type THEN
+      UPDATE leave_balances
+      SET sick_leaves_used = sick_leaves_used + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'unplanned'::leave_type THEN
+      UPDATE leave_balances
+      SET unplanned_leaves_used = unplanned_leaves_used + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- Fix validate_leave_request function with enum casts
 CREATE OR REPLACE FUNCTION public.validate_leave_request()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -29,7 +91,7 @@ BEGIN
     NEW.working_days_count := v_working_days;
   END IF;
   
-  -- Set salary deduction based on leave type
+  -- Set salary deduction based on leave type (with enum casting)
   IF NEW.leave_type = 'sick'::leave_type THEN
     NEW.salary_deduction_percent := 50;
   ELSIF NEW.leave_type = 'unplanned'::leave_type THEN
@@ -63,7 +125,7 @@ BEGIN
 END;
 $function$;
 
--- Fix check_leave_eligibility function
+-- Fix check_leave_eligibility function with enum casts
 CREATE OR REPLACE FUNCTION public.check_leave_eligibility(p_user_id uuid, p_start_date date, p_end_date date, p_leave_type leave_type, p_is_emergency boolean DEFAULT false)
 RETURNS json
 LANGUAGE plpgsql
@@ -120,7 +182,7 @@ BEGIN
     IF v_casual_used + v_working_days > 2 THEN
       RETURN json_build_object(
         'eligible', false,
-        'reason', 'Monthly casual leave limit (2 days) reached. You have used ' || v_casual_used || ' day(s) and are requesting ' || v_working_days || ' more day(s). Maximum allowed: 2 days per month.',
+        'reason', 'Monthly casual leave limit (2 days) reached. You have used ' || CAST(v_casual_used AS INTEGER) || ' day(s) and are requesting ' || CAST(v_working_days AS INTEGER) || ' more day(s). Maximum allowed: 2 days per month.',
         'working_days', v_working_days
       );
     END IF;
@@ -136,4 +198,3 @@ BEGIN
   );
 END;
 $function$;
-
