@@ -18,6 +18,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Info, Loader2, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +31,8 @@ import { differenceInDays, format, addDays, isSunday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { leaveNotifications } from "@/lib/notificationService";
 import { getAllLeavePolicies, type LeaveType, type LeavePolicyData } from "@/lib/leavePolicyService";
+import { validateLeaveRequest, type ValidationError, getLeaveTypeRule } from "@/lib/leave-validation-utils";
+import { EmployeeLeaveRulesView } from "./EmployeeLeaveRulesView";
 
 // Use dynamic policy loading
 let LEAVE_POLICY: Record<LeaveType, LeavePolicyData> = {};
@@ -63,23 +71,46 @@ export function LeaveApplicationForm({
   const [validationMessage, setValidationMessage] = useState<{ type: "error" | "warning" | "info"; message: string } | null>(null);
   const [workingDays, setWorkingDays] = useState(0);
   const [policiesLoading, setPoliciesLoading] = useState(true);
+  const [ruleErrors, setRuleErrors] = useState<string[]>([]);
+  const [existingLeaves, setExistingLeaves] = useState<any[]>([]);
+  const [currentLeaveRule, setCurrentLeaveRule] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"form" | "rules">("form");
 
   const policy = LEAVE_POLICY[leaveType];
 
-  // Load leave policies from database on component mount
+  // Load leave policies and existing leaves on component mount
   useEffect(() => {
-    const loadPolicies = async () => {
+    const loadData = async () => {
       try {
         const policies = await getAllLeavePolicies();
         LEAVE_POLICY = policies;
+
+        // Load existing approved leaves for this employee
+        const { data: leaves, error } = await supabase
+          .from("leaves")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("status", "approved");
+
+        if (error) throw error;
+        setExistingLeaves(leaves || []);
       } catch (error) {
-        console.error("Error loading policies:", error);
+        console.error("Error loading data:", error);
       } finally {
         setPoliciesLoading(false);
       }
     };
-    loadPolicies();
-  }, []);
+    loadData();
+  }, [userId]);
+
+  // Load current leave type rule when leave type changes
+  useEffect(() => {
+    const loadLeaveTypeRule = async () => {
+      const rule = await getLeaveTypeRule(leaveType);
+      setCurrentLeaveRule(rule);
+    };
+    loadLeaveTypeRule();
+  }, [leaveType]);
 
   // Get remaining balance for current leave type
   const getRemainingBalance = (type: LeaveType) => {
@@ -132,14 +163,15 @@ export function LeaveApplicationForm({
     }
   };
 
-  // Validate leave request
+  // Validate leave request against both policies and rules
   useEffect(() => {
     validateLeave();
   }, [startDate, endDate, leaveType, workingDays, leaveBalancesUsed]);
 
-  const validateLeave = () => {
+  const validateLeave = async () => {
     if (!startDate || !policy) {
       setValidationMessage(null);
+      setRuleErrors([]);
       return;
     }
 
@@ -166,7 +198,7 @@ export function LeaveApplicationForm({
       return;
     }
 
-    // Check max days at a time
+    // Check max days at a time (policy level)
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -192,6 +224,30 @@ export function LeaveApplicationForm({
         message: `${policy.label} requires minimum ${policy.advanceDays} days advance notice`,
       });
       return;
+    }
+
+    // Validate against leave rules (per-leave-type rules)
+    if (startDate && endDate) {
+      const ruleValidation = await validateLeaveRequest(
+        userId,
+        leaveType,
+        start,
+        new Date(endDate),
+        existingLeaves
+      );
+
+      if (!ruleValidation.valid) {
+        setRuleErrors(ruleValidation.errors);
+        if (ruleValidation.errors.length > 0) {
+          setValidationMessage({
+            type: "error",
+            message: ruleValidation.errors[0],
+          });
+          return;
+        }
+      } else {
+        setRuleErrors([]);
+      }
     }
 
     // Warning for last leave
@@ -295,7 +351,7 @@ export function LeaveApplicationForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle>Apply for Leave</DialogTitle>
           {policy ? (
@@ -327,17 +383,24 @@ export function LeaveApplicationForm({
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <>
-            {isFormDisabled && policy && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  You have exhausted your {policy.label} quota ({policy.balance}/{policy.balance} used). Please choose a different leave type.
-                </AlertDescription>
-              </Alert>
-            )}
+          <Tabs defaultValue="form" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">Leave Request</TabsTrigger>
+              <TabsTrigger value="rules">Rules & Limits</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-4 py-4">
+            {/* Form Tab */}
+            <TabsContent value="form" className="space-y-4 max-h-[500px] overflow-y-auto">
+              {isFormDisabled && policy && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    You have exhausted your {policy.label} quota ({policy.balance}/{policy.balance} used). Please choose a different leave type.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-4 py-4">
           {/* Leave Type */}
           <div className="grid gap-2">
             <Label>Leave Type</Label>
@@ -480,7 +543,99 @@ export function LeaveApplicationForm({
             </Alert>
           )}
             </div>
-          </>
+            </TabsContent>
+
+            {/* Rules Tab */}
+            <TabsContent value="rules" className="max-h-[500px] overflow-y-auto">
+              <div className="py-4">
+                {currentLeaveRule ? (
+                  <div className="space-y-4">
+                    <Alert>
+                      <Info className="h-4 w-4" />
+                      <AlertDescription>
+                        These are the rules for {policy?.label}. Your leave requests must comply with all these limits.
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase">
+                          Max Per Request
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-2xl font-bold">
+                            {currentLeaveRule.max_per_request}
+                          </span>
+                          <span className="text-sm text-muted-foreground ml-2">days</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase">
+                          Max Per Week
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-2xl font-bold">
+                            {currentLeaveRule.max_per_week}
+                          </span>
+                          <span className="text-sm text-muted-foreground ml-2">days</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase">
+                          Max Per Month
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-2xl font-bold">
+                            {currentLeaveRule.max_per_month}
+                          </span>
+                          <span className="text-sm text-muted-foreground ml-2">days</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase">
+                          Min Gap Between Requests
+                        </div>
+                        <div className="mt-2">
+                          <span className="text-2xl font-bold">
+                            {currentLeaveRule.min_gap_between_requests}
+                          </span>
+                          <span className="text-sm text-muted-foreground ml-2">days</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-4 text-sm space-y-2 text-muted-foreground">
+                      <p className="font-semibold">Summary:</p>
+                      <ul className="space-y-1 ml-4">
+                        <li>
+                          • Maximum {currentLeaveRule.max_per_request} days per single request
+                        </li>
+                        <li>
+                          • Maximum {currentLeaveRule.max_per_week} days per week (7 days)
+                        </li>
+                        <li>
+                          • Maximum {currentLeaveRule.max_per_month} days per calendar month
+                        </li>
+                        {currentLeaveRule.min_gap_between_requests > 0 && (
+                          <li>
+                            • {currentLeaveRule.min_gap_between_requests} days gap required between consecutive requests
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>Loading rules...</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         )}
 
         <DialogFooter>
@@ -495,7 +650,8 @@ export function LeaveApplicationForm({
               !startDate ||
               !endDate ||
               !reason.trim() ||
-              validationMessage?.type === "error"
+              validationMessage?.type === "error" ||
+              ruleErrors.length > 0
             }
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

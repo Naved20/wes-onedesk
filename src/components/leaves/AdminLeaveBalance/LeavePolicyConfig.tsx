@@ -255,7 +255,7 @@ export function LeavePolicyConfig() {
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Monthly Balance</p>
+                    <p className="text-muted-foreground">Balance</p>
                     <p className="font-semibold">{policy.monthlyBalance} days</p>
                   </div>
                   <div>
@@ -326,7 +326,7 @@ function EditPolicyDialog({
 
         <div className="space-y-4">
           <div>
-            <Label>Monthly Balance (days)</Label>
+            <Label>Balance (days)</Label>
             <Input
               type="number"
               min="1"
