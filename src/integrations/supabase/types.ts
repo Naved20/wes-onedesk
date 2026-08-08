@@ -1176,6 +1176,42 @@ export type Database = {
           },
         ]
       }
+      leave_balance_config: {
+        Row: {
+          advance_notice: number
+          carry_forward_allowed: boolean | null
+          code: string | null
+          created_at: string | null
+          leave_type: string
+          max_per_request: number
+          monthly_balance: number
+          salary_impact_percent: number
+          updated_at: string | null
+        }
+        Insert: {
+          advance_notice?: number
+          carry_forward_allowed?: boolean | null
+          code?: string | null
+          created_at?: string | null
+          leave_type: string
+          max_per_request?: number
+          monthly_balance?: number
+          salary_impact_percent?: number
+          updated_at?: string | null
+        }
+        Update: {
+          advance_notice?: number
+          carry_forward_allowed?: boolean | null
+          code?: string | null
+          created_at?: string | null
+          leave_type?: string
+          max_per_request?: number
+          monthly_balance?: number
+          salary_impact_percent?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       leave_balances: {
         Row: {
           casual_leaves_entitled: number | null
@@ -1224,6 +1260,123 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
           year?: number
+        }
+        Relationships: []
+      }
+      leave_reset_history: {
+        Row: {
+          created_at: string | null
+          employees_affected: number | null
+          error_message: string | null
+          frequency: string
+          id: string
+          leaves_carried_forward: number | null
+          reset_date: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          employees_affected?: number | null
+          error_message?: string | null
+          frequency: string
+          id?: string
+          leaves_carried_forward?: number | null
+          reset_date: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          employees_affected?: number | null
+          error_message?: string | null
+          frequency?: string
+          id?: string
+          leaves_carried_forward?: number | null
+          reset_date?: string
+          status?: string | null
+        }
+        Relationships: []
+      }
+      leave_reset_settings: {
+        Row: {
+          carry_forward_enabled: boolean | null
+          carry_forward_expiry: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_reset_date: string | null
+          max_carry_forward: number | null
+          next_reset_date: string | null
+          reset_day: number | null
+          reset_frequency: string
+          reset_month: number | null
+          reset_time: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          carry_forward_enabled?: boolean | null
+          carry_forward_expiry?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_reset_date?: string | null
+          max_carry_forward?: number | null
+          next_reset_date?: string | null
+          reset_day?: number | null
+          reset_frequency: string
+          reset_month?: number | null
+          reset_time?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          carry_forward_enabled?: boolean | null
+          carry_forward_expiry?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_reset_date?: string | null
+          max_carry_forward?: number | null
+          next_reset_date?: string | null
+          reset_day?: number | null
+          reset_frequency?: string
+          reset_month?: number | null
+          reset_time?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      leave_rules_config: {
+        Row: {
+          advance_notice_days: number
+          created_at: string | null
+          id: string
+          leave_type: string
+          max_per_month: number
+          max_per_request: number
+          max_per_week: number
+          min_gap_between_requests: number
+          updated_at: string | null
+        }
+        Insert: {
+          advance_notice_days?: number
+          created_at?: string | null
+          id?: string
+          leave_type: string
+          max_per_month?: number
+          max_per_request?: number
+          max_per_week?: number
+          min_gap_between_requests?: number
+          updated_at?: string | null
+        }
+        Update: {
+          advance_notice_days?: number
+          created_at?: string | null
+          id?: string
+          leave_type?: string
+          max_per_month?: number
+          max_per_request?: number
+          max_per_week?: number
+          min_gap_between_requests?: number
+          updated_at?: string | null
         }
         Relationships: []
       }
