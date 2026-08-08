@@ -136,26 +136,8 @@ BEGIN
     END IF;
   END IF;
   
-  -- Check weekly limit (max 1 leave per week, unless emergency)
-  IF NOT p_is_emergency THEN
-    v_week_start := date_trunc('week', p_start_date)::DATE;
-    SELECT COUNT(*)
-    INTO v_week_leaves
-    FROM leaves
-    WHERE user_id = p_user_id
-      AND status IN ('approved', 'pending')
-      AND auto_rejected = false
-      AND start_date >= v_week_start
-      AND start_date < v_week_start + INTERVAL '7 days';
-    
-    IF v_week_leaves >= 1 THEN
-      RETURN json_build_object(
-        'eligible', false,
-        'reason', 'Maximum 1 leave application per calendar week allowed',
-        'working_days', v_working_days
-      );
-    END IF;
-  END IF;
+  -- Check weekly limit - REMOVED (should be handled by application logic using LeaveRulesConfig)
+  -- The frontend validation in LeaveApplicationForm uses LeaveRulesConfig values
   
   RETURN json_build_object(
     'eligible', true,

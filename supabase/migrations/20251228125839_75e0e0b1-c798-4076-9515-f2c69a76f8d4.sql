@@ -1,4 +1,4 @@
--- Update validate_leave_request trigger function to enforce single-day casual leaves
+-- Update validate_leave_request trigger function - validates using LeaveRulesConfig
 CREATE OR REPLACE FUNCTION public.validate_leave_request()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -12,15 +12,6 @@ BEGIN
   -- Calculate working days
   v_working_days := calculate_working_days(NEW.start_date, NEW.end_date);
   
-  -- ENFORCE: Casual leaves must be exactly 1 day per application
-  IF NEW.leave_type = 'casual' AND NEW.start_date != NEW.end_date THEN
-    NEW.auto_rejected := true;
-    NEW.auto_rejection_reason := 'Casual leaves are limited to exactly 1 day per application';
-    NEW.status := 'rejected';
-    NEW.working_days_count := v_working_days;
-    RETURN NEW;
-  END IF;
-  
   -- Adjust for half day
   IF NEW.is_half_day THEN
     NEW.working_days_count := 0.5;
@@ -28,38 +19,38 @@ BEGIN
     NEW.working_days_count := v_working_days;
   END IF;
   
-  -- Set salary deduction based on leave type
-  IF NEW.leave_type = 'sick' THEN
-    NEW.salary_deduction_percent := 50;
-  ELSIF NEW.leave_type = 'unplanned' THEN
-    NEW.salary_deduction_percent := 100;
-  ELSIF NEW.leave_type = 'casual' OR NEW.leave_type = 'emergency' THEN
-    NEW.salary_deduction_percent := 0;
+  -- Set salary deduction based on leave_balance_config
+  IF NEW.leave_type IS NOT NULL THEN
+    SELECT salary_impact_percent INTO NEW.salary_deduction_percent
+    FROM leave_balance_config
+    WHERE leave_type = NEW.leave_type;
   END IF;
   
-  -- Check eligibility (skip for emergency or if already auto_rejected)
-  IF NEW.leave_type != 'emergency' AND NOT NEW.auto_rejected THEN
-    v_eligibility := check_leave_eligibility(
-      NEW.user_id,
-      NEW.start_date,
-      NEW.end_date,
-      NEW.leave_type,
-      NEW.is_emergency
-    );
-    
-    IF NOT (v_eligibility->>'eligible')::BOOLEAN THEN
-      NEW.auto_rejected := true;
-      NEW.auto_rejection_reason := v_eligibility->>'reason';
-      NEW.status := 'rejected';
-    END IF;
+  -- Emergency leaves bypass eligibility checks
+  IF NEW.is_emergency THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Check eligibility for non-emergency leaves
+  v_eligibility := check_leave_eligibility(
+    NEW.user_id,
+    NEW.start_date,
+    NEW.end_date,
+    NEW.leave_type
+  );
+  
+  IF NOT (v_eligibility->>'eligible')::BOOLEAN THEN
+    NEW.auto_rejected := true;
+    NEW.auto_rejection_reason := v_eligibility->>'reason';
+    NEW.status := 'rejected';
   END IF;
   
   RETURN NEW;
 END;
 $function$;
 
--- Update check_leave_eligibility to also validate single-day casual
-CREATE OR REPLACE FUNCTION public.check_leave_eligibility(p_user_id uuid, p_start_date date, p_end_date date, p_leave_type leave_type, p_is_emergency boolean DEFAULT false)
+-- Update check_leave_eligibility to validate against LeaveRulesConfig
+CREATE OR REPLACE FUNCTION public.check_leave_eligibility(p_user_id uuid, p_start_date date, p_end_date date, p_leave_type leave_type)
 RETURNS json
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
@@ -68,83 +59,104 @@ AS $function$
 DECLARE
   v_month INTEGER := EXTRACT(MONTH FROM p_start_date);
   v_year INTEGER := EXTRACT(YEAR FROM p_start_date);
-  v_casual_used NUMERIC;
   v_week_start DATE;
-  v_week_leaves INTEGER;
+  v_week_leaves NUMERIC;
+  v_month_leaves NUMERIC;
   v_advance_days INTEGER;
   v_working_days INTEGER;
+  v_rule record;
 BEGIN
+  -- Get leave type rule from LeaveRulesConfig
+  SELECT * INTO v_rule
+  FROM leave_rules_config
+  WHERE leave_type = p_leave_type;
+  
+  IF v_rule IS NULL THEN
+    RETURN json_build_object(
+      'eligible', false,
+      'reason', 'Leave type rules not configured: ' || p_leave_type
+    );
+  END IF;
+  
   -- Calculate advance notice days
   v_advance_days := p_start_date - CURRENT_DATE;
   
   -- Calculate working days for this request
   v_working_days := calculate_working_days(p_start_date, p_end_date);
   
-  -- ENFORCE: Casual leaves must be exactly 1 day per application
-  IF p_leave_type = 'casual' AND v_working_days > 1 THEN
+  -- Check 1: Max days per request
+  IF v_working_days > v_rule.max_per_request THEN
     RETURN json_build_object(
       'eligible', false,
-      'reason', 'Casual leaves are limited to exactly 1 day per application',
-      'working_days', v_working_days
+      'reason', 'Maximum ' || v_rule.max_per_request || ' days per request allowed. You requested ' || v_working_days || ' days.'
     );
   END IF;
   
-  -- For casual leaves, check 3-day advance notice (unless emergency)
-  IF p_leave_type = 'casual' AND NOT p_is_emergency AND v_advance_days < 3 THEN
+  -- Check 2: Advance notice
+  IF v_rule.advance_notice_days > 0 AND v_advance_days < v_rule.advance_notice_days THEN
     RETURN json_build_object(
       'eligible', false,
-      'reason', 'Casual leaves require minimum 3 days advance notice',
-      'working_days', v_working_days
+      'reason', p_leave_type || ' leave requires ' || v_rule.advance_notice_days || ' days advance notice. You are applying with only ' || v_advance_days || ' days notice.'
     );
   END IF;
   
-  -- Check casual leave limit (2 per month)
-  IF p_leave_type = 'casual' THEN
-    SELECT COALESCE(casual_leaves_used, 0)
-    INTO v_casual_used
-    FROM leave_balances
-    WHERE user_id = p_user_id
-      AND month = v_month
-      AND year = v_year;
-    
-    IF v_casual_used IS NULL THEN
-      v_casual_used := 0;
-    END IF;
-    
-    IF v_casual_used >= 2 THEN
-      RETURN json_build_object(
-        'eligible', false,
-        'reason', 'Monthly casual leave limit (2 days) reached. Used: ' || v_casual_used || '/2',
-        'working_days', v_working_days
-      );
-    END IF;
+  -- Check 3: Max per week
+  v_week_start := date_trunc('week', p_start_date)::DATE;
+  SELECT COALESCE(SUM(calculate_working_days(start_date, end_date)), 0)
+  INTO v_week_leaves
+  FROM leaves
+  WHERE user_id = p_user_id
+    AND leave_type = p_leave_type
+    AND status = 'approved'
+    AND start_date >= v_week_start
+    AND start_date < v_week_start + INTERVAL '7 days';
+  
+  IF v_week_leaves + v_working_days > v_rule.max_per_week THEN
+    RETURN json_build_object(
+      'eligible', false,
+      'reason', 'Maximum ' || v_rule.max_per_week || ' days per week allowed. You have ' || v_week_leaves::INTEGER || ' days approved and are requesting ' || v_working_days || ' more days this week.'
+    );
   END IF;
   
-  -- Check weekly limit (max 1 leave per week, unless emergency)
-  IF NOT p_is_emergency THEN
-    v_week_start := date_trunc('week', p_start_date)::DATE;
-    SELECT COUNT(*)
-    INTO v_week_leaves
-    FROM leaves
-    WHERE user_id = p_user_id
-      AND status IN ('approved', 'pending')
-      AND auto_rejected = false
-      AND start_date >= v_week_start
-      AND start_date < v_week_start + INTERVAL '7 days';
-    
-    IF v_week_leaves >= 1 THEN
+  -- Check 4: Max per month
+  SELECT COALESCE(SUM(calculate_working_days(start_date, end_date)), 0)
+  INTO v_month_leaves
+  FROM leaves
+  WHERE user_id = p_user_id
+    AND leave_type = p_leave_type
+    AND status = 'approved'
+    AND EXTRACT(MONTH FROM start_date) = v_month
+    AND EXTRACT(YEAR FROM start_date) = v_year;
+  
+  IF v_month_leaves + v_working_days > v_rule.max_per_month THEN
+    RETURN json_build_object(
+      'eligible', false,
+      'reason', 'Maximum ' || v_rule.max_per_month || ' days per month allowed. You have ' || v_month_leaves::INTEGER || ' days approved and are requesting ' || v_working_days || ' more days this month.'
+    );
+  END IF;
+  
+  -- Check 5: Minimum gap between requests
+  IF v_rule.min_gap_between_requests > 0 THEN
+    IF EXISTS (
+      SELECT 1
+      FROM leaves
+      WHERE user_id = p_user_id
+        AND leave_type = p_leave_type
+        AND status = 'approved'
+        AND end_date >= (p_start_date - (v_rule.min_gap_between_requests || ' days')::INTERVAL)
+        AND end_date < p_start_date
+      LIMIT 1
+    ) THEN
       RETURN json_build_object(
         'eligible', false,
-        'reason', 'Maximum 1 leave application per calendar week allowed',
-        'working_days', v_working_days
+        'reason', 'Minimum ' || v_rule.min_gap_between_requests || ' days gap required between ' || p_leave_type || ' leave requests.'
       );
     END IF;
   END IF;
   
   RETURN json_build_object(
     'eligible', true,
-    'reason', NULL,
-    'working_days', v_working_days
+    'reason', NULL
   );
 END;
 $function$;

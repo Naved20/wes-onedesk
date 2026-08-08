@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CalendarDays, AlertTriangle, Info } from "lucide-react";
+import { CalendarDays, AlertTriangle, Info, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -22,6 +23,15 @@ interface LeaveBalance {
 interface LeaveUsageKey {
   used: keyof LeaveBalance;
   entitled: keyof LeaveBalance;
+}
+
+interface LeaveRule {
+  leave_type: string;
+  max_per_request: number;
+  max_per_week: number;
+  max_per_month: number;
+  min_gap_between_requests: number;
+  advance_notice_days: number;
 }
 
 interface LeaveBalanceCardProps {
@@ -87,13 +97,38 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
   const [leaveGroups, setLeaveGroups] = useState<LeaveGroupConfig[]>(DEFAULT_LEAVE_GROUPS);
   const [actualBalance, setActualBalance] = useState<LeaveBalance | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leaveRules, setLeaveRules] = useState<Record<string, LeaveRule>>({});
+  const [rulesLoading, setRulesLoading] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
     if (user) {
       fetchEmployeeActualBalance();
+      fetchLeaveRules();
     }
   }, [user, balance]); // Re-fetch when parent balance updates
+
+  const fetchLeaveRules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("leave_rules_config")
+        .select("*");
+
+      if (error) throw error;
+
+      const rulesMap: Record<string, LeaveRule> = {};
+      if (data) {
+        for (const rule of data) {
+          rulesMap[rule.leave_type] = rule;
+        }
+      }
+      setLeaveRules(rulesMap);
+    } catch (error) {
+      console.error("Error fetching leave rules:", error);
+    } finally {
+      setRulesLoading(false);
+    }
+  };
 
   const fetchEmployeeActualBalance = async () => {
     if (!user) return;
@@ -333,20 +368,100 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
           })}
         </div>
 
+        {/* Leave Rules Summary */}
+        {!rulesLoading && Object.keys(leaveRules).length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-blue-600" />
+              <h3 className="text-sm font-semibold text-blue-900">Leave Rules</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
+              {/* Casual */}
+              {leaveRules.casual && (
+                <div className="border border-blue-200 rounded p-2 bg-white">
+                  <p className="font-semibold text-blue-900 mb-1">Casual</p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Maximum days in a single leave request: {leaveRules.casual.max_per_request} day</p>
+                    <p>Maximum leaves in a week {leaveRules.casual.max_per_week} day</p>
+                    <p>Maximum leaves in a month {leaveRules.casual.max_per_month} day</p>
+                    <p>Days required between requests {leaveRules.casual.min_gap_between_requests} day</p>
+                    <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.casual.advance_notice_days} day</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Medical */}
+              {leaveRules.medical && (
+                <div className="border border-blue-200 rounded p-2 bg-white">
+                  <p className="font-semibold text-blue-900 mb-1">Medical</p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Maximum days in a single leave request: {leaveRules.medical.max_per_request} day</p>
+                    <p>Maximum leaves in a week {leaveRules.medical.max_per_week} day</p>
+                    <p>Maximum leaves in a month {leaveRules.medical.max_per_month} day</p>
+                    <p>Days required between requests {leaveRules.medical.min_gap_between_requests} day</p>
+                    <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.medical.advance_notice_days} day</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Emergency */}
+              {leaveRules.emergency && (
+                <div className="border border-blue-200 rounded p-2 bg-white">
+                  <p className="font-semibold text-blue-900 mb-1">Emergency</p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Maximum days in a single leave request: {leaveRules.emergency.max_per_request} day</p>
+                    <p>Maximum leaves in a week {leaveRules.emergency.max_per_week} day</p>
+                    <p>Maximum leaves in a month {leaveRules.emergency.max_per_month} day</p>
+                    <p>Days required between requests {leaveRules.emergency.min_gap_between_requests} day</p>
+                    <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.emergency.advance_notice_days} day</p>
+                  </div>
+                </div>
+              )}
+
+              {/* LOP */}
+              {leaveRules.lop && (
+                <div className="border border-blue-200 rounded p-2 bg-white">
+                  <p className="font-semibold text-blue-900 mb-1">LOP</p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Maximum days in a single leave request: {leaveRules.lop.max_per_request} day</p>
+                    <p>Maximum leaves in a week {leaveRules.lop.max_per_week} day</p>
+                    <p>Maximum leaves in a month {leaveRules.lop.max_per_month} day</p>
+                    <p>Days required between requests {leaveRules.lop.min_gap_between_requests} day</p>
+                    <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.lop.advance_notice_days} day</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Half Day */}
+              {leaveRules.half_day && (
+                <div className="border border-blue-200 rounded p-2 bg-white">
+                  <p className="font-semibold text-blue-900 mb-1">Half Day</p>
+                  <div className="space-y-0.5 text-muted-foreground">
+                    <p>Maximum days in a single leave request: {leaveRules.half_day.max_per_request} day</p>
+                    <p>Maximum leaves in a week {leaveRules.half_day.max_per_week} day</p>
+                    <p>Maximum leaves in a month {leaveRules.half_day.max_per_month} day</p>
+                    <p>Days required between requests {leaveRules.half_day.min_gap_between_requests} day</p>
+                    <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.half_day.advance_notice_days} day</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Policy Legend */}
         <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">
           <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
           <div className="text-xs text-muted-foreground space-y-1">
             <p>
-              <strong>PL (Paid Leave):</strong> Casual (4 days notice, max 2
-              days) + Medical (same day, max 2 days) — No deduction
+              <strong>PL (Paid Leave):</strong> Casual + Medical — No deduction
             </p>
             <p>
-              <strong>LE (Leave):</strong> Emergency (same day, 1 day, 1 LOP) +
-              LOP (next day, 1 day, 1 LOP)
+              <strong>LE (Leave):</strong> Emergency + LOP — Salary deduction applied
             </p>
             <p>
-              <strong>HD (Half Day):</strong> 1 day notice, 0.5 LOP deduction
+              <strong>HD (Half Day):</strong> Half day leave — 0.5 day deduction
             </p>
           </div>
         </div>

@@ -15,7 +15,6 @@ import { LeaveApplicationForm } from "@/components/leaves/LeaveApplicationForm";
 import { LeaveApprovalDialog } from "@/components/leaves/LeaveApprovalDialog";
 import { BulkLeaveApproval } from "@/components/leaves/BulkLeaveApproval";
 import { AdminLeaveBalance } from "@/components/leaves/AdminLeaveBalance";
-import { LeavePolicySummary } from "@/components/leaves/LeavePolicySummary";
 
 interface LeaveBalance {
   casual_leaves_used: number;
@@ -446,7 +445,6 @@ export default function Leaves() {
         {role === "employee" && (
           <div className="grid grid-cols-1 gap-4">
             <LeaveBalanceCard balance={leaveBalance} loading={balanceLoading} />
-            <LeavePolicySummary />
           </div>
         )}
 

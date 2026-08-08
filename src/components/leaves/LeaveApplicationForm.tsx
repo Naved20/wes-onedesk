@@ -384,10 +384,7 @@ export function LeaveApplicationForm({
           </div>
         ) : (
           <Tabs defaultValue="form" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="form">Leave Request</TabsTrigger>
-              <TabsTrigger value="rules">Rules & Limits</TabsTrigger>
-            </TabsList>
+         
 
             {/* Form Tab */}
             <TabsContent value="form" className="space-y-4 max-h-[500px] overflow-y-auto">
@@ -542,99 +539,26 @@ export function LeaveApplicationForm({
               <AlertDescription>{validationMessage.message}</AlertDescription>
             </Alert>
           )}
+
+          {ruleErrors.length > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <p className="font-semibold">Leave request cannot be submitted:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {ruleErrors.map((error, idx) => (
+                      <li key={idx} className="text-sm">{error}</li>
+                    ))}
+                  </ul>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
             </div>
             </TabsContent>
 
-            {/* Rules Tab */}
-            <TabsContent value="rules" className="max-h-[500px] overflow-y-auto">
-              <div className="py-4">
-                {currentLeaveRule ? (
-                  <div className="space-y-4">
-                    <Alert>
-                      <Info className="h-4 w-4" />
-                      <AlertDescription>
-                        These are the rules for {policy?.label}. Your leave requests must comply with all these limits.
-                      </AlertDescription>
-                    </Alert>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="text-xs font-semibold text-muted-foreground uppercase">
-                          Max Per Request
-                        </div>
-                        <div className="mt-2">
-                          <span className="text-2xl font-bold">
-                            {currentLeaveRule.max_per_request}
-                          </span>
-                          <span className="text-sm text-muted-foreground ml-2">days</span>
-                        </div>
-                      </div>
-
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="text-xs font-semibold text-muted-foreground uppercase">
-                          Max Per Week
-                        </div>
-                        <div className="mt-2">
-                          <span className="text-2xl font-bold">
-                            {currentLeaveRule.max_per_week}
-                          </span>
-                          <span className="text-sm text-muted-foreground ml-2">days</span>
-                        </div>
-                      </div>
-
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="text-xs font-semibold text-muted-foreground uppercase">
-                          Max Per Month
-                        </div>
-                        <div className="mt-2">
-                          <span className="text-2xl font-bold">
-                            {currentLeaveRule.max_per_month}
-                          </span>
-                          <span className="text-sm text-muted-foreground ml-2">days</span>
-                        </div>
-                      </div>
-
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <div className="text-xs font-semibold text-muted-foreground uppercase">
-                          Min Gap Between Requests
-                        </div>
-                        <div className="mt-2">
-                          <span className="text-2xl font-bold">
-                            {currentLeaveRule.min_gap_between_requests}
-                          </span>
-                          <span className="text-sm text-muted-foreground ml-2">days</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-4 text-sm space-y-2 text-muted-foreground">
-                      <p className="font-semibold">Summary:</p>
-                      <ul className="space-y-1 ml-4">
-                        <li>
-                          • Maximum {currentLeaveRule.max_per_request} days per single request
-                        </li>
-                        <li>
-                          • Maximum {currentLeaveRule.max_per_week} days per week (7 days)
-                        </li>
-                        <li>
-                          • Maximum {currentLeaveRule.max_per_month} days per calendar month
-                        </li>
-                        {currentLeaveRule.min_gap_between_requests > 0 && (
-                          <li>
-                            • {currentLeaveRule.min_gap_between_requests} days gap required between consecutive requests
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  <Alert>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <AlertDescription>Loading rules...</AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            </TabsContent>
           </Tabs>
         )}
 

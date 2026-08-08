@@ -116,9 +116,9 @@ export async function validateLeaveRequest(
 
     // 4. Check minimum gap between requests
     if (rule.min_gap_between_requests > 0) {
-      const gapError = checkMinimumGap(userId, startDate, endDate, existingLeaves, leaveType, rule.min_gap_between_requests);
-      if (gapError) {
-        errors.push(gapError);
+      const gapErrors = checkMinimumGap(userId, startDate, endDate, existingLeaves, leaveType, rule.min_gap_between_requests);
+      if (gapErrors) {
+        errors.push(...gapErrors);
       }
     }
 
@@ -227,7 +227,8 @@ function checkMinimumGap(
   existingLeaves: any[],
   leaveType: string,
   minGap: number
-): string | null {
+): string[] {
+  const errors: string[] = [];
   const approved = existingLeaves.filter(
     (leave) =>
       leave.leave_type?.toLowerCase() === leaveType.toLowerCase() &&
@@ -244,11 +245,11 @@ function checkMinimumGap(
     gapEndDate.setDate(gapEndDate.getDate() + minGap - 1);
 
     if (startDate <= gapEndDate && startDate >= dayAfterLeave) {
-      return `Minimum ${minGap} days gap required between ${leaveType} leave requests. Your last ${leaveType} leave ended on ${formatDate(leaveEnd)}.`;
+      errors.push(`Minimum ${minGap} days gap required between ${leaveType} leave requests. Your last ${leaveType} leave ended on ${formatDate(leaveEnd)}.`);
     }
   }
 
-  return null;
+  return errors;
 }
 
 /**

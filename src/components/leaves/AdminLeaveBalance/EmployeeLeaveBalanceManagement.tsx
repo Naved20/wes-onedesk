@@ -49,14 +49,35 @@ export function EmployeeLeaveBalanceManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(String(new Date().getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
+  const [resetFrequency, setResetFrequency] = useState<"monthly" | "quarterly" | "half_yearly" | "yearly">("yearly");
   const [editingEmployee, setEditingEmployee] = useState<EmployeeBalance | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [historyEmployee, setHistoryEmployee] = useState<EmployeeBalance | null>(null);
 
   useEffect(() => {
+    loadResetFrequency();
+  }, []);
+
+  useEffect(() => {
     fetchEmployeeBalances();
   }, [selectedMonth, selectedYear]);
+
+  const loadResetFrequency = async () => {
+    try {
+      const { data } = await supabase
+        .from("leave_reset_settings")
+        .select("reset_frequency")
+        .eq("is_active", true)
+        .single();
+
+      if (data) {
+        setResetFrequency(data.reset_frequency as any);
+      }
+    } catch (error) {
+      console.error("Error loading reset frequency:", error);
+    }
+  };
 
   const fetchEmployeeBalances = async () => {
     setLoading(true);
@@ -235,23 +256,25 @@ export function EmployeeLeaveBalanceManagement() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium">Month</label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MONTHS.map((month, idx) => (
-                    <SelectItem key={idx} value={String(idx + 1)}>
-                      {month}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {resetFrequency !== "yearly" && (
+              <div>
+                <label className="text-sm font-medium">Month</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((month, idx) => (
+                      <SelectItem key={idx} value={String(idx + 1)}>
+                        {month}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-            <div>
+            <div className={resetFrequency !== "yearly" ? "" : "md:col-span-2"}>
               <label className="text-sm font-medium">Year</label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
                 <SelectTrigger>
@@ -270,7 +293,7 @@ export function EmployeeLeaveBalanceManagement() {
               </Select>
             </div>
 
-            <div className="md:col-span-2">
+            <div className={resetFrequency !== "yearly" ? "md:col-span-2" : "md:col-span-2"}>
               <label className="text-sm font-medium">Search Employee</label>
               <div className="flex gap-2">
                 <Input
