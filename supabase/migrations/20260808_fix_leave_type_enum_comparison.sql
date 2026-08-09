@@ -3,6 +3,10 @@
 -- This fixes the "operator does not exist: character varying = leave_type" error
 
 -- Fix the update_leave_balance_on_approval trigger function
+-- FIXED: Properly deducts balance for each leave type (was incorrectly grouping emergency with casual)
+-- Drop old trigger first to ensure we rebind to the new function
+DROP TRIGGER IF EXISTS update_balance_on_leave_approval ON leaves;
+
 CREATE OR REPLACE FUNCTION public.update_leave_balance_on_approval()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -24,9 +28,15 @@ BEGIN
     PERFORM get_or_create_leave_balance(NEW.user_id, v_year, v_month);
     
     -- Update the appropriate balance based on leave type (with enum casting)
-    IF NEW.leave_type = 'casual'::leave_type OR NEW.leave_type = 'emergency'::leave_type THEN
+    -- FIXED: Each leave type now updates its own column
+    IF NEW.leave_type = 'casual'::leave_type THEN
       UPDATE leave_balances
-      SET casual_leaves_used = casual_leaves_used + v_days,
+      SET casual_leaves_used = COALESCE(casual_leaves_used, 0) + v_days,
+          updated_at = now()
+      WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
+    ELSIF NEW.leave_type = 'emergency'::leave_type THEN
+      UPDATE leave_balances
+      SET emergency_leaves_used = COALESCE(emergency_leaves_used, 0) + v_days,
           updated_at = now()
       WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
     ELSIF NEW.leave_type = 'medical'::leave_type THEN
@@ -46,12 +56,12 @@ BEGIN
       WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
     ELSIF NEW.leave_type = 'sick'::leave_type THEN
       UPDATE leave_balances
-      SET sick_leaves_used = sick_leaves_used + v_days,
+      SET sick_leaves_used = COALESCE(sick_leaves_used, 0) + v_days,
           updated_at = now()
       WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
     ELSIF NEW.leave_type = 'unplanned'::leave_type THEN
       UPDATE leave_balances
-      SET unplanned_leaves_used = unplanned_leaves_used + v_days,
+      SET unplanned_leaves_used = COALESCE(unplanned_leaves_used, 0) + v_days,
           updated_at = now()
       WHERE user_id = NEW.user_id AND year = v_year AND month = v_month;
     END IF;
@@ -61,7 +71,92 @@ BEGIN
 END;
 $$;
 
--- Fix validate_leave_request function with enum casts
+-- Recreate the trigger to ensure it binds to the fixed function
+CREATE TRIGGER update_balance_on_leave_approval
+  AFTER UPDATE ON leaves
+  FOR EACH ROW
+  EXECUTE FUNCTION update_leave_balance_on_approval();
+
+-- Add validation function to check if user has sufficient balance before approving
+-- This prevents approving leaves when balance is insufficient
+CREATE OR REPLACE FUNCTION public.check_leave_balance_sufficient(
+  p_user_id uuid,
+  p_leave_type leave_type,
+  p_working_days NUMERIC,
+  p_start_date date
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_month INTEGER := EXTRACT(MONTH FROM p_start_date);
+  v_year INTEGER := EXTRACT(YEAR FROM p_start_date);
+  v_balance_record RECORD;
+  v_used NUMERIC;
+  v_allocated NUMERIC;
+  v_leave_type_str TEXT;
+BEGIN
+  v_leave_type_str := p_leave_type::TEXT;
+  
+  -- Get the balance record for this user/month/year
+  SELECT * INTO v_balance_record
+  FROM leave_balances
+  WHERE user_id = p_user_id AND month = v_month AND year = v_year;
+  
+  -- If no record found, there's no balance - cannot approve
+  IF v_balance_record IS NULL THEN
+    RETURN json_build_object(
+      'sufficient', false,
+      'reason', 'No leave balance allocation found for this month. Please ensure the user has a leave balance configured.'
+    );
+  END IF;
+  
+  -- Check the specific leave type balance
+  IF v_leave_type_str = 'casual' THEN
+    v_used := COALESCE(v_balance_record.casual_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.casual_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'emergency' THEN
+    v_used := COALESCE(v_balance_record.emergency_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.emergency_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'medical' THEN
+    v_used := COALESCE(v_balance_record.medical_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.medical_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'lop' THEN
+    v_used := COALESCE(v_balance_record.lop_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.lop_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'half_day' THEN
+    v_used := COALESCE(v_balance_record.half_day_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.half_day_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'sick' THEN
+    v_used := COALESCE(v_balance_record.sick_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.sick_leaves_allocated, 0);
+  ELSIF v_leave_type_str = 'unplanned' THEN
+    v_used := COALESCE(v_balance_record.unplanned_leaves_used, 0);
+    v_allocated := COALESCE(v_balance_record.unplanned_leaves_allocated, 0);
+  END IF;
+  
+  -- Check if user has sufficient balance
+  IF v_used + p_working_days > v_allocated THEN
+    RETURN json_build_object(
+      'sufficient', false,
+      'reason', 'Insufficient ' || v_leave_type_str || ' leave balance. Allocated: ' || v_allocated::INTEGER || ' days, Used: ' || v_used::INTEGER || ' days, Requesting: ' || p_working_days::INTEGER || ' days. Remaining balance: ' || (v_allocated - v_used)::INTEGER || ' days.'
+    );
+  END IF;
+  
+  -- Sufficient balance
+  RETURN json_build_object(
+    'sufficient', true,
+    'reason', NULL,
+    'allocated', v_allocated::INTEGER,
+    'used', v_used::INTEGER,
+    'remaining', (v_allocated - v_used)::INTEGER
+  );
+END;
+$function$;
+
+
 -- Removed hardcoded 1-day casual leave restriction (now uses leave_rules_config)
 CREATE OR REPLACE FUNCTION public.validate_leave_request()
 RETURNS trigger
