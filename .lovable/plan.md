@@ -1,42 +1,29 @@
-## Diagnosis (no changes made)
+# Face ID Management: photos not showing
 
-Face Hub ka camera, login aur backend sab theek hai — problem browser me face models load hone par crash ho rahi hai, isliye scan hi start nahi hota.
+## Why it happens
 
-### Evidence collected
+Data theek hai — jo bhi check kiya:
 
-1. **Backend healthy** — `face-hub-checkin` function live hai, direct call par HTTP 200 + valid history return kar raha hai. `face_descriptors` me 37 active enrollments (sab 128-length, koi null nahi).
-2. **Check-ins ek exact date par ruke** — `attendance` me face check-ins 1 Jul se 29 Jul tak roz 20–26 rows, 30/31 Jul par **zero**. `face_checkin_history` ka last row bhi 29 Jul 11:29. Sessions 30–31 Jul par active the, matlab log kiosk khol rahe the par scan attempt server tak pahunch hi nahi raha.
-3. **Live browser test (`/face-hub`)** — page render hota hai, camera stream ready (1280x1280, readyState 4), lekin UI par permanently "Loading face models..." aur **"Scan Face & Check-in" button disabled**. `modelsReady` kabhi `true` nahi hota.
-4. **Model files fine** — CDN se saare weights 200 aate hain (manifest + shards).
-5. **Actual error** — `loadFaceModels()` ko directly call karne par:
-   ```text
-   ERR: Lt2.makeTensor is not a function
-   ```
-   plus console warnings: "webgl backend was already registered", "cpu backend was already registered", "Platform browser has already been set."
+- `face_descriptors` me 38 rows, sabhi me `photo_url` set hai.
+- `face-enrollments` bucket public hai, 76 objects maujood hain, aur ek sample URL direct fetch par `200 image/jpeg` deta hai.
+- RLS bhi block nahi kar raha: authenticated users active descriptors read kar sakte hain.
 
-### Root cause
+Asli reason ek security header hai. App har response par `Cross-Origin-Embedder-Policy: require-corp` bhejti hai (`vite.config.ts`, `public/_headers`, `netlify.toml`, `vercel.json`) — ye WebCodecs/ffmpeg (SharedArrayBuffer) ke liye lagaya gaya tha.
 
-`node_modules` me TensorFlow.js ki **do copies** install hain:
+`require-corp` ke tehat browser sirf woh cross-origin sub-resources load karta hai jo ya `Cross-Origin-Resource-Policy` header bhejte hain, ya CORS mode me maange gaye ho. Storage image response me CORP header nahi hai, aur `<img src={emp.photo_url}>` (line 533, `src/pages/FaceIdManagement.tsx`) bina `crossOrigin` attribute ke plain no-cors request karta hai → browser image block kar deta hai, isliye avatar khali/blank dikhta hai.
 
-```text
-node_modules/@tensorflow/tfjs-core                                  -> 1.2.2   (face-api.js ka exact pin)
-node_modules/tfjs-image-recognition-base/node_modules/@tensorflow/tfjs-core -> 1.7.0  (^1.2.9 range se resolve)
-```
+Good news: storage `access-control-allow-origin: *` bhejta hai, to CORS-mode request allowed hai.
 
-- `face-api.js@0.20.1` `@tensorflow/tfjs-core@1.2.2` pin karta hai.
-- Uski dependency `tfjs-image-recognition-base` `^1.2.9` maangti hai, to uske liye alag nested 1.7.0 install hua.
-- 1.2.2 ke engine me `makeTensor` method **exist hi nahi karta**; 1.7.0 me karta hai. Weight-loading code 1.7.0 copy se aata hai par engine/backend 1.2.2 copy ka register hota hai (duplicate backend registration warnings isi ka proof hain) → `makeTensor is not a function` throw hota hai.
-- `loadFaceModels()` apna failed promise cache kar leta hai, aur error sirf ek toast me jaata hai, isliye button hamesha disabled rehta hai aur user ko clear reason nahi dikhta.
+## Fix
 
-Ye break kisi UI ya DB change se nahi, **dependency re-resolution** (fresh install / lockfile update) se aaya — code path 29 Jul tak same tha aur kaam kar raha tha.
+1. `src/pages/FaceIdManagement.tsx` ke avatar `<img>` par `crossOrigin="anonymous"` add karna (isse request CORS mode me jaati hai, jo COEP `require-corp` ke saath allowed hai) + `loading="lazy"` aur `onError` fallback (image fail ho to initials wala circle dikhe).
+2. Poore app me scan karke baaki cross-origin storage/CDN `<img>` tags par bhi wahi treatment (Face Hub, Face Attendance, documents/announcements previews) — taaki same header dubara kisi aur page par blank image na de.
+3. Ek chhota shared avatar/image component ya helper use karke duplication avoid karna, agar 3 se zyada jagah affected hain.
 
-### Ek chhota secondary issue (asli cause nahi)
+Koi database, RLS ya bucket change ki zarurat nahi; headers bhi jaise hain waise rahenge (ffmpeg/WebCodecs feature toot na jaye).
 
-- `supabase/config.toml` me `face-hub-checkin` ke liye entry nahi hai (JWT verify default on) — anon key se abhi kaam kar raha hai, so blocking nahi.
-- "No face detected" case me client seedha `face_checkin_history` me insert karta hai aur error ignore karta hai — anon RLS block hone par ye silently drop hota hai.
+## Technical notes
 
-### Fix options (aapke kehne par implement karunga)
-
-1. **Pin ek hi TFJS copy** — `package.json` me `@tensorflow/tfjs-core` ko `1.7.0` par pin karke overrides/resolutions se nested copy hata dena (sabse chhota, targeted fix).
-2. **`@vladmandic/face-api` par migrate** — maintained fork jo modern TFJS ke saath ship hota hai (thoda bada change, long-term stable).
-3. Saath me: model-load failure par UI par visible error + "Retry" button, aur `loadFaceModels()` me failed promise cache na karna.
+- Affected file (confirmed): `src/pages/FaceIdManagement.tsx` line ~533.
+- COEP sources: `vite.config.ts` (dev), `public/_headers`, `netlify.toml`, `vercel.json` (prod). Inhe hataana bhi ek option hai, par usse video compression ka SharedArrayBuffer path break hoga — isliye recommended approach `crossOrigin` attribute hai.
+- Verification: browser me `/face-id-management` load karke console ki `ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep` errors gayab hone chahiye aur avatars render hone chahiye.

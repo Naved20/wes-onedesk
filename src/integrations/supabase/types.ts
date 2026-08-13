@@ -1214,48 +1214,69 @@ export type Database = {
       }
       leave_balances: {
         Row: {
+          casual_leaves_allocated: number | null
           casual_leaves_entitled: number | null
           casual_leaves_used: number | null
           created_at: string | null
+          emergency_leaves_allocated: number | null
           emergency_leaves_used: number | null
+          half_day_leaves_allocated: number | null
           half_day_leaves_used: number | null
           id: string
+          lop_leaves_allocated: number | null
           lop_leaves_used: number | null
+          medical_leaves_allocated: number | null
           medical_leaves_used: number | null
           month: number
+          sick_leaves_allocated: number | null
           sick_leaves_used: number | null
+          unplanned_leaves_allocated: number | null
           unplanned_leaves_used: number | null
           updated_at: string | null
           user_id: string
           year: number
         }
         Insert: {
+          casual_leaves_allocated?: number | null
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
           created_at?: string | null
+          emergency_leaves_allocated?: number | null
           emergency_leaves_used?: number | null
+          half_day_leaves_allocated?: number | null
           half_day_leaves_used?: number | null
           id?: string
+          lop_leaves_allocated?: number | null
           lop_leaves_used?: number | null
+          medical_leaves_allocated?: number | null
           medical_leaves_used?: number | null
           month: number
+          sick_leaves_allocated?: number | null
           sick_leaves_used?: number | null
+          unplanned_leaves_allocated?: number | null
           unplanned_leaves_used?: number | null
           updated_at?: string | null
           user_id: string
           year: number
         }
         Update: {
+          casual_leaves_allocated?: number | null
           casual_leaves_entitled?: number | null
           casual_leaves_used?: number | null
           created_at?: string | null
+          emergency_leaves_allocated?: number | null
           emergency_leaves_used?: number | null
+          half_day_leaves_allocated?: number | null
           half_day_leaves_used?: number | null
           id?: string
+          lop_leaves_allocated?: number | null
           lop_leaves_used?: number | null
+          medical_leaves_allocated?: number | null
           medical_leaves_used?: number | null
           month?: number
+          sick_leaves_allocated?: number | null
           sick_leaves_used?: number | null
+          unplanned_leaves_allocated?: number | null
           unplanned_leaves_used?: number | null
           updated_at?: string | null
           user_id?: string
@@ -3541,16 +3562,26 @@ export type Database = {
         }
         Returns: number
       }
-      check_leave_eligibility: {
-        Args: {
-          p_end_date: string
-          p_is_emergency?: boolean
-          p_leave_type: Database["public"]["Enums"]["leave_type"]
-          p_start_date: string
-          p_user_id: string
-        }
-        Returns: Json
-      }
+      check_leave_eligibility:
+        | {
+            Args: {
+              p_end_date: string
+              p_leave_type: Database["public"]["Enums"]["leave_type"]
+              p_start_date: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_end_date: string
+              p_is_emergency?: boolean
+              p_leave_type: Database["public"]["Enums"]["leave_type"]
+              p_start_date: string
+              p_user_id: string
+            }
+            Returns: Json
+          }
       cleanup_old_face_sessions: { Args: never; Returns: undefined }
       create_absent_records_for_date: {
         Args: { p_date: string }
@@ -3608,16 +3639,23 @@ export type Database = {
       get_or_create_leave_balance: {
         Args: { p_month: number; p_user_id: string; p_year: number }
         Returns: {
+          casual_leaves_allocated: number | null
           casual_leaves_entitled: number | null
           casual_leaves_used: number | null
           created_at: string | null
+          emergency_leaves_allocated: number | null
           emergency_leaves_used: number | null
+          half_day_leaves_allocated: number | null
           half_day_leaves_used: number | null
           id: string
+          lop_leaves_allocated: number | null
           lop_leaves_used: number | null
+          medical_leaves_allocated: number | null
           medical_leaves_used: number | null
           month: number
+          sick_leaves_allocated: number | null
           sick_leaves_used: number | null
+          unplanned_leaves_allocated: number | null
           unplanned_leaves_used: number | null
           updated_at: string | null
           user_id: string
