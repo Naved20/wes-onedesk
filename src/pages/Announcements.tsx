@@ -603,6 +603,7 @@ export default function Announcements() {
                                   src={announcement.file_url}
                                   alt={announcement.file_name}
                                   className="max-w-full h-auto rounded-lg border max-h-96 object-contain hover:opacity-90 transition-opacity"
+                                  crossOrigin="anonymous"
                                 />
                               </a>
                               <a

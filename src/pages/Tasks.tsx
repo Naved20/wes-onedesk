@@ -151,7 +151,7 @@ interface Task {
   created_at: string;
   updated_at: string;
   due_date: string | null;
-  is_active: boolean;
+  is_deleted: boolean;
   file_url: string | null;
   file_name: string | null;
   display_order: number | null;
@@ -897,7 +897,7 @@ const Tasks = () => {
         query = supabase
           .from("tasks" as any)
           .select("*")
-          .eq("is_active", true)
+          .eq("is_deleted", false)
           // .gte("created_at", start)
           // .lte("created_at", end)
           .order("display_order", { ascending: true, nullsFirst: false })
@@ -925,7 +925,7 @@ const Tasks = () => {
           .from("tasks" as any)
           .select("*")
           .in("id", taskIds)
-          .eq("is_active", true)
+          .eq("is_deleted", false)
           // .gte("created_at", start)
           // .lte("created_at", end)
           .order("display_order", { ascending: true, nullsFirst: false })
@@ -1329,7 +1329,7 @@ const Tasks = () => {
             file_url: fileUrl || formData.fileUrl || null,
             file_name: fileName || formData.fileName || null,
             created_by: user.id,
-            is_active: true,
+            is_deleted: false,
             review_assignment_type: formData.review_assignment_type,
           })
           .select()
@@ -2430,7 +2430,7 @@ const Tasks = () => {
       const { data, error } = await supabase
         .from("tasks" as any)
         .select("*")
-        .eq("is_active", true)
+        .eq("is_deleted", false)
         .order("display_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
 
@@ -2513,6 +2513,7 @@ const Tasks = () => {
               src={fileUrl}
               alt={fileName}
               className="max-w-full h-auto rounded-lg border max-h-96 object-contain hover:opacity-90 transition-opacity"
+              crossOrigin="anonymous"
             />
           </a>
           <a
@@ -3451,8 +3452,8 @@ const Tasks = () => {
                       aValue = getTaskStatus(a).toLowerCase();
                       bValue = getTaskStatus(b).toLowerCase();
                     } else {
-                      aValue = a.is_active ? 1 : 0;
-                      bValue = b.is_active ? 1 : 0;
+                      aValue = !a.is_deleted ? 1 : 0;
+                      bValue = !b.is_deleted ? 1 : 0;
                     }
                     break;
                   case "completion": {

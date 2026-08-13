@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Supabase CLI installed
-- Access to Supabase project (glijytescdhdtihzlhlg)
+- Access to Supabase project (cyfcfrgrzcmbweviogrn)
 - SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY available
 
 ## Deployment Steps
@@ -38,7 +38,7 @@ You should see `reset-leave-balances` in the list.
 
 ### Via Supabase Dashboard
 1. Go to https://app.supabase.com
-2. Select project: glijytescdhdtihzlhlg
+2. Select project: cyfcfrgrzcmbweviogrn
 3. Navigate to Edge Functions
 4. Find `reset-leave-balances`
 5. Test with payload:
@@ -54,7 +54,7 @@ You should see `reset-leave-balances` in the list.
 
 ### Via cURL
 ```bash
-curl -X POST https://glijytescdhdtihzlhlg.supabase.co/functions/v1/reset-leave-balances \
+curl -X POST https://cyfcfrgrzcmbweviogrn.supabase.co/functions/v1/reset-leave-balances \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

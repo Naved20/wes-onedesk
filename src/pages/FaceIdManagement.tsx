@@ -530,7 +530,7 @@ export default function FaceIdManagement() {
                 <div key={emp.user_id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     {emp.photo_url ? (
-                      <img src={emp.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      <img src={emp.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" crossOrigin="anonymous" />
                     ) : (
                       <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                         {emp.first_name[0]}

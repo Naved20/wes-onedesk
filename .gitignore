@@ -7,19 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
+.pnp
+.pnp.js
 
-# Environment variables
+# Production
+/build
+/out
+
+# Environment variables (NEVER commit secrets!)
 .env
 .env.local
 .env.*.local
+.env.production.local
+.env.development.local
+.env.test.local
+.env.secrets
 
-# Editor directories and files
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# IDE & Editor directories
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -27,3 +43,77 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+.AppleDouble
+.LSOverride
+*.pem
+
+# Testing
+coverage
+.nyc_output
+*.lcov
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Cache
+.eslintcache
+.cache
+.parcel-cache
+.next
+out
+
+# Misc
+*.bak
+*.backup
+~*
+*.orig
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.postgres
+
+# Certificates & Keys (SECURITY!)
+*.key
+*.crt
+*.cer
+*.pem
+private/
+secrets/
+
+# Build outputs
+.tsbuildinfo
+
+# Bun
+bun.lockb
+
+# IDE specific
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.jar
+*.jmod
+
+# API keys and credentials (DO NOT COMMIT)
+auth_*.sql
+credentials.json
+secrets.json
+
+# Downloaded files
+downloads/
+exports/
+
+# Temporary testing files
+test-*.json
+test-*.sql
