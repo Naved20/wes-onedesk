@@ -117,3 +117,40 @@ exports/
 # Temporary testing files
 test-*.json
 test-*.sql
+
+# PostgreSQL & Database tools
+pgsql/
+pgsql17/
+postgres.zip
+postgres17.zip
+extracted_dump.sql
+restored_data_dump.sql
+restore_log.txt
+import_auth.sql
+import_auth_identities.sql
+download_pg.py
+
+# Temporary scripts (not for version control)
+scripts/test*.js
+scripts/check*.js
+scripts/download*.js
+scripts/parse*.py
+scripts/unpack*.py
+scripts/apply_all*.js
+scripts/execute_full*.js
+scripts/fix_all*.js
+scripts/migrate_all*.js
+scripts/inspect*.js
+scripts/restore*.js
+scripts/split*.js
+check*.js
+check*.cjs
+check_*.js
+download_*.py
+restore_*.js
+analyze_*.js
+
+# Database backup & migration files
+*.sql
+!supabase/migrations/**/*.sql
+!scripts/migrations/**/*.sql
