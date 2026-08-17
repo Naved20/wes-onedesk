@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node -e \"const fs = require('fs'); const path = 'node_modules/lucide-react/dist/esm/icons/arrow-down.js.map'; if (fs.existsSync(path)) { try { JSON.parse(fs.readFileSync(path, 'utf8')); } catch (e) { fs.writeFileSync(path, '{\\\"version\\\":3,\\\"file\\\":\\\"arrow-down.js\\\",\\\"sources\\\":[],\\\"mappings\\\":\\\"\\\"}'); console.log('Fixed corrupted lucide-react source map.'); } }\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

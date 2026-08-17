@@ -66,15 +66,79 @@ export default function Attendance() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 
+  // Dialogue-specific attendance records to load correct historical logs
+  const [dialogAttendanceRecords, setDialogAttendanceRecords] = useState<AttendanceWithEmployee[]>([]);
+  const [dialogLoading, setDialogLoading] = useState(false);
+
   const currentYear = selectedMonth.getFullYear();
   const currentMonth = selectedMonth.getMonth() + 1;
 
+  // Refetch when role or selectedMonth changes to avoid limit truncation
   useEffect(() => {
     fetchData();
     if (role === "admin" || role === "manager") {
       fetchInstitutions();
     }
-  }, [role]);
+  }, [role, selectedMonth]);
+
+  // Fetch dialog attendance records for selected employee and month
+  useEffect(() => {
+    if (selectedEmployeeId && employeeDetailsOpen) {
+      fetchDialogAttendance();
+    }
+  }, [selectedEmployeeId, employeeDialogMonth, employeeDetailsOpen]);
+
+  const fetchDialogAttendance = async () => {
+    if (!selectedEmployeeId) return;
+    setDialogLoading(true);
+    try {
+      const monthStart = startOfMonth(employeeDialogMonth);
+      const monthEnd = endOfMonth(employeeDialogMonth);
+      const monthStartStr = format(monthStart, "yyyy-MM-dd");
+      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("user_id", selectedEmployeeId)
+        .gte("date", monthStartStr)
+        .lte("date", monthEndStr)
+        .neq("status", "holiday")
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      // Get shift information for names mapping
+      const { data: shifts } = await supabase
+        .from("shifts")
+        .select("id, name");
+      const shiftMap = new Map(shifts?.map(s => [s.id, s.name]) || []);
+
+      // Get profile name for the employee
+      const { data: profile } = await supabase
+        .from("employee_profiles")
+        .select("first_name, last_name, institution_assignment")
+        .eq("user_id", selectedEmployeeId)
+        .maybeSingle();
+
+      const firstName = (profile?.first_name || "Unknown").trim();
+      const lastName = (profile?.last_name || "").trim();
+      const fullName = `${firstName} ${lastName}`.trim() || "Unknown User";
+
+      const recordsWithNames = (data || []).map(record => ({
+        ...record,
+        employee_name: fullName,
+        institution: profile?.institution_assignment || null,
+        shift_name: record.shift_id ? shiftMap.get(record.shift_id) || "Unknown" : "-",
+      })) as AttendanceWithEmployee[];
+
+      setDialogAttendanceRecords(recordsWithNames);
+    } catch (error) {
+      console.error("Error fetching dialog attendance:", error);
+    } finally {
+      setDialogLoading(false);
+    }
+  };
 
   // Clear status filter when institution or date changes
   useEffect(() => {
@@ -112,41 +176,47 @@ export default function Attendance() {
 
   const fetchAttendance = async () => {
     try {
-      // Fetch attendance for current year to show all records
-      const yearStart = new Date(new Date().getFullYear(), 0, 1);
-      
-      const { data: attendanceData, error } = await supabase
+      const monthStart = startOfMonth(selectedMonth);
+      const monthEnd = endOfMonth(selectedMonth);
+      const monthStartStr = format(monthStart, "yyyy-MM-dd");
+      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
+
+      // Fetch month's records
+      const { data: monthData, error: monthError } = await supabase
         .from("attendance")
         .select("*")
-        .gte("date", format(yearStart, "yyyy-MM-dd"))
-        .neq("status", "holiday")  // EXCLUDE holiday records - they're fetched separately
+        .gte("date", monthStartStr)
+        .lte("date", monthEndStr)
+        .neq("status", "holiday")
         .order("date", { ascending: false });
 
-      if (error) throw error;
+      if (monthError) throw monthError;
 
-      console.log("📊 Fetched attendance data (excluding holidays):");
-      console.log("  Total records:", attendanceData?.length || 0);
-      console.log("  Year filter:", format(yearStart, "yyyy-MM-dd"));
-      
-      if (attendanceData && attendanceData.length > 0) {
-        console.log("  First 3 records:", attendanceData.slice(0, 3));
+      // Fetch all pending records (if manager/admin) for approval list
+      let pendingData: any[] = [];
+      if (role === "admin" || role === "manager") {
+        const { data, error: pendingError } = await supabase
+          .from("attendance")
+          .select("*")
+          .eq("status", "pending")
+          .neq("status", "holiday")
+          .order("date", { ascending: false });
         
-        // Count by status
-        const statusCounts = attendanceData.reduce((acc: any, r: any) => {
-          acc[r.status] = (acc[r.status] || 0) + 1;
-          return acc;
-        }, {});
-        console.log("  Status breakdown:", statusCounts);
-        
-        // Show date range
-        const dates = attendanceData.map((r: any) => r.date).sort();
-        console.log("  Date range:", dates[0], "to", dates[dates.length - 1]);
-      } else {
-        console.warn("⚠️ No attendance records found! Check if:");
-        console.warn("  1. Employees have checked in");
-        console.warn("  2. Year filter is correct:", format(yearStart, "yyyy-MM-dd"));
-        console.warn("  3. All records might have status='holiday'");
+        if (pendingError) throw pendingError;
+        pendingData = data || [];
       }
+
+      // Merge records uniquely by id
+      const mergedMap = new Map();
+      monthData?.forEach(r => mergedMap.set(r.id, r));
+      pendingData.forEach(r => mergedMap.set(r.id, r));
+      const attendanceData = Array.from(mergedMap.values()) as Attendance[];
+
+      console.log("📊 Fetched attendance data:", {
+        monthCount: monthData?.length || 0,
+        pendingCount: pendingData.length,
+        totalMerged: attendanceData.length
+      });
 
       // For managers and admins, fetch employee names and institutions
       if ((role === "admin" || role === "manager") && attendanceData && attendanceData.length > 0) {
@@ -185,9 +255,9 @@ export default function Attendance() {
           shift_name: record.shift_id ? shiftMap.get(record.shift_id) || "Unknown" : "-",
         }));
 
-        setAttendanceRecords(recordsWithNames);
+        setAttendanceRecords(recordsWithNames as AttendanceWithEmployee[]);
       } else {
-        setAttendanceRecords(attendanceData || []);
+        setAttendanceRecords(attendanceData as AttendanceWithEmployee[] || []);
       }
     } catch (error) {
       console.error("Error fetching attendance:", error);
@@ -315,15 +385,18 @@ export default function Attendance() {
 
   const fetchLeaves = async () => {
     try {
-      // Fetch leaves for current and previous months
-      const monthStart = startOfMonth(new Date());
+      // Fetch leaves for selected, previous and next months
+      const monthStart = startOfMonth(selectedMonth);
       const twoMonthsAgo = new Date(monthStart);
+      const twoMonthsLater = new Date(monthStart);
       twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
 
       let query = supabase
         .from("leaves")
         .select("*")
         .gte("start_date", format(twoMonthsAgo, "yyyy-MM-dd"))
+        .lte("start_date", format(twoMonthsLater, "yyyy-MM-dd"))
         .eq("status", "approved")
         .order("start_date", { ascending: false });
 
@@ -1428,9 +1501,8 @@ export default function Attendance() {
             <DialogHeader>
               <DialogTitle>
                 {(() => {
-                  const employeeRecord = attendanceRecords.find(r => r.user_id === selectedEmployeeId);
-                  const employeeName = employeeRecord?.employee_name || "Employee";
-                  return employeeName;
+                  const employee = allEmployees.find(e => e.user_id === selectedEmployeeId);
+                  return employee?.name || "Employee";
                 })()}
               </DialogTitle>
             </DialogHeader>
@@ -1496,7 +1568,7 @@ export default function Attendance() {
                 userId={selectedEmployeeId} 
                 year={employeeDialogMonth.getFullYear()} 
                 month={employeeDialogMonth.getMonth() + 1}
-                attendanceRecords={attendanceRecords as any}
+                attendanceRecords={dialogAttendanceRecords as any}
                 holidays={holidays}
                 compactView={true}
               />
@@ -1508,13 +1580,15 @@ export default function Attendance() {
                 </CardHeader>
                 <CardContent>
                   {(() => {
-                    const monthRecords = attendanceRecords
-                      .filter(r => {
-                        if (r.user_id !== selectedEmployeeId) return false;
-                        const recordDate = new Date(r.date);
-                        return recordDate.getMonth() === employeeDialogMonth.getMonth() &&
-                               recordDate.getFullYear() === employeeDialogMonth.getFullYear();
-                      });
+                    if (dialogLoading) {
+                      return (
+                        <div className="flex justify-center items-center py-12">
+                          <span className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></span>
+                        </div>
+                      );
+                    }
+
+                    const monthRecords = dialogAttendanceRecords;
 
                     // Single source of truth: attendance table only.
                     // Approved leaves are auto-synced into attendance via DB trigger,
