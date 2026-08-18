@@ -25,7 +25,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Info, Loader2, Calendar } from "lucide-react";
+import { AlertTriangle, Info, Loader2, Calendar, Paperclip, CloudUpload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { differenceInDays, format, addDays, isSunday } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ import { leaveNotifications } from "@/lib/notificationService";
 import { getAllLeavePolicies, type LeaveType, type LeavePolicyData } from "@/lib/leavePolicyService";
 import { validateLeaveRequest, type ValidationError, getLeaveTypeRule } from "@/lib/leave-validation-utils";
 import { EmployeeLeaveRulesView } from "./EmployeeLeaveRulesView";
+import { uploadLeaveDocumentToDrive } from "@/lib/leaveDriveService";
 
 // Use dynamic policy loading
 let LEAVE_POLICY: Record<LeaveType, LeavePolicyData> = {};
@@ -80,12 +81,26 @@ export function LeaveApplicationForm({
 
   const policy = LEAVE_POLICY[leaveType];
 
-  // Load leave policies and existing leaves on component mount
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [employeeName, setEmployeeName] = useState("");
+
+  // Load leave policies, employee profile, and existing leaves on component mount
   useEffect(() => {
     const loadData = async () => {
       try {
         const policies = await getAllLeavePolicies();
         LEAVE_POLICY = policies;
+
+        // Load employee profile for Drive folder naming
+        const { data: profile } = await supabase
+          .from("employee_profiles")
+          .select("first_name, last_name")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (profile) {
+          setEmployeeName(`${profile.first_name} ${profile.last_name}`);
+        }
 
         // Load existing approved leaves for this employee
         const { data: leaves, error } = await supabase
@@ -299,6 +314,25 @@ export function LeaveApplicationForm({
     setSubmitting(true);
     try {
       const isHalfDay = leaveType === "half_day";
+      let documentUrl: string | null = null;
+      let documentName: string | null = null;
+
+      // If document is selected, upload to Google Drive under 'leave > EmployeeName'
+      if (selectedFile) {
+        setValidationMessage({
+          type: "info",
+          message: "Uploading document to Google Drive...",
+        });
+
+        const driveResult = await uploadLeaveDocumentToDrive(
+          selectedFile,
+          employeeName || "Employee",
+          policy?.label || leaveType
+        );
+
+        documentUrl = driveResult.webViewLink;
+        documentName = selectedFile.name;
+      }
 
       const { error } = await supabase.from("leaves").insert({
         user_id: userId,
@@ -309,12 +343,15 @@ export function LeaveApplicationForm({
         is_half_day: isHalfDay,
         half_day_type: isHalfDay ? halfDayType : null,
         is_emergency: leaveType === "emergency",
+        document_url: documentUrl,
+        document_name: documentName,
+        medical_document_url: leaveType === "medical" ? documentUrl : null,
       });
 
       if (error) throw error;
 
       // Send notification
-      const workingDaysDisplay = isHalfDay ? "0.5" : String(workingDays);
+      const workingDaysDisplay = isHalfDay ? "0.5 text" : String(workingDays);
       await leaveNotifications.applied(
         userId,
         leaveType,
@@ -342,6 +379,7 @@ export function LeaveApplicationForm({
     setReason("");
     setLeaveType("casual");
     setHalfDayType("first_half");
+    setSelectedFile(null);
     setValidationMessage(null);
     setWorkingDays(0);
   };
@@ -532,6 +570,25 @@ export function LeaveApplicationForm({
               rows={3}
               disabled={isFormDisabled}
             />
+          </div>
+
+          {/* Supporting Document Upload (Google Drive) */}
+          <div className="grid gap-2">
+            <Label className="flex items-center gap-1.5 font-medium text-sm">
+              <Paperclip className="h-4 w-4 text-muted-foreground" />
+              Attach Document / Proof (Optional)
+            </Label>
+            <Input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              disabled={isFormDisabled || submitting}
+            />
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <CloudUpload className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              Document will be stored in Google Drive under:{" "}
+              <span className="font-semibold text-foreground">leave &gt; {employeeName || "Employee"}</span>
+            </p>
           </div>
 
           {/* Validation Message */}

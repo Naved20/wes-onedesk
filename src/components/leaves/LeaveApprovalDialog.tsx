@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Info } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Info, FileText, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -32,6 +32,8 @@ interface LeaveRequest {
   salary_deduction_percent: number;
   auto_rejected: boolean;
   auto_rejection_reason?: string;
+  document_url?: string | null;
+  document_name?: string | null;
 }
 
 interface LeaveApprovalDialogProps {
@@ -343,6 +345,27 @@ export function LeaveApprovalDialog({
             <Label className="text-muted-foreground">Reason</Label>
             <p className="mt-1 p-3 bg-muted rounded-lg text-sm">{leave.reason}</p>
           </div>
+
+          {/* Attached Document */}
+          {leave.document_url && (
+            <div className="bg-blue-50/70 border border-blue-200 rounded-lg p-3">
+              <Label className="text-blue-900 text-xs font-semibold">Submitted Supporting Document</Label>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-800 flex items-center gap-1.5 truncate">
+                  <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                  {leave.document_name || "Leave Attachment"}
+                </span>
+                <a
+                  href={leave.document_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline font-semibold shrink-0"
+                >
+                  View in Drive <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          )}
 
           {/* Rejection Reason Input */}
           <div>

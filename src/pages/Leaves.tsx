@@ -9,12 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Eye, AlertTriangle, ListChecks } from "lucide-react";
+import { Plus, Eye, AlertTriangle, ListChecks, MessageSquare, FileText, ExternalLink } from "lucide-react";
 import { LeaveBalanceCard } from "@/components/leaves/LeaveBalanceCard";
 import { LeaveApplicationForm } from "@/components/leaves/LeaveApplicationForm";
 import { LeaveApprovalDialog } from "@/components/leaves/LeaveApprovalDialog";
 import { BulkLeaveApproval } from "@/components/leaves/BulkLeaveApproval";
 import { AdminLeaveBalance } from "@/components/leaves/AdminLeaveBalance";
+import { LeaveChatDialog } from "@/components/leaves/LeaveChatDialog";
 
 interface LeaveBalance {
   casual_leaves_used: number;
@@ -44,6 +45,8 @@ interface LeaveWithEmployee {
   salary_deduction_percent: number | null;
   auto_rejected: boolean | null;
   auto_rejection_reason: string | null;
+  document_url?: string | null;
+  document_name?: string | null;
   created_at: string;
   employee_name?: string;
 }
@@ -70,6 +73,13 @@ export default function Leaves() {
   const [selectedLeave, setSelectedLeave] = useState<LeaveWithEmployee | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
+  const [chatDialogOpen, setChatDialogOpen] = useState(false);
+  const [chatLeave, setChatLeave] = useState<LeaveWithEmployee | null>(null);
+
+  const openChatDialog = (leave: LeaveWithEmployee) => {
+    setChatLeave(leave);
+    setChatDialogOpen(true);
+  };
 
   useEffect(() => {
     fetchLeaves();
@@ -532,12 +542,33 @@ export default function Leaves() {
                               <TableCell>{getLeaveTypeBadge(leave)}</TableCell>
                               <TableCell className="max-w-[200px]">
                                 <div className="truncate" title={leave.reason}>{leave.reason}</div>
+                                {leave.document_url && (
+                                  <a
+                                    href={leave.document_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1 font-medium"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    {leave.document_name || "Attachment"}
+                                    <ExternalLink className="h-2.5 w-2.5" />
+                                  </a>
+                                )}
                                 {leave.auto_rejection_reason && (
                                   <div className="text-xs text-destructive mt-1">{leave.auto_rejection_reason}</div>
                                 )}
                               </TableCell>
                               <TableCell>{getStatusBadge(leave)}</TableCell>
-                              <TableCell className="text-right">
+                              <TableCell className="text-right flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Clarification Chat"
+                                  onClick={() => openChatDialog(leave)}
+                                >
+                                  <MessageSquare className="h-4 w-4 text-blue-600" />
+                                  <span className="sr-only sm:not-sr-only sm:inline-block text-xs">Chat</span>
+                                </Button>
                                 {leave.status === "pending" && !leave.auto_rejected && (
                                   <Button
                                     size="sm"
@@ -588,6 +619,7 @@ export default function Leaves() {
                         <TableHead>Type</TableHead>
                         <TableHead>Reason</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -610,11 +642,34 @@ export default function Leaves() {
                           <TableCell>{getLeaveTypeBadge(leave)}</TableCell>
                           <TableCell className="max-w-[200px]">
                             <div className="truncate" title={leave.reason}>{leave.reason}</div>
+                            {leave.document_url && (
+                              <a
+                                href={leave.document_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1 font-medium"
+                              >
+                                <FileText className="h-3 w-3" />
+                                {leave.document_name || "Attachment"}
+                                <ExternalLink className="h-2.5 w-2.5" />
+                              </a>
+                            )}
                             {leave.auto_rejection_reason && (
                               <div className="text-xs text-destructive mt-1">{leave.auto_rejection_reason}</div>
                             )}
                           </TableCell>
                           <TableCell>{getStatusBadge(leave)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1 text-xs"
+                              onClick={() => openChatDialog(leave)}
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
+                              Chat / Clarify
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -665,6 +720,14 @@ export default function Leaves() {
         onOpenChange={setApprovalDialogOpen}
         onApprove={handleApprove}
         onReject={handleReject}
+      />
+
+      {/* Leave Clarification Continuous Chat Dialog */}
+      <LeaveChatDialog
+        open={chatDialogOpen}
+        onOpenChange={setChatDialogOpen}
+        leave={chatLeave}
+        currentUserId={user?.id || ""}
       />
     </DashboardLayout>
   );
