@@ -76,7 +76,6 @@ export default function EditBalanceDialog({
     setLoadingPolicy(true);
     try {
       const now = new Date();
-      const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
       // Get employee's actual current balance from leave_balances table
@@ -84,7 +83,6 @@ export default function EditBalanceDialog({
         .from("leave_balances")
         .select("*")
         .eq("user_id", employee.user_id)
-        .eq("month", month)
         .eq("year", year)
         .maybeSingle();
 
@@ -193,12 +191,10 @@ export default function EditBalanceDialog({
     setSaving(true);
     try {
       const now = new Date();
-      const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
       console.log("Editing balance for:", {
         user_id: employee.user_id,
-        month,
         year,
         newValues: {
           casual: casualValue,
@@ -214,7 +210,6 @@ export default function EditBalanceDialog({
         .from("leave_balances")
         .select("*")
         .eq("user_id", employee.user_id)
-        .eq("month", month)
         .eq("year", year)
         .maybeSingle();
 
@@ -266,7 +261,7 @@ export default function EditBalanceDialog({
         .upsert(
           {
             user_id: employee.user_id,
-            month,
+            month: 1, // Default month
             year,
             casual_leaves_used: newCasualUsed,
             medical_leaves_used: newMedicalUsed,
@@ -275,7 +270,7 @@ export default function EditBalanceDialog({
             half_day_leaves_used: newHalfDayUsed,
           },
           {
-            onConflict: "user_id,month,year",
+            onConflict: "user_id,year",
           }
         )
         .select();

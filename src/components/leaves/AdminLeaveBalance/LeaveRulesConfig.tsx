@@ -256,7 +256,7 @@ export function LeaveRulesConfig() {
                       </div>
 
                       <div>
-                        <Label>Max Per Month (days)</Label>
+                        <Label>Max Per Year (days)</Label>
                         <Input
                           type="number"
                           min="1"
@@ -270,7 +270,7 @@ export function LeaveRulesConfig() {
                           }
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Maximum leaves in a month
+                          Maximum leaves in a year
                         </p>
                       </div>
 

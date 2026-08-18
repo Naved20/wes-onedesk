@@ -105,12 +105,12 @@ export async function validateLeaveRequest(
       );
     }
 
-    // 3. Check max per month
-    const monthLeaves = getMonthLeaves(userId, startDate, endDate, existingLeaves, leaveType);
-    const monthTotal = monthLeaves + daysRequested;
-    if (monthTotal > rule.max_per_month) {
+    // 3. Check max per year (using rule.max_per_month as the yearly limit)
+    const yearLeaves = getYearLeaves(userId, startDate, endDate, existingLeaves, leaveType);
+    const yearTotal = yearLeaves + daysRequested;
+    if (yearTotal > rule.max_per_month) {
       errors.push(
-        `Maximum ${rule.max_per_month} days per month allowed. This would total ${monthTotal} days in ${getMonthName(startDate)}.`
+        `Maximum ${rule.max_per_month} days per year allowed. This would total ${yearTotal} days in the year ${startDate.getFullYear()}.`
       );
     }
 
@@ -186,31 +186,31 @@ function getWeekLeaves(
 }
 
 /**
- * Get total leaves used in the same month
+ * Get total leaves used in the same year
  */
-function getMonthLeaves(
+function getYearLeaves(
   userId: string,
   startDate: Date,
   endDate: Date,
   existingLeaves: any[],
   leaveType: string
 ): number {
-  const monthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-  const monthEnd = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+  const yearStart = new Date(startDate.getFullYear(), 0, 1);
+  const yearEnd = new Date(startDate.getFullYear(), 11, 31);
 
-  const monthLeaves = existingLeaves.filter((leave) => {
+  const yearLeaves = existingLeaves.filter((leave) => {
     const leaveStart = new Date(leave.start_date);
     const leaveEnd = new Date(leave.end_date);
     const sameType = leave.leave_type?.toLowerCase() === leaveType.toLowerCase();
     const approved = leave.status === "approved";
     const overlaps =
-      (leaveStart <= monthEnd && leaveEnd >= monthStart);
+      (leaveStart <= yearEnd && leaveEnd >= yearStart);
 
     return sameType && approved && overlaps;
   });
 
   let total = 0;
-  for (const leave of monthLeaves) {
+  for (const leave of yearLeaves) {
     total += calculateBusinessDays(new Date(leave.start_date), new Date(leave.end_date));
   }
 

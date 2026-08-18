@@ -83,7 +83,6 @@ export default function Leaves() {
     setBalanceLoading(true);
     try {
       const now = new Date();
-      const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
       // Try to get existing balance
@@ -92,7 +91,6 @@ export default function Leaves() {
         .select("*")
         .eq("user_id", user.id)
         .eq("year", year)
-        .eq("month", month)
         .maybeSingle();
 
       if (error) throw error;
@@ -118,7 +116,7 @@ export default function Leaves() {
           .insert({
             user_id: user.id,
             year,
-            month,
+            month: 1, // Default month
           })
           .select()
           .single();
@@ -215,7 +213,6 @@ export default function Leaves() {
     if (!leave) return;
     const type = leave.leave_type;
     const userId = leave.user_id;
-    const month = new Date().getMonth() + 1;
     const year = new Date().getFullYear();
     const columnMap: Record<string, string> = {
       casual: 'casual_leaves_used',
@@ -233,7 +230,6 @@ export default function Leaves() {
         .from('leave_balances')
         .select('*')
         .eq('user_id', userId)
-        .eq('month', month)
         .eq('year', year)
         .maybeSingle();
       if (balErr) throw balErr;
@@ -247,8 +243,8 @@ export default function Leaves() {
       } else {
         const newRow: any = {
           user_id: userId,
-          month,
           year,
+          month: 1, // Default month
           [column]: increment,
         };
         const { error: insErr } = await supabase.from('leave_balances').insert(newRow);
@@ -651,6 +647,13 @@ export default function Leaves() {
             emergency: leaveBalance.emergency_leaves_used,
             lop: leaveBalance.lop_leaves_used,
             half_day: leaveBalance.half_day_leaves_used,
+          } : undefined}
+          leaveBalancesEntitled={leaveBalance ? {
+            casual: leaveBalance.casual_leaves_entitled || 6,
+            medical: leaveBalance.medical_leaves_entitled || 6,
+            emergency: leaveBalance.emergency_leaves_entitled || 6,
+            lop: leaveBalance.lop_leaves_entitled || 6,
+            half_day: leaveBalance.half_day_leaves_entitled || 6,
           } : undefined}
         />
       )}

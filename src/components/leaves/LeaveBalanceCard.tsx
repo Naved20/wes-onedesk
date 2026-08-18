@@ -135,7 +135,6 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
     
     try {
       const now = new Date();
-      const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
       // Get employee's actual balance from leave_balances table
@@ -143,7 +142,6 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
         .from("leave_balances")
         .select("*")
         .eq("user_id", user.id)
-        .eq("month", month)
         .eq("year", year)
         .maybeSingle();
 
@@ -155,7 +153,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
           .from("leave_balances")
           .insert({
             user_id: user.id,
-            month,
+            month: 1, // Default month
             year,
             casual_leaves_used: 0,
             medical_leaves_used: 0,
@@ -384,7 +382,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Maximum days in a single leave request: {leaveRules.casual.max_per_request} day</p>
                     <p>Maximum leaves in a week {leaveRules.casual.max_per_week} day</p>
-                    <p>Maximum leaves in a month {leaveRules.casual.max_per_month} day</p>
+                    <p>Maximum leaves in a year {leaveRules.casual.max_per_month} day</p>
                     <p>Days required between requests {leaveRules.casual.min_gap_between_requests} day</p>
                     <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.casual.advance_notice_days} day</p>
                   </div>
@@ -398,7 +396,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Maximum days in a single leave request: {leaveRules.medical.max_per_request} day</p>
                     <p>Maximum leaves in a week {leaveRules.medical.max_per_week} day</p>
-                    <p>Maximum leaves in a month {leaveRules.medical.max_per_month} day</p>
+                    <p>Maximum leaves in a year {leaveRules.medical.max_per_month} day</p>
                     <p>Days required between requests {leaveRules.medical.min_gap_between_requests} day</p>
                     <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.medical.advance_notice_days} day</p>
                   </div>
@@ -412,7 +410,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Maximum days in a single leave request: {leaveRules.emergency.max_per_request} day</p>
                     <p>Maximum leaves in a week {leaveRules.emergency.max_per_week} day</p>
-                    <p>Maximum leaves in a month {leaveRules.emergency.max_per_month} day</p>
+                    <p>Maximum leaves in a year {leaveRules.emergency.max_per_month} day</p>
                     <p>Days required between requests {leaveRules.emergency.min_gap_between_requests} day</p>
                     <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.emergency.advance_notice_days} day</p>
                   </div>
@@ -426,7 +424,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Maximum days in a single leave request: {leaveRules.lop.max_per_request} day</p>
                     <p>Maximum leaves in a week {leaveRules.lop.max_per_week} day</p>
-                    <p>Maximum leaves in a month {leaveRules.lop.max_per_month} day</p>
+                    <p>Maximum leaves in a year {leaveRules.lop.max_per_month} day</p>
                     <p>Days required between requests {leaveRules.lop.min_gap_between_requests} day</p>
                     <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.lop.advance_notice_days} day</p>
                   </div>
@@ -440,7 +438,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                   <div className="space-y-0.5 text-muted-foreground">
                     <p>Maximum days in a single leave request: {leaveRules.half_day.max_per_request} day</p>
                     <p>Maximum leaves in a week {leaveRules.half_day.max_per_week} day</p>
-                    <p>Maximum leaves in a month {leaveRules.half_day.max_per_month} day</p>
+                    <p>Maximum leaves in a year {leaveRules.half_day.max_per_month} day</p>
                     <p>Days required between requests {leaveRules.half_day.min_gap_between_requests} day</p>
                     <p className="text-orange-600">Minimum days in advance required to apply for leave {leaveRules.half_day.advance_notice_days} day</p>
                   </div>

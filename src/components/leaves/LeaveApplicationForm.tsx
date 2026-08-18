@@ -52,6 +52,7 @@ interface LeaveApplicationFormProps {
   userId: string;
   casualLeavesRemaining: number;
   leaveBalancesUsed?: LeaveBalances;
+  leaveBalancesEntitled?: LeaveBalances;
 }
 
 export function LeaveApplicationForm({
@@ -61,6 +62,7 @@ export function LeaveApplicationForm({
   userId,
   casualLeavesRemaining,
   leaveBalancesUsed,
+  leaveBalancesEntitled,
 }: LeaveApplicationFormProps) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -114,12 +116,14 @@ export function LeaveApplicationForm({
 
   // Get remaining balance for current leave type
   const getRemainingBalance = (type: LeaveType) => {
-    if (!leaveBalancesUsed) return LEAVE_POLICY[type]?.balance || 6;
+    const limit = leaveBalancesEntitled ? (leaveBalancesEntitled[type] ?? 6) : (LEAVE_POLICY[type]?.balance ?? 6);
+    if (!leaveBalancesUsed) return limit;
     const used = leaveBalancesUsed[type] || 0;
-    return Math.max(0, (LEAVE_POLICY[type]?.balance || 6) - used);
+    return Math.max(0, limit - used);
   };
 
   const currentRemaining = getRemainingBalance(leaveType);
+  const currentEntitled = leaveBalancesEntitled ? (leaveBalancesEntitled[leaveType] ?? 6) : (policy?.balance ?? 6);
 
   // For single-day leave types, auto-sync end date with start date
   useEffect(() => {
@@ -193,7 +197,7 @@ export function LeaveApplicationForm({
     if (currentRemaining <= 0) {
       setValidationMessage({
         type: "error",
-        message: `You have used all ${policy.balance} ${policy.label} this month (0 remaining)`,
+        message: `You have used all ${currentEntitled} ${policy.label} this year (0 remaining)`,
       });
       return;
     }
@@ -242,7 +246,7 @@ export function LeaveApplicationForm({
           setValidationMessage({
             type: "error",
             message: ruleValidation.errors[0],
-          });
+            });
           return;
         }
       } else {
@@ -254,7 +258,7 @@ export function LeaveApplicationForm({
     if (currentRemaining === 1) {
       setValidationMessage({
         type: "warning",
-        message: `This is your last ${policy.label} for this month (1/${policy.balance} remaining)`,
+        message: `This is your last ${policy.label} for this year (1/${currentEntitled} remaining)`,
       });
       return;
     }
@@ -360,7 +364,7 @@ export function LeaveApplicationForm({
               <span>
                 {policy.label}:{" "}
                 <Badge variant={currentRemaining > 0 ? "secondary" : "destructive"}>
-                  {currentRemaining}/{policy.balance} remaining
+                  {currentRemaining}/{currentEntitled} remaining
                 </Badge>
                 <Badge variant="outline" className="ml-1 text-xs">
                   {policy.code}
@@ -392,7 +396,7 @@ export function LeaveApplicationForm({
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    You have exhausted your {policy.label} quota ({policy.balance}/{policy.balance} used). Please choose a different leave type.
+                    You have exhausted your {policy.label} quota ({currentEntitled}/{currentEntitled} used). Please choose a different leave type.
                   </AlertDescription>
                 </Alert>
               )}

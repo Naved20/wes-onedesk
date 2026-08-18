@@ -185,7 +185,7 @@ export function LeavePolicyConfig() {
           <div>
             <CardTitle>Leave Policy Configuration</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Configure monthly balance and salary impact for each leave type
+              Configure yearly balance and salary impact for each leave type
             </p>
           </div>
           <Button
@@ -224,7 +224,7 @@ export function LeavePolicyConfig() {
 
                 <div className=" gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Balance</p>
+                    <p className="text-muted-foreground">Yearly Balance</p>
                     <p className="font-semibold">{policy.monthlyBalance} days</p>
                   </div>
 
@@ -273,17 +273,17 @@ function EditPolicyDialog({
         <DialogHeader>
           <DialogTitle>Edit {policy.leaveType} Policy</DialogTitle>
           <DialogDescription>
-            Configure balance and salary deduction for {policy.leaveType} leave
+            Configure yearly balance and salary deduction for {policy.leaveType} leave
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <Label>Balance (days)</Label>
+            <Label>Yearly Balance (days)</Label>
             <Input
               type="number"
               min="1"
-              max="30"
+              max="365"
               value={policy.monthlyBalance}
               onChange={(e) =>
                 onPolicyChange({

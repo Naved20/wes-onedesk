@@ -34,6 +34,7 @@ interface EmployeeBalance {
   lop_balance: number;
   half_day_balance: number;
   used_total: number;
+  total_available: number;
   remaining_total: number;
 }
 
@@ -82,7 +83,6 @@ export function EmployeeLeaveBalanceManagement() {
   const fetchEmployeeBalances = async () => {
     setLoading(true);
     try {
-      const month = parseInt(selectedMonth);
       const year = parseInt(selectedYear);
 
       // Get all employee profiles
@@ -93,11 +93,10 @@ export function EmployeeLeaveBalanceManagement() {
 
       if (profileError) throw profileError;
 
-      // Get leave balances for selected month
+      // Get leave balances for selected year
       const { data: balances, error: balanceError } = await supabase
         .from("leave_balances")
         .select("*")
-        .eq("month", month)
         .eq("year", year);
 
       if (balanceError) throw balanceError;
@@ -143,6 +142,7 @@ export function EmployeeLeaveBalanceManagement() {
           lop_balance: lopRemaining,          // Shows remaining
           half_day_balance: halfDayRemaining, // Shows remaining
           used_total: usedTotal,
+          total_available: totalAvailable,
           remaining_total: remainingTotal,
         };
       });
@@ -191,7 +191,6 @@ export function EmployeeLeaveBalanceManagement() {
   const handleResetBalance = async (employee: EmployeeBalance) => {
     try {
       // Reset balance by creating/updating record with 0 values using upsert
-      const month = parseInt(selectedMonth);
       const year = parseInt(selectedYear);
 
       const { error } = await supabase
@@ -199,7 +198,7 @@ export function EmployeeLeaveBalanceManagement() {
         .upsert(
           {
             user_id: employee.user_id,
-            month,
+            month: 1, // Default month
             year,
             casual_leaves_used: 0,
             medical_leaves_used: 0,
@@ -208,7 +207,7 @@ export function EmployeeLeaveBalanceManagement() {
             half_day_leaves_used: 0,
           },
           {
-            onConflict: "user_id,month,year",
+            onConflict: "user_id,year",
           }
         );
 
@@ -374,7 +373,7 @@ export function EmployeeLeaveBalanceManagement() {
                         {employee.half_day_balance}
                       </TableCell>
                       <TableCell className="text-center">
-                        {employee.used_total}/{30}
+                        {employee.used_total}/{employee.total_available}
                       </TableCell>
                       <TableCell className="text-center">
                         {getBalanceBadge(employee.remaining_total)}{" "}

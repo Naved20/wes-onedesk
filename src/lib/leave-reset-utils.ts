@@ -49,12 +49,11 @@ export async function resetEmployeeBalance(
   carryForwardAmount: number = 0
 ): Promise<boolean> {
   try {
-    // Check if balance record exists for current month
+    // Check if balance record exists for current year
     const { data: existingBalance, error: checkError } = await supabase
       .from("leave_balances")
       .select("id")
       .eq("user_id", userId)
-      .eq("month", currentMonth)
       .eq("year", currentYear)
       .single();
 
@@ -84,7 +83,7 @@ export async function resetEmployeeBalance(
         .from("leave_balances")
         .insert({
           user_id: userId,
-          month: currentMonth,
+          month: 1, // Default month
           year: currentYear,
           ...updateData,
           casual_leaves_entitled: 6,

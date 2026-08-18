@@ -174,17 +174,17 @@ export function EmployeeLeaveRulesView() {
                     </p>
                   </div>
 
-                  {/* Max Per Month */}
+                  {/* Max Per Year */}
                   <div className="bg-muted/50 rounded-lg p-3">
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Max Per Month
+                      Max Per Year
                     </div>
                     <div className="mt-2 flex items-baseline gap-2">
                       <span className="text-2xl font-bold">{item.rule.max_per_month}</span>
                       <span className="text-sm text-muted-foreground">days</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Maximum days allowed in a calendar month
+                      Maximum days allowed in a calendar year
                     </p>
                   </div>
 
@@ -216,7 +216,7 @@ export function EmployeeLeaveRulesView() {
                     ✓ Maximum {item.rule.max_per_week} days per week
                   </p>
                   <p>
-                    ✓ Maximum {item.rule.max_per_month} days per month
+                    ✓ Maximum {item.rule.max_per_month} days per year
                   </p>
                   {item.rule.min_gap_between_requests > 0 && (
                     <p>
@@ -240,7 +240,7 @@ export function EmployeeLeaveRulesView() {
         </CardHeader>
         <CardContent className="text-sm space-y-2 text-blue-900">
           <p>• Plan your leaves in advance to respect request limits</p>
-          <p>• Keep track of leaves used in the current week and month</p>
+          <p>• Keep track of leaves used in the current week and year</p>
           <p>• If you need more leave, consider different leave types</p>
           <p>• Submit requests early to comply with advance notice requirements</p>
           <p>• Always provide clear reasons for your leave requests</p>
