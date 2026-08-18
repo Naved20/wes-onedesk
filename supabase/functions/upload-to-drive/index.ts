@@ -57,12 +57,27 @@ Deno.serve(async (req) => {
     console.log("[DEBUG] Access token obtained successfully");
     console.log("[DEBUG] Creating folder hierarchy...");
 
-    // Folder hierarchy: ROOT_FOLDER_ID -> TaskName -> SubmissionType -> EmployeeName
-    const taskFolderId = await getOrCreateFolder(taskName, ROOT_FOLDER_ID, accessToken);
-    const typeFolderId = await getOrCreateFolder(submissionType, taskFolderId, accessToken);
-    const userFolderId = await getOrCreateFolder(userName, typeFolderId, accessToken);
+    // Check if the upload is related to a leave
+    const isLeave = submissionType.toLowerCase() === "leave" || taskName.toLowerCase() === "leave";
 
-    console.log("[DEBUG] Folders created, userFolderId:", userFolderId);
+    let targetFolderId: string;
+    let folderPath: string;
+
+    if (isLeave) {
+      // Hierarchy for leaves: ROOT_FOLDER_ID -> leave -> EmployeeName
+      const leaveFolderId = await getOrCreateFolder("leave", ROOT_FOLDER_ID, accessToken);
+      targetFolderId = await getOrCreateFolder(userName, leaveFolderId, accessToken);
+      folderPath = `leave > ${userName}`;
+    } else {
+      // Hierarchy for tasks: ROOT_FOLDER_ID -> training task -> TaskName -> SubmissionType -> EmployeeName
+      const trainingTaskFolderId = await getOrCreateFolder("training task", ROOT_FOLDER_ID, accessToken);
+      const taskFolderId = await getOrCreateFolder(taskName, trainingTaskFolderId, accessToken);
+      const typeFolderId = await getOrCreateFolder(submissionType, taskFolderId, accessToken);
+      targetFolderId = await getOrCreateFolder(userName, typeFolderId, accessToken);
+      folderPath = `training task > ${taskName} > ${submissionType} > ${userName}`;
+    }
+
+    console.log("[DEBUG] Folders created, targetFolderId:", targetFolderId);
 
     const fileExt = file.name.split(".").pop() || "";
     const now = new Date();
@@ -80,7 +95,7 @@ Deno.serve(async (req) => {
     const metadata = {
       name: newFileName,
       mimeType: file.type,
-      parents: [userFolderId],
+      parents: [targetFolderId],
     };
 
     const uploadFormData = new FormData();
@@ -120,7 +135,6 @@ Deno.serve(async (req) => {
     }
 
     const directViewLink = `https://drive.google.com/uc?export=view&id=${fileId}`;
-    const folderPath = `${taskName} > ${submissionType} > ${userName}`;
 
     return new Response(
       JSON.stringify({

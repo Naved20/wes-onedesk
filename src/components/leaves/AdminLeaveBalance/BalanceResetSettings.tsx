@@ -405,16 +405,7 @@ export function BalanceResetSettings() {
               Save Reset Settings
             </Button>
 
-            <Button
-              onClick={handleResetNow}
-              disabled={resettingNow || loading}
-              variant="secondary"
-              className="gap-2"
-            >
-              {resettingNow && <Loader2 className="h-4 w-4 animate-spin" />}
-              <Play className="h-4 w-4" />
-              Reset Now
-            </Button>
+
           </div>
           </>
           )}
