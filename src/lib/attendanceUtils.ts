@@ -91,22 +91,21 @@ export function getAttendanceDisplayStatus(
   calculatedStatus: string | null,
   isLate: boolean | null
 ): AttendanceStatus {
-  // If manually approved/rejected, use that status
-  if (status === "approved") {
+  const calc = calculatedStatus?.toLowerCase() ?? null;
+  const stat = status?.toLowerCase() ?? null;
+
+  if (calc === "not_applicable" || calc === "na") return "not_applicable";
+  if (calc === "paid_leave") return "paid_leave";
+  if (calc === "leave") return "leave";
+  if (calc === "half_day") return "half_day";
+  if (calc === "holiday" || stat === "holiday") return "holiday";
+  if (calc === "absent" || stat === "rejected") return "absent";
+  if (calc === "present" || calc === "late") return "present";
+
+  // Generic approved status defaults to present if not a leave/holiday/absent
+  if (stat === "approved") {
     return "present";
   }
-  if (status === "rejected") return "absent";
-  
-  // Use calculated status - always return present if not absent/half_day
-  if (calculatedStatus === "present" || calculatedStatus === "late") {
-    return "present";
-  }
-  if (calculatedStatus === "absent") return "absent";
-  if (calculatedStatus === "half_day") return "half_day";
-  if (calculatedStatus === "paid_leave") return "paid_leave";
-  if (calculatedStatus === "leave") return "leave";
-  if (calculatedStatus === "holiday") return "holiday";
-  if (calculatedStatus === "not_applicable" || calculatedStatus === "na") return "not_applicable";
-  
+
   return "pending";
 }

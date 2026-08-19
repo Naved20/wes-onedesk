@@ -35,11 +35,11 @@ export function getEffectiveStatus(record: AttendanceLikeRecord): EffectiveStatu
   if (calc === "leave") return "leave";
   if (calc === "half_day" || record.is_half_day) return "half_day";
   if (calc === "late" || record.is_late) return "late";
-  if (calc === "present" || record.check_in_time || (status === "approved" && calc !== "holiday" && calc !== "absent")) {
-    return "present";
-  }
   if (status === "holiday" || calc === "holiday") return "holiday";
   if (status === "rejected" || calc === "absent") return "absent";
+  if (calc === "present" || record.check_in_time || status === "approved" || status === "present") {
+    return "present";
+  }
   return "pending";
 }
 

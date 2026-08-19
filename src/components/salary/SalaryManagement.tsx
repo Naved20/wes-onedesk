@@ -1483,6 +1483,7 @@ export function SalaryManagement({ userId, isAdmin, isManager }: SalaryManagemen
     // Helper function - same as AttendanceStats
     const getRecordSummaryStatus = (record: any) => {
       const calculatedStatus = record.calculated_status?.toLowerCase();
+      if (calculatedStatus === "not_applicable" || calculatedStatus === "na") return "not_applicable";
       if (record.status === "rejected" || calculatedStatus === "absent") return "absent";
       if (calculatedStatus === "paid_leave") return "paid_leave";
       if (calculatedStatus === "leave") return "leave";
