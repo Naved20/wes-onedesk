@@ -193,9 +193,7 @@ export function LeaveRulesConfig() {
               Set rules for each leave type
             </p>
           </div>
-          <Button variant="outline" onClick={handleResetRules}>
-            Reset to Defaults
-          </Button>
+          
         </CardHeader>
         <CardContent className="space-y-6">
           {loading ? (

@@ -399,14 +399,7 @@ export function EmployeeLeaveBalanceManagement() {
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleResetBalance(employee)}
-                            title="Reset balance"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
+                     
                         </div>
                       </TableCell>
                     </TableRow>

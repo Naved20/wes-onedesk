@@ -188,15 +188,7 @@ export function LeavePolicyConfig() {
               Configure yearly balance and salary impact for each leave type
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResetToDefaults}
-            className="gap-2"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset to Defaults
-          </Button>
+          
         </CardHeader>
         <CardContent>
           <div className=" grid grid-cols-2 md:grid-cols-3 gap-4 ">
