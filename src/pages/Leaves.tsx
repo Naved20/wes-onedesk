@@ -307,6 +307,39 @@ export default function Leaves() {
     }
   };
 
+  const handleUndo = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("leaves")
+        .update({
+          status: "pending",
+          auto_rejected: false,
+          auto_rejection_reason: null,
+          rejection_reason: null,
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Undo Successful",
+        description: "Leave request reset to pending status",
+      });
+
+      fetchLeaves();
+      if (role === "employee") {
+        fetchLeaveBalance();
+      }
+    } catch (error) {
+      console.error("Error undoing leave decision:", error);
+      toast({
+        title: "Error",
+        description: "Failed to undo leave decision",
+        variant: "destructive",
+      });
+    }
+  };
+
   const openApprovalDialog = (leave: LeaveWithEmployee) => {
     setSelectedLeave(leave);
     setApprovalDialogOpen(true);
@@ -619,7 +652,8 @@ export default function Leaves() {
                                   <MessageSquare className="h-3.5 w-3.5 text-blue-600" />
                                   <span>Chat</span>
                                 </Button>
-                                {leave.status === "pending" && !leave.auto_rejected && (
+
+                                {leave.status === "pending" && !leave.auto_rejected ? (
                                   <Button
                                     size="sm"
                                     variant="default"
@@ -628,7 +662,18 @@ export default function Leaves() {
                                     <Eye className="h-4 w-4 mr-1" />
                                     Review
                                   </Button>
-                                )}
+                                ) : leave.end_date >= new Date().toISOString().split("T")[0] ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 font-medium"
+                                    title="Undo Decision (Reset to Pending)"
+                                    onClick={() => handleUndo(leave.id)}
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-amber-600" />
+                                    <span>Undo</span>
+                                  </Button>
+                                ) : null}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -781,6 +826,7 @@ export default function Leaves() {
         onOpenChange={setApprovalDialogOpen}
         onApprove={handleApprove}
         onReject={handleReject}
+        onUndo={handleUndo}
       />
 
       {/* Leave Clarification Continuous Chat Dialog */}

@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Info, FileText, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Info, FileText, ExternalLink, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -34,6 +34,7 @@ interface LeaveRequest {
   auto_rejection_reason?: string;
   document_url?: string | null;
   document_name?: string | null;
+  status?: string | null;
 }
 
 interface LeaveApprovalDialogProps {
@@ -42,6 +43,7 @@ interface LeaveApprovalDialogProps {
   onOpenChange: (open: boolean) => void;
   onApprove: (id: string) => Promise<void>;
   onReject: (id: string, reason: string) => Promise<void>;
+  onUndo?: (id: string) => Promise<void>;
 }
 
 export function LeaveApprovalDialog({
@@ -50,13 +52,13 @@ export function LeaveApprovalDialog({
   onOpenChange,
   onApprove,
   onReject,
+  onUndo,
 }: LeaveApprovalDialogProps) {
   const [rejectionReason, setRejectionReason] = useState("");
-  const [processing, setProcessing] = useState<"approve" | "reject" | null>(null);
+  const [processing, setProcessing] = useState<"approve" | "reject" | "undo" | null>(null);
   const [casualLeaveNumber, setCasualLeaveNumber] = useState<number | null>(null);
   const [loadingLeaveCount, setLoadingLeaveCount] = useState(false);
 
-  // Fetch the casual leave count for this employee's month
   useEffect(() => {
     if (leave && leave.leave_type === "casual" && open) {
       fetchCasualLeaveCount();
@@ -67,26 +69,24 @@ export function LeaveApprovalDialog({
 
   const fetchCasualLeaveCount = async () => {
     if (!leave) return;
-    
+
     setLoadingLeaveCount(true);
     try {
       const leaveDate = new Date(leave.start_date);
       const month = leaveDate.getMonth() + 1;
       const year = leaveDate.getFullYear();
 
-      // Get approved casual leaves for this user in this month
       const { data, error } = await supabase
         .from("leaves")
         .select("id")
         .eq("user_id", leave.user_id)
         .eq("leave_type", "casual")
         .eq("status", "approved")
-        .gte("start_date", `${year}-${String(month).padStart(2, '0')}-01`)
-        .lt("start_date", month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`);
+        .gte("start_date", `${year}-${String(month).padStart(2, "0")}-01`)
+        .lt("start_date", month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`);
 
       if (error) throw error;
-      
-      // This would be their (count + 1)th leave if approved
+
       setCasualLeaveNumber((data?.length || 0) + 1);
     } catch (error) {
       console.error("Error fetching casual leave count:", error);
@@ -108,7 +108,6 @@ export function LeaveApprovalDialog({
 
       if (error) throw error;
 
-      // Send approval notification to employee
       await leaveNotifications.approved(
         leave.user_id,
         leave.leave_type || "leave",
@@ -143,15 +142,14 @@ export function LeaveApprovalDialog({
     try {
       const { error } = await supabase
         .from("leaves")
-        .update({ 
+        .update({
           status: "rejected",
-          rejection_reason: rejectionReason.trim()
+          rejection_reason: rejectionReason.trim(),
         })
         .eq("id", leave.id);
 
       if (error) throw error;
 
-      // Send rejection notification to employee
       await leaveNotifications.rejected(
         leave.user_id,
         leave.leave_type || "leave",
@@ -174,9 +172,40 @@ export function LeaveApprovalDialog({
     }
   };
 
+  const handleUndo = async () => {
+    setProcessing("undo");
+    try {
+      const { error } = await supabase
+        .from("leaves")
+        .update({
+          status: "pending",
+          auto_rejected: false,
+          auto_rejection_reason: null,
+          rejection_reason: null,
+        })
+        .eq("id", leave.id);
+
+      if (error) throw error;
+
+      toast({ title: "Undo Successful", description: "Leave request status reset to Pending" });
+      onOpenChange(false);
+      if (onUndo) {
+        await onUndo(leave.id);
+      }
+    } catch (error) {
+      console.error("Error undoing leave decision:", error);
+      toast({
+        title: "Error",
+        description: "Failed to undo leave decision",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   const getLeaveTypeBadge = () => {
     const type = leave.leave_type || "casual";
-    // Emergency leaves now carry a full‑day salary deduction.
     if (type === "emergency" && leave.salary_deduction_percent === 100) {
       return (
         <Badge variant="outline" className="border-red-500 text-red-600">
@@ -199,12 +228,18 @@ export function LeaveApprovalDialog({
             Medical (Paid)
           </Badge>
         );
-      case "unplanned":
-        return <Badge variant="destructive">Unplanned</Badge>;
       case "emergency":
         return (
           <Badge variant="outline" className="border-red-500 text-red-600">
-            Emergency (Deduction)
+            Emergency
+          </Badge>
+        );
+      case "lop":
+        return <Badge variant="destructive">LOP</Badge>;
+      case "half_day":
+        return (
+          <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+            Half Day
           </Badge>
         );
       default:
@@ -212,87 +247,75 @@ export function LeaveApprovalDialog({
     }
   };
 
-  const getSalaryImpact = () => {
-    const percent = leave.salary_deduction_percent;
-    const type = leave.leave_type;
-    if (percent === undefined || percent === null) {
-      return { text: "—", color: "text-muted-foreground" };
+  const getSalaryImpactText = () => {
+    const type = leave.leave_type || "casual";
+    if (type === "casual" || type === "medical" || type === "sick") {
+      return { text: "No salary deduction (Paid Leave)", color: "text-green-600" };
     }
-    if (type === "emergency" || type === "lop") {
-      return { text: "1 LOP", color: "text-destructive" };
+    if (type === "half_day") {
+      return { text: "0.5 day salary deduction", color: "text-amber-600" };
     }
-    if (percent === 0) return { text: "No deduction", color: "text-green-600" };
-    if (percent === 50) return { text: "50% deduction", color: "text-amber-600" };
-    if (percent === 100) return { text: "Full deduction", color: "text-destructive" };
-    return { text: `${percent}% deduction`, color: "text-muted-foreground" };
+    return { text: "100% salary deduction for leave days", color: "text-red-600" };
   };
+
+  const salaryImpact = getSalaryImpactText();
   const isCasualLeave = leave.leave_type === "casual";
-  const isSingleDay = leave.start_date === leave.end_date;
-  const salaryImpact = getSalaryImpact();
+  const isSingleDay = (leave.working_days_count || 1) <= 1;
+  const isDecided = leave.status === "approved" || leave.status === "rejected" || leave.auto_rejected;
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isFutureOrCurrent = leave.end_date >= todayStr;
+  const canUndo = isDecided && isFutureOrCurrent;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Review Leave Request</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span>Review Leave Request</span>
+            {leave.auto_rejected && (
+              <Badge variant="destructive" className="text-xs">
+                Auto-Rejected
+              </Badge>
+            )}
+            {leave.status === "approved" && (
+              <Badge variant="default" className="bg-green-600 text-xs">
+                Approved
+              </Badge>
+            )}
+            {leave.status === "rejected" && !leave.auto_rejected && (
+              <Badge variant="destructive" className="text-xs">
+                Rejected
+              </Badge>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            {leave.employee_name ? `From: ${leave.employee_name}` : "Review and approve or reject this leave request"}
+            Review details for {leave.employee_name || "Employee"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Auto-rejection warning */}
+        <div className="space-y-4 py-2">
+          {/* Auto Rejection Alert */}
           {leave.auto_rejected && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 text-sm text-destructive flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-destructive">Auto-Rejected</p>
-                <p className="text-sm text-muted-foreground">{leave.auto_rejection_reason}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Casual Leave Number Indicator */}
-          {isCasualLeave && !leave.auto_rejected && (
-            <div className={`rounded-lg p-3 flex items-start gap-2 ${
-              casualLeaveNumber === 2 
-                ? "bg-amber-50 border border-amber-200" 
-                : "bg-muted/50 border border-border"
-            }`}>
-              <Info className={`h-5 w-5 shrink-0 mt-0.5 ${
-                casualLeaveNumber === 2 ? "text-amber-600" : "text-muted-foreground"
-              }`} />
-              <div>
-                <p className={`font-medium ${casualLeaveNumber === 2 ? "text-amber-800" : "text-foreground"}`}>
-                  {loadingLeaveCount ? (
-                    "Loading..."
-                  ) : casualLeaveNumber === 1 ? (
-                    "This is their 1st casual leave this month"
-                  ) : casualLeaveNumber === 2 ? (
-                    "This is their 2nd (FINAL) casual leave this month"
-                  ) : casualLeaveNumber && casualLeaveNumber > 2 ? (
-                    <span className="text-destructive">Warning: This would exceed the 2/month limit!</span>
-                  ) : (
-                    "Casual leave request"
-                  )}
+                <p className="font-semibold">Auto-Rejection Notice</p>
+                <p className="text-xs mt-0.5">
+                  {leave.auto_rejection_reason || "Violates company leave rules"}
                 </p>
-                {casualLeaveNumber === 2 && (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Approving this will exhaust their monthly casual leave quota.
-                  </p>
-                )}
               </div>
             </div>
           )}
 
-          {/* Single Day Validation */}
-          {isCasualLeave && !isSingleDay && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          {/* Casual Leave Multi-Day Warning */}
+          {isCasualLeave && !isSingleDay && !isDecided && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
               <div>
-                <p className="font-medium text-destructive">Policy Violation</p>
-                <p className="text-sm text-muted-foreground">
-                  Casual leaves must be single-day applications. This request spans multiple days.
+                <p className="font-semibold">Policy Violation Warning</p>
+                <p className="text-xs mt-0.5">
+                  Casual leave can only be taken 1 day at a time. Multi-day casual leave cannot be approved.
                 </p>
               </div>
             </div>
@@ -367,40 +390,58 @@ export function LeaveApprovalDialog({
             </div>
           )}
 
-          {/* Rejection Reason Input */}
-          <div>
-            <Label>Rejection Reason (required for rejection)</Label>
-            <Textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Provide reason if rejecting..."
-              rows={2}
-              className="mt-1"
-            />
-          </div>
+          {/* Rejection Reason Input if pending */}
+          {!isDecided && (
+            <div>
+              <Label>Rejection Reason (required for rejection)</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Provide reason if rejecting..."
+                rows={2}
+                className="mt-1"
+              />
+            </div>
+          )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={!!processing}>
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            onClick={handleReject}
-            disabled={!!processing || !rejectionReason.trim()}
-          >
-            {processing === "reject" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <XCircle className="mr-2 h-4 w-4" />
-            Reject
-          </Button>
-          <Button 
-            onClick={handleApprove} 
-            disabled={!!processing || leave.auto_rejected || (isCasualLeave && !isSingleDay)}
-          >
-            {processing === "approve" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <CheckCircle className="mr-2 h-4 w-4" />
-            Approve
-          </Button>
+
+          {canUndo ? (
+            <Button
+              variant="outline"
+              className="border-amber-300 text-amber-800 hover:bg-amber-50"
+              onClick={handleUndo}
+              disabled={!!processing}
+            >
+              {processing === "undo" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <RotateCcw className="mr-2 h-4 w-4 text-amber-600" />
+              Undo Decision (Reset to Pending)
+            </Button>
+          ) : !isDecided ? (
+            <>
+              <Button
+                variant="destructive"
+                onClick={handleReject}
+                disabled={!!processing || !rejectionReason.trim()}
+              >
+                {processing === "reject" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <XCircle className="mr-2 h-4 w-4" />
+                Reject
+              </Button>
+              <Button
+                onClick={handleApprove}
+                disabled={!!processing || leave.auto_rejected || (isCasualLeave && !isSingleDay)}
+              >
+                {processing === "approve" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Approve
+              </Button>
+            </>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
