@@ -51,10 +51,10 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,jpg,jpeg,svg,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
-        // Don't precache large JS files - use runtime caching instead
-        globIgnores: ["**/index-*.js"],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*supabase\.co\/.*/i,
@@ -69,12 +69,12 @@ export default defineConfig(({ mode }) => ({
           },
           {
             urlPattern: /\/assets\/.*\.js$/,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
               cacheName: "js-cache",
               expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
               },
             },
           },
