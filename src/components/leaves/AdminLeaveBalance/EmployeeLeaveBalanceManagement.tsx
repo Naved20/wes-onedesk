@@ -391,14 +391,7 @@ export function EmployeeLeaveBalanceManagement() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditBalance(employee)}
-                            title="Edit balance"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
+                    
                      
                         </div>
                       </TableCell>
