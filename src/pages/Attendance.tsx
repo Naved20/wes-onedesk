@@ -103,7 +103,6 @@ export default function Attendance() {
         .eq("user_id", selectedEmployeeId)
         .gte("date", monthStartStr)
         .lte("date", monthEndStr)
-        .neq("status", "holiday")
         .order("date", { ascending: false });
 
       if (error) throw error;
@@ -468,12 +467,12 @@ export default function Attendance() {
       });
     }
     
-    // If absent on a holiday, show HO (Holiday) instead of AB
-    if (calculatedStatus === "absent" && isHoliday) {
+    // If NA (not applicable)
+    if (calculatedStatus === "not_applicable" || calculatedStatus === "na") {
       return (
         <div className="flex flex-wrap gap-1 items-center">
-          <Badge variant="outline" className="font-mono bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-700">
-            HO
+          <Badge variant="outline" className="font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700">
+            NA
           </Badge>
           {record.status === "pending" && (
             <Badge variant="outline" className="text-xs">
@@ -483,9 +482,9 @@ export default function Attendance() {
         </div>
       );
     }
-    
-    // If absent from calculated_status, show AB
-    if (calculatedStatus === "absent") {
+
+    // If absent from calculated_status or rejected status, show AB
+    if (calculatedStatus === "absent" || record.status === "rejected") {
       return (
         <div className="flex flex-wrap gap-1 items-center">
           <Badge variant="destructive" className="font-mono">
@@ -1407,14 +1406,14 @@ export default function Attendance() {
                         let bgColor = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700';
                         let textColor = 'text-slate-700 dark:text-slate-200';
 
-                        if (isHoliday && !record?.check_in_time) {
-                          statusTag = 'HO';
-                          bgColor = 'bg-purple-50 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-700';
-                          textColor = 'text-purple-700 dark:text-purple-300';
-                        } else if (record) {
+                        if (record) {
                           const calcStatus = record.calculated_status?.toLowerCase();
                           
-                          if (calcStatus === 'paid_leave') {
+                          if (calcStatus === 'not_applicable' || calcStatus === 'na') {
+                            statusTag = 'NA';
+                            bgColor = 'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700';
+                            textColor = 'text-slate-500 dark:text-slate-400';
+                          } else if (calcStatus === 'paid_leave') {
                             statusTag = 'PL';
                             bgColor = 'bg-blue-50 dark:bg-blue-950/30 border border-blue-300 dark:border-blue-700';
                             textColor = 'text-blue-700 dark:text-blue-300';
@@ -1426,6 +1425,10 @@ export default function Attendance() {
                             statusTag = 'AB';
                             bgColor = 'bg-red-50 dark:bg-red-950/30 border border-red-300 dark:border-red-700';
                             textColor = 'text-red-700 dark:text-red-300';
+                          } else if (calcStatus === 'holiday') {
+                            statusTag = 'HO';
+                            bgColor = 'bg-purple-50 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-700';
+                            textColor = 'text-purple-700 dark:text-purple-300';
                           } else if (record.is_late || calcStatus === 'late') {
                             statusTag = 'LT';
                             bgColor = 'bg-orange-50 dark:bg-orange-950/30 border border-orange-300 dark:border-orange-700';
@@ -1439,6 +1442,10 @@ export default function Attendance() {
                             bgColor = 'bg-green-50 dark:bg-green-950/30 border border-green-300 dark:border-green-700';
                             textColor = 'text-green-700 dark:text-green-300';
                           }
+                        } else if (isHoliday) {
+                          statusTag = 'HO';
+                          bgColor = 'bg-purple-50 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-700';
+                          textColor = 'text-purple-700 dark:text-purple-300';
                         }
 
                         const checkInTime = record?.check_in_time 
@@ -1451,6 +1458,25 @@ export default function Attendance() {
                             onClick={() => {
                               if (record) {
                                 setSelectedAttendance(record);
+                                setApprovalDialogOpen(true);
+                              } else if (role === "admin" || role === "manager") {
+                                const empName = user?.email || "Employee";
+                                const virtualRecord: AttendanceWithEmployee = {
+                                  id: `new-${user?.id}-${dateStr}`,
+                                  user_id: user?.id || "",
+                                  date: dateStr,
+                                  check_in_time: null,
+                                  check_out_time: null,
+                                  status: "approved",
+                                  calculated_status: isHoliday ? "holiday" : "present",
+                                  is_half_day: false,
+                                  half_day_type: null,
+                                  is_late: false,
+                                  notes: null,
+                                  employee_name: empName,
+                                  is_new_entry: true
+                                };
+                                setSelectedAttendance(virtualRecord);
                                 setApprovalDialogOpen(true);
                               }
                             }}
@@ -1489,7 +1515,12 @@ export default function Attendance() {
           setApprovalDialogOpen(false);
           setSelectedAttendance(null);
         }}
-        onUpdate={fetchAttendance}
+        onUpdate={() => {
+          fetchAttendance();
+          if (selectedEmployeeId) {
+            fetchDialogAttendance();
+          }
+        }}
         userId={user?.id || ""}
         isAdmin={role === "admin"}
       />
@@ -1591,16 +1622,6 @@ export default function Attendance() {
                     const monthRecords = dialogAttendanceRecords;
 
                     // Single source of truth: attendance table only.
-                    // Approved leaves are auto-synced into attendance via DB trigger,
-                    // so we no longer overlay the leaves table on the calendar.
-
-                    if (monthRecords.length === 0) {
-                      return (
-                        <p className="text-center text-muted-foreground py-8">
-                          No attendance records for this month
-                        </p>
-                      );
-                    }
 
 
                     // Create a map of date -> record for quick lookup
@@ -1659,56 +1680,28 @@ export default function Attendance() {
                             let displayColor = 'bg-muted border-muted-foreground/20 text-muted-foreground';
                             let statusTag = '';
 
-                            // Check if user is present on a holiday
                             const calcStatus = record?.calculated_status?.toLowerCase();
-                            // A record is "present" if: it has a check_in_time OR calculated_status is one of the active statuses
-                            // AND the record is not rejected AND not marked absent
-                            const isActiveRecord = record &&
-                              record.status !== 'rejected' &&
-                              calcStatus !== 'absent' &&
-                              calcStatus !== 'holiday' &&
-                              (record.check_in_time != null ||
-                                calcStatus === 'present' ||
-                                calcStatus === 'late' ||
-                                calcStatus === 'half_day' ||
-                                calcStatus === 'paid_leave' ||
-                                calcStatus === 'leave' ||
-                                record.is_half_day ||
-                                record.is_late);
 
-                            // Priority 1: If there's an active attendance record, it overrides holiday/Sunday
-                            if (isActiveRecord) {
-                              if (calcStatus === 'paid_leave') {
+                            // Priority 1: Explicit database record (manual Admin override or logged attendance)
+                            if (record) {
+                              if (calcStatus === 'not_applicable' || calcStatus === 'na') {
+                                displayColor = 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500';
+                                statusTag = 'NA';
+                              } else if (record.status === 'rejected' || calcStatus === 'absent') {
+                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300';
+                                statusTag = 'AB';
+                              } else if (calcStatus === 'paid_leave') {
                                 displayColor = 'bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700';
                                 statusTag = 'PL';
                               } else if (calcStatus === 'leave') {
                                 displayColor = 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-300 dark:border-cyan-700';
                                 statusTag = 'LE';
-                              } else if (calcStatus === 'half_day' || record!.is_half_day) {
+                              } else if (calcStatus === 'half_day' || record.is_half_day) {
                                 displayColor = 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700';
                                 statusTag = 'HD';
-                              } else if (record!.is_late || calcStatus === 'late') {
+                              } else if (record.is_late || calcStatus === 'late') {
                                 displayColor = 'bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-700';
                                 statusTag = 'LT';
-                              } else {
-                                displayColor = 'bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700';
-                                statusTag = 'PR';
-                              }
-
-                              if (record!.check_in_time) {
-                                displayInfo = format(new Date(record!.check_in_time), "hh:mm a");
-                              }
-                            }
-                            // Priority 2: If it's a holiday (including Sunday) with no active attendance
-                            else if (isHoliday) {
-                              displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
-                              statusTag = 'HO';
-                            }
-                            // Priority 3: Other attendance records (rejected/absent)
-                            else if (record) {
-                              if (record.status === 'rejected' || calcStatus === 'absent') {
-                                displayColor = 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700';
-                                statusTag = 'AB';
                               } else if (calcStatus === 'holiday') {
                                 displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
                                 statusTag = 'HO';
@@ -1721,12 +1714,10 @@ export default function Attendance() {
                                 displayInfo = format(new Date(record.check_in_time), "hh:mm a");
                               }
                             }
-                            // (Leaves overlay removed — attendance is the single source of truth.)
-
-                            // Priority 4: If it's a Sunday (weekend) with no attendance
-                            else if (isSunday) {
-                              displayColor = 'bg-gray-200 dark:bg-gray-800 border-gray-300 dark:border-gray-700';
-                              statusTag = '';
+                            // Priority 2: Default Holiday or Sunday when no database record exists
+                            else if (isHoliday || isSunday) {
+                              displayColor = 'bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700';
+                              statusTag = 'HO';
                             }
 
                             return (
@@ -1736,8 +1727,26 @@ export default function Attendance() {
                                 onClick={() => {
                                   if (record) {
                                     setSelectedAttendance(record as AttendanceWithEmployee);
-                                    setApprovalDialogOpen(true);
+                                  } else {
+                                    const empName = allEmployees.find(e => e.user_id === selectedEmployeeId)?.name || "Employee";
+                                    const virtualRecord: AttendanceWithEmployee = {
+                                      id: `new-${selectedEmployeeId}-${dateStr}`,
+                                      user_id: selectedEmployeeId!,
+                                      date: dateStr,
+                                      check_in_time: null,
+                                      check_out_time: null,
+                                      status: "approved",
+                                      calculated_status: isHoliday ? "holiday" : "present",
+                                      is_half_day: false,
+                                      half_day_type: null,
+                                      is_late: false,
+                                      notes: null,
+                                      employee_name: empName,
+                                      is_new_entry: true
+                                    };
+                                    setSelectedAttendance(virtualRecord);
                                   }
+                                  setApprovalDialogOpen(true);
                                 }}
                               >
                                 <span className="font-bold text-base">{day}</span>

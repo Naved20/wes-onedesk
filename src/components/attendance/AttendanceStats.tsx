@@ -15,7 +15,7 @@ import {
   Gift
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { getPaidDaysFormula } from "@/lib/paidDays";
+import { getPaidDaysFormula, summarizeAttendance } from "@/lib/paidDays";
 
 type Attendance = Database["public"]["Tables"]["attendance"]["Row"];
 
@@ -79,6 +79,21 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     };
   }, [userId, year, month]);
 
+  // Recalculate summary instantly whenever attendanceRecords prop updates
+  useEffect(() => {
+    if (attendanceRecords && attendanceRecords.length > 0) {
+      const clientSummary = summarizeAttendance(attendanceRecords as any, year, month);
+      setStats(prev => {
+        if (!prev) return clientSummary as unknown as AttendanceStatsRPC;
+        return {
+          ...prev,
+          ...clientSummary,
+          holiday_count: prev.holiday_count > 0 ? prev.holiday_count : clientSummary.holiday_count,
+        };
+      });
+    }
+  }, [attendanceRecords, year, month]);
+
   const fetchLeaves = async () => {
     try {
       const { data, error } = await supabase
@@ -109,13 +124,19 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
 
       if (error) {
         console.error("[AttendanceStats] RPC error:", error);
-        throw error;
       }
       
-      console.log("[AttendanceStats] RPC response:", data);
-      
-      // Use RPC data directly - no local calculations
-      setStats(data as unknown as AttendanceStatsRPC);
+      const rpcStats = data ? (data as unknown as AttendanceStatsRPC) : null;
+      if (attendanceRecords && attendanceRecords.length > 0) {
+        const clientSummary = summarizeAttendance(attendanceRecords as any, year, month);
+        setStats({
+          ...(rpcStats || {}),
+          ...clientSummary,
+          holiday_count: rpcStats?.holiday_count ?? clientSummary.holiday_count ?? 0,
+        } as AttendanceStatsRPC);
+      } else if (rpcStats) {
+        setStats(rpcStats);
+      }
     } catch (error) {
       console.error("[AttendanceStats] Error fetching attendance stats:", error);
     } finally {

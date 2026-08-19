@@ -25,6 +25,7 @@ interface AttendanceRecord {
   is_late: boolean | null;
   notes: string | null;
   employee_name?: string;
+  is_new_entry?: boolean;
 }
 
 interface AttendanceApprovalDialogProps {
@@ -61,13 +62,13 @@ export function AttendanceApprovalDialog({
   useEffect(() => {
     if (attendance) {
       const initialIsLate = attendance.is_late || false;
-      console.log("Setting initial is_late from attendance:", initialIsLate, attendance);
+      const isNew = attendance.is_new_entry || (typeof attendance.id === "string" && attendance.id.startsWith("new-"));
       
       setEditData({
         check_in_time: attendance.check_in_time 
           ? format(new Date(attendance.check_in_time), "HH:mm")
           : "",
-        status: attendance.status || "pending",
+        status: attendance.status || "approved",
         calculated_status: attendance.calculated_status || "present",
         is_late: initialIsLate,
         is_half_day: attendance.is_half_day || false,
@@ -75,8 +76,12 @@ export function AttendanceApprovalDialog({
         notes: attendance.notes || "",
       });
       
-      // Reset edit mode when attendance changes
-      setEditMode(false);
+      // Automatically open in edit mode if creating a new record
+      if (isNew) {
+        setEditMode(true);
+      } else {
+        setEditMode(false);
+      }
     }
   }, [attendance]);
 
@@ -169,9 +174,13 @@ export function AttendanceApprovalDialog({
         ? new Date(`${attendance.date}T${editData.check_in_time}:00`).toISOString()
         : null;
 
-      const updateData = {
+      const isNewRecord = attendance.is_new_entry || (typeof attendance.id === "string" && attendance.id.startsWith("new-"));
+
+      const recordPayload = {
+        user_id: attendance.user_id,
+        date: attendance.date,
         check_in_time: checkInDateTime,
-        status: editData.status as "pending" | "approved" | "rejected",
+        status: (editData.status || "approved") as "pending" | "approved" | "rejected",
         calculated_status: editData.calculated_status,
         is_late: editData.is_late,
         is_half_day: editData.is_half_day,
@@ -183,26 +192,33 @@ export function AttendanceApprovalDialog({
       };
 
       console.log("=== Sending to database ===");
-      console.log("Update data:", updateData);
-      console.log("is_late value:", updateData.is_late);
+      console.log("Is new record?", isNewRecord);
+      console.log("Payload:", recordPayload);
 
-      const { data, error } = await supabase
-        .from("attendance")
-        .update(updateData)
-        .eq("id", attendance.id)
-        .select();
+      let error;
+      if (isNewRecord) {
+        const res = await supabase
+          .from("attendance")
+          .upsert(recordPayload, { onConflict: "user_id,date" })
+          .select();
+        error = res.error;
+      } else {
+        const res = await supabase
+          .from("attendance")
+          .update(recordPayload)
+          .eq("id", attendance.id)
+          .select();
+        error = res.error;
+      }
 
       if (error) {
         console.error("Database error:", error);
         throw error;
       }
 
-      console.log("=== Database response ===");
-      console.log("Updated record:", data);
-
       toast({ 
         title: "Success", 
-        description: `Attendance updated${editData.is_late ? ' with Late tag' : ' (Late tag removed)'}` 
+        description: isNewRecord ? "Attendance entry created successfully" : `Attendance updated${editData.is_late ? ' with Late tag' : ''}` 
       });
       
       // Close dialog and refresh
@@ -332,8 +348,8 @@ export function AttendanceApprovalDialog({
             onValueChange={(value) => {
               // Auto-set approval status based on attendance status
               let newApprovalStatus = editData.status;
-              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "leave" ) {
-                newApprovalStatus = "approved"; // Auto-approve when marking as present/half day/leave
+              if (value === "present" || value === "half_day" || value === "paid_leave" || value === "leave" || value === "not_applicable") {
+                newApprovalStatus = "approved"; // Auto-approve when marking as present/half day/leave/NA
               } else if (value === "absent") {
                 newApprovalStatus = "rejected"; // Auto-reject when marking as absent
               }
@@ -378,6 +394,7 @@ export function AttendanceApprovalDialog({
               <SelectItem value="half_day">Half Day (HD)</SelectItem>
               <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
               <SelectItem value="leave">Leave (LE)</SelectItem>
+              <SelectItem value="not_applicable">Not Applicable (NA)</SelectItem>
             </SelectContent>
           </Select>
         </div>

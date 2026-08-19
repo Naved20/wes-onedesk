@@ -14,6 +14,7 @@ export type EffectiveStatus =
   | "leave"
   | "absent"
   | "holiday"
+  | "not_applicable"
   | "pending";
 
 export interface AttendanceLikeRecord {
@@ -29,15 +30,16 @@ export function getEffectiveStatus(record: AttendanceLikeRecord): EffectiveStatu
   const status = record.status?.toLowerCase() ?? null;
   const calc = record.calculated_status?.toLowerCase() ?? null;
 
-  if (status === "holiday" || calc === "holiday") return "holiday";
-  if (status === "rejected" || calc === "absent") return "absent";
+  if (calc === "not_applicable" || calc === "na") return "not_applicable";
   if (calc === "paid_leave") return "paid_leave";
   if (calc === "leave") return "leave";
   if (calc === "half_day" || record.is_half_day) return "half_day";
   if (calc === "late" || record.is_late) return "late";
-  if (calc === "present" || record.check_in_time || status === "approved" || status === "present") {
+  if (calc === "present" || record.check_in_time || (status === "approved" && calc !== "holiday" && calc !== "absent")) {
     return "present";
   }
+  if (status === "holiday" || calc === "holiday") return "holiday";
+  if (status === "rejected" || calc === "absent") return "absent";
   return "pending";
 }
 
@@ -108,6 +110,7 @@ export function summarizeAttendance(
     leave: 0,
     absent: 0,
     holiday: 0,
+    not_applicable: 0,
     pending: 0,
   };
   let rejected = 0;

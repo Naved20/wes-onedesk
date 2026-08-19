@@ -7,6 +7,7 @@ export type AttendanceStatus =
   | "paid_leave" 
   | "leave"
   | "holiday" 
+  | "not_applicable"
   | "pending";
 
 export interface AttendanceStatusConfig {
@@ -52,6 +53,12 @@ export const attendanceStatusConfig: Record<AttendanceStatus, AttendanceStatusCo
     shortLabel: "HO",
     variant: "outline",
     color: "bg-purple-500",
+  },
+  not_applicable: {
+    label: "Not Applicable",
+    shortLabel: "NA",
+    variant: "outline",
+    color: "bg-gray-400",
   },
   pending: {
     label: "Pending",
@@ -99,6 +106,7 @@ export function getAttendanceDisplayStatus(
   if (calculatedStatus === "paid_leave") return "paid_leave";
   if (calculatedStatus === "leave") return "leave";
   if (calculatedStatus === "holiday") return "holiday";
+  if (calculatedStatus === "not_applicable" || calculatedStatus === "na") return "not_applicable";
   
   return "pending";
 }
