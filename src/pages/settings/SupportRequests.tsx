@@ -15,6 +15,7 @@ import { format } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { supportNotifications } from "@/lib/notificationService";
 
 interface SupportRequest {
   id: string;
@@ -199,6 +200,17 @@ export default function SupportRequests() {
 
       if (error) throw error;
 
+      // Trigger notification for reply
+      const recipientId = user?.id === selectedRequest.user_id ? selectedRequest.assigned_to : selectedRequest.user_id;
+      if (recipientId) {
+        await supportNotifications.replyMade(
+          recipientId,
+          selectedRequest.id,
+          user?.email || "Support",
+          replyMessage.slice(0, 50)
+        );
+      }
+
       toast({
         title: "Success",
         description: "Reply sent successfully",
@@ -238,7 +250,7 @@ export default function SupportRequests() {
 
     setSubmitting(true);
     try {
-      const { error } = await supabase
+      const { data: inserted, error } = await supabase
         .from("support_requests" as any)
         .insert({
           user_id: user?.id,
@@ -247,9 +259,20 @@ export default function SupportRequests() {
           priority: formData.priority,
           category: formData.category || null,
           status: "pending",
-        });
+        })
+        .select("id")
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (user?.id) {
+        await supportNotifications.ticketCreated(
+          user.id,
+          inserted?.id || "N/A",
+          formData.subject,
+          user.email || "Employee"
+        );
+      }
 
       toast({
         title: "Success",

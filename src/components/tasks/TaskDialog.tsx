@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { taskNotifications } from '@/lib/notificationService';
 import { Task } from './TaskBoard';
 
 interface TaskDialogProps {
@@ -114,10 +115,20 @@ export const TaskDialog = ({ open, onOpenChange, task }: TaskDialogProps) => {
           .eq('id', task.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('tasks')
-          .insert([taskData]);
+          .insert([taskData])
+          .select('id')
+          .maybeSingle();
         if (error) throw error;
+        if (data.assigned_to) {
+          taskNotifications.assigned(
+            data.assigned_to,
+            data.title,
+            data.due_date || 'as soon as possible',
+            inserted?.id
+          );
+        }
       }
     },
     onSuccess: () => {

@@ -111,7 +111,8 @@ export function LeaveApprovalDialog({
       await leaveNotifications.approved(
         leave.user_id,
         leave.leave_type || "leave",
-        format(new Date(leave.start_date), "MMM dd, yyyy")
+        format(new Date(leave.start_date), "MMM dd, yyyy"),
+        leave.id
       );
 
       toast({ title: "Approved", description: "Leave approved successfully" });
@@ -153,7 +154,8 @@ export function LeaveApprovalDialog({
       await leaveNotifications.rejected(
         leave.user_id,
         leave.leave_type || "leave",
-        rejectionReason.trim()
+        rejectionReason.trim(),
+        leave.id
       );
 
       toast({ title: "Rejected", description: "Leave rejected successfully" });

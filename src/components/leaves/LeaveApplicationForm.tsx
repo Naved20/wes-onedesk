@@ -350,12 +350,12 @@ export function LeaveApplicationForm({
 
       if (error) throw error;
 
-      // Send notification
-      const workingDaysDisplay = isHalfDay ? "0.5 text" : String(workingDays);
+      // Send notification to employee and notify admins/managers
       await leaveNotifications.applied(
         userId,
+        employeeName || "Employee",
         leaveType,
-        parseInt(workingDaysDisplay) || 1,
+        isHalfDay ? 0.5 : (workingDays || 1),
         format(new Date(startDate), "MMM dd, yyyy")
       );
 

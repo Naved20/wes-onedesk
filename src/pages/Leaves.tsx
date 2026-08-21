@@ -40,6 +40,7 @@ import { LeaveApprovalDialog } from "@/components/leaves/LeaveApprovalDialog";
 import { AdminLeaveBalance } from "@/components/leaves/AdminLeaveBalance";
 import { LeaveChatDialog } from "@/components/leaves/LeaveChatDialog";
 import { EmployeeLeaveRulesView } from "@/components/leaves/EmployeeLeaveRulesView";
+import { MaterialDateRangePicker } from "@/components/ui/date-range-picker";
 
 interface LeaveBalance {
   casual_leaves_used: number;
@@ -442,34 +443,31 @@ export default function Leaves() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={isManagerOrAdmin ? "Search employee / reason..." : "Search reason..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 text-xs h-9"
+            className="pl-9 pr-3.5 text-xs h-10 rounded-full border-input bg-background shadow-sm hover:border-slate-300 font-normal"
           />
         </div>
 
-        {/* Status Filter */}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Material Date Range Picker */}
+        <MaterialDateRangePicker
+          startDate={startDateFilter}
+          endDate={endDateFilter}
+          onRangeChange={(start, end) => {
+            setStartDateFilter(start);
+            setEndDateFilter(end);
+          }}
+        />
 
         {/* Type Filter */}
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="h-9 text-xs">
+          <SelectTrigger className="h-10 text-xs rounded-full px-3.5 border-input bg-background shadow-sm hover:border-slate-300 font-normal">
             <SelectValue placeholder="All Leave Types" />
           </SelectTrigger>
           <SelectContent>
@@ -482,21 +480,18 @@ export default function Leaves() {
           </SelectContent>
         </Select>
 
-        {/* Start Date */}
-        <Input
-          type="date"
-          value={startDateFilter}
-          onChange={(e) => setStartDateFilter(e.target.value)}
-          className="h-9 text-xs"
-        />
-
-        {/* End Date */}
-        <Input
-          type="date"
-          value={endDateFilter}
-          onChange={(e) => setEndDateFilter(e.target.value)}
-          className="h-9 text-xs"
-        />
+        {/* Status Filter */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-10 text-xs rounded-full px-3.5 border-input bg-background shadow-sm hover:border-slate-300 font-normal">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {hasActiveFilters && (

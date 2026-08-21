@@ -216,6 +216,21 @@ export function AttendanceApprovalDialog({
         throw error;
       }
 
+      // Notify employee and admins/managers based on updated status
+      if (editData.calculated_status === "absent") {
+        await attendanceNotifications.absent(
+          attendance.user_id,
+          attendance.employee_name || "Employee",
+          attendance.date
+        );
+      } else if (editData.calculated_status === "present") {
+        await attendanceNotifications.checkIn(
+          attendance.user_id,
+          attendance.employee_name || "Employee",
+          editData.check_in_time || "scheduled time"
+        );
+      }
+
       toast({ 
         title: "Success", 
         description: isNewRecord ? "Attendance entry created successfully" : `Attendance updated${editData.is_late ? ' with Late tag' : ''}` 

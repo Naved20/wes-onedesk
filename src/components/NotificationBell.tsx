@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bell, Check, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { playNotificationSound } from "@/lib/audioNotification";
+import { getNotificationRoute } from "@/lib/notificationService";
 
 interface Notification {
   id: string;
@@ -36,6 +38,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const seenIds = useRef<Set<string>>(new Set());
@@ -134,6 +137,15 @@ export function NotificationBell() {
     setItems((prev) => prev.map((n) => ({ ...n, is_read: true })));
   };
 
+  const handleItemClick = async (n: Notification) => {
+    if (!n.is_read) {
+      await markRead(n.id);
+    }
+    setOpen(false);
+    const targetRoute = getNotificationRoute(n.type, n.related_id);
+    navigate(targetRoute);
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -183,7 +195,7 @@ export function NotificationBell() {
                     "p-3 hover:bg-accent/50 cursor-pointer transition-colors flex gap-3",
                     !n.is_read && "bg-accent/30"
                   )}
-                  onClick={() => !n.is_read && markRead(n.id)}
+                  onClick={() => handleItemClick(n)}
                 >
                   <div
                     className={cn(
@@ -216,3 +228,4 @@ export function NotificationBell() {
     </Popover>
   );
 }
+

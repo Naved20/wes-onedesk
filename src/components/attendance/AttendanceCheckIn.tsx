@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getAttendanceStatusBadge } from "@/lib/attendanceUtils";
+import { attendanceNotifications } from "@/lib/notificationService";
 
 interface AttendanceCheckInProps {
   userId: string;
@@ -232,6 +233,20 @@ export function AttendanceCheckIn({ userId, todayCheckedIn, onCheckInComplete }:
       });
 
       if (error) throw error;
+
+      // Trigger notification for attendance check-in
+      const { data: profile } = await supabase
+        .from("employee_profiles")
+        .select("first_name, last_name")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const empName = profile ? `${profile.first_name} ${profile.last_name}` : "Employee";
+      await attendanceNotifications.checkIn(
+        userId,
+        empName,
+        format(istTime, "hh:mm a")
+      );
 
       const statusMessages = {
         present: "Checked in successfully!",

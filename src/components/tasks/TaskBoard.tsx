@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Plus, Clock, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { taskNotifications } from '@/lib/notificationService';
 import { TaskDialog } from './TaskDialog';
 import { TaskCard } from './TaskCard';
 
@@ -133,7 +134,25 @@ export const TaskBoard = () => {
   });
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+    const targetTask = tasks.find((t) => t.id === taskId);
     updateTaskMutation.mutate({ id: taskId, updates: { status: newStatus } });
+
+    if (targetTask) {
+      if (newStatus === "review") {
+        taskNotifications.submitted(
+          session?.user?.email || "Employee",
+          targetTask.title,
+          taskId
+        );
+      } else if (newStatus === "completed" && targetTask.assigned_to) {
+        taskNotifications.completed(
+          targetTask.assigned_to,
+          targetTask.title,
+          session?.user?.email || "Employee",
+          taskId
+        );
+      }
+    }
   };
 
   const handleCreateTask = () => {
