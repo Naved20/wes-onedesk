@@ -321,18 +321,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
                 {/* Progress */}
                 <Progress value={usagePercent} className="h-2" />
 
-                {/* Remaining */}
-                <div className="flex justify-between items-center">
-                  <span className={`text-sm font-semibold ${group.color}`}>
-                    {totalRemaining} remaining
-                  </span>
-                  {totalRemaining === 0 && (
-                    <span className="text-xs text-destructive flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Limit reached
-                    </span>
-                  )}
-                </div>
+              
 
                 {/* Individual Type Breakdown */}
                 <div className="space-y-1 pt-1 border-t">
@@ -368,21 +357,7 @@ export function LeaveBalanceCard({ balance, loading: parentLoading }: LeaveBalan
 
   
 
-        {/* Policy Legend */}
-        <div className="bg-muted/50 rounded-lg p-3 flex items-start gap-2">
-          <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p>
-              <strong>PL (Paid Leave):</strong> Casual + Medical — No deduction
-            </p>
-            <p>
-              <strong>LE (Leave):</strong> Emergency + LOP — Salary deduction applied
-            </p>
-            <p>
-              <strong>HD (Half Day):</strong> Half day leave — 0.5 day deduction
-            </p>
-          </div>
-        </div>
+    
       </CardContent>
     </Card>
   );
