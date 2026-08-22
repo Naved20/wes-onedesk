@@ -43,37 +43,47 @@ export default function FaceAttendanceAuth() {
         credentials.username.toLowerCase() === validCredentials.username.toLowerCase() &&
         credentials.password === validCredentials.password
       ) {
-        // Create session in database
-        const sessionToken = await createFaceSession();
-        
-        // Store session permanently in localStorage (unlimited duration)
-        // Also use sessionStorage as backup fallback
-        const authData = {
-          auth: "true",
-          token: sessionToken,
-          timestamp: Date.now().toString(),
-          username: credentials.username
-        };
-        
-        localStorage.setItem("faceAttendanceAuth", "true");
-        localStorage.setItem("faceSessionToken", sessionToken);
-        localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
-        localStorage.setItem("faceAuthData", JSON.stringify(authData));
-        
-        // Also set sessionStorage as backup
-        sessionStorage.setItem("faceAttendanceAuth", "true");
-        sessionStorage.setItem("faceSessionToken", sessionToken);
-        sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
-        
-        toast({
-          title: "Login Successful",
-          description: "Redirecting to face attendance...",
-        });
+        try {
+          // Create session in database (location check is mandatory)
+          const sessionToken = await createFaceSession();
+          
+          // Store session permanently in localStorage (unlimited duration)
+          // Also use sessionStorage as backup fallback
+          const authData = {
+            auth: "true",
+            token: sessionToken,
+            timestamp: Date.now().toString(),
+            username: credentials.username
+          };
+          
+          localStorage.setItem("faceAttendanceAuth", "true");
+          localStorage.setItem("faceSessionToken", sessionToken);
+          localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+          localStorage.setItem("faceAuthData", JSON.stringify(authData));
+          
+          // Also set sessionStorage as backup
+          sessionStorage.setItem("faceAttendanceAuth", "true");
+          sessionStorage.setItem("faceSessionToken", sessionToken);
+          sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+          
+          toast({
+            title: "Login Successful",
+            description: "Location verified! Redirecting to face attendance...",
+          });
 
-        // Redirect to face attendance
-        setTimeout(() => {
-          navigate("/face-attendance");
-        }, 500);
+          // Redirect to face attendance
+          setTimeout(() => {
+            navigate("/face-attendance");
+          }, 500);
+        } catch (locErr: any) {
+          console.error("Location or session creation error:", locErr);
+          toast({
+            title: "Location Permission Required",
+            description: locErr.message || "GPS Location permission is mandatory to access Face Attendance.",
+            variant: "destructive",
+          });
+          return;
+        }
       } else {
         toast({
           title: "Invalid Credentials",

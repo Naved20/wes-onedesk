@@ -7,11 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2, Scan } from "lucide-react";
+import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2, Scan, MapPin, AlertTriangle, RefreshCw } from "lucide-react";
 import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
-import { updateSessionActivity, logoutFaceSession, isSessionValid } from "@/lib/faceSessionManager";
+import { updateSessionActivity, logoutFaceSession, isSessionValid, getLocation } from "@/lib/faceSessionManager";
 import { speakAttendanceEnrolled } from "@/lib/speak";
 
 interface HistoryRow {
@@ -44,38 +44,91 @@ export default function FaceHub() {
     shiftEndTime?: string;
   } | null>(null);
 
+  // Mandatory Location states
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number; accuracy: number; address?: string } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
+
+  const fetchHighAccuracyLocation = async () => {
+    setLoadingLocation(true);
+    try {
+      const loc = await getLocation();
+      setCurrentLocation(loc);
+      setLocationError(null);
+    } catch (err: any) {
+      console.error("[FaceHub] Geolocation error:", err);
+      setCurrentLocation(null);
+      setLocationError(err.message || "Exact GPS Location is required to use Face Hub.");
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
+
   useEffect(() => {
-    const checkAuth = () => {
-      // Check if user is authenticated (check both localStorage and sessionStorage)
+    fetchHighAccuracyLocation();
+    
+    // Periodically re-verify location every 45 seconds
+    const locationInterval = setInterval(() => {
+      fetchHighAccuracyLocation();
+    }, 45000);
+
+    return () => {
+      clearInterval(locationInterval);
+    };
+  }, []);
+
+  const performLogout = (reason: string = "Session ended by administrator") => {
+    console.log("[FaceHub] Forced logout triggered:", reason);
+    localStorage.removeItem("faceAttendanceAuth");
+    localStorage.removeItem("faceSessionToken");
+    localStorage.removeItem("faceSessionCreatedAt");
+    localStorage.removeItem("faceAuthData");
+    sessionStorage.removeItem("faceAttendanceAuth");
+    sessionStorage.removeItem("faceSessionToken");
+    sessionStorage.removeItem("faceSessionCreatedAt");
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    toast({
+      title: "Session Ended",
+      description: reason,
+      variant: "destructive",
+    });
+    navigate("/auth", { replace: true });
+  };
+
+  useEffect(() => {
+    const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
+
+    const checkAuthAndValidity = async () => {
+      // Check local storage flags
       const localAuth = localStorage.getItem("faceAttendanceAuth") === "true";
       const sessionAuth = sessionStorage.getItem("faceAttendanceAuth") === "true";
       const isAuthenticated = localAuth || sessionAuth;
       
-      console.log("[FaceHub] Auth check - localStorage:", localAuth, "sessionStorage:", sessionAuth);
-      
-      if (!isAuthenticated) {
+      if (!isAuthenticated || !sessionToken) {
         console.log("[FaceHub] Not authenticated, redirecting to /auth");
-        navigate("/auth");
+        performLogout("Please login to access Face Attendance Hub");
         return;
       }
 
-      // Session exists, allow access
-      console.log("[FaceHub] Session found, user can proceed");
+      // Check database session validity immediately on load/refresh
+      const valid = await isSessionValid(sessionToken);
+      if (!valid) {
+        console.log("[FaceHub] Session is inactive in database, logging out");
+        performLogout("Your session has been ended remotely by administrator");
+        return;
+      }
       
       // Sync both storages to ensure consistency
       if (localAuth && !sessionAuth) {
         sessionStorage.setItem("faceAttendanceAuth", "true");
-        const token = localStorage.getItem("faceSessionToken");
-        if (token) sessionStorage.setItem("faceSessionToken", token);
+        if (sessionToken) sessionStorage.setItem("faceSessionToken", sessionToken);
       } else if (sessionAuth && !localAuth) {
         localStorage.setItem("faceAttendanceAuth", "true");
-        const token = sessionStorage.getItem("faceSessionToken");
-        if (token) localStorage.setItem("faceSessionToken", token);
+        if (sessionToken) localStorage.setItem("faceSessionToken", sessionToken);
       }
     };
 
-    // Run check immediately (no async)
-    checkAuth();
+    checkAuthAndValidity();
     
     initCamera();
     loadFaceModels()
@@ -83,46 +136,47 @@ export default function FaceHub() {
       .catch((e) => toast({ title: "Model load failed", description: String(e), variant: "destructive" }));
     fetchHistory();
 
-    // Update activity every 30 seconds
-    const activityInterval = setInterval(() => {
-      const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
-      if (sessionToken) {
-        updateSessionActivity(sessionToken);
-      }
-    }, 30000);
-
-    // Check session validity every 2 minutes (allows admin to logout remotely)
-    const sessionValidationInterval = setInterval(async () => {
-      const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
-      if (sessionToken) {
-        try {
-          const valid = await isSessionValid(sessionToken);
-          if (!valid) {
-            console.log("[FaceHub] Admin invalidated session");
-            localStorage.removeItem("faceAttendanceAuth");
-            localStorage.removeItem("faceSessionToken");
-            localStorage.removeItem("faceSessionCreatedAt");
-            localStorage.removeItem("faceAuthData");
-            sessionStorage.removeItem("faceAttendanceAuth");
-            sessionStorage.removeItem("faceSessionToken");
-            sessionStorage.removeItem("faceSessionCreatedAt");
-            toast({
-              title: "Session Ended",
-              description: "Your session has been ended by administrator",
-              variant: "destructive",
-            });
-            navigate("/auth");
-          }
-        } catch (error) {
-          console.error("Session validation error:", error);
+    // 1. Activity Heartbeat & Session Check (every 10 seconds)
+    const activityInterval = setInterval(async () => {
+      const currentToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
+      if (currentToken) {
+        const active = await updateSessionActivity(currentToken);
+        if (!active) {
+          console.log("[FaceHub] Activity update failed - session revoked");
+          performLogout("Your session has been ended remotely by administrator");
         }
       }
-    }, 120000); // Check every 2 minutes
+    }, 10000);
+
+    // 2. Realtime Supabase Push Subscription for INSTANT logout (<1 second)
+    let channel: any = null;
+    if (sessionToken) {
+      channel = supabase
+        .channel(`face_session_${sessionToken}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "face_attendance_sessions",
+            filter: `session_token=eq.${sessionToken}`,
+          },
+          (payload: any) => {
+            console.log("[FaceHub] Realtime session event received:", payload);
+            if (payload?.new && payload.new.is_active === false) {
+              performLogout("Your session has been ended remotely by administrator");
+            }
+          }
+        )
+        .subscribe();
+    }
 
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       clearInterval(activityInterval);
-      clearInterval(sessionValidationInterval);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -250,6 +304,27 @@ export default function FaceHub() {
 
   const handleScan = async () => {
     if (!videoRef.current || !modelsReady) return;
+
+    // Check session validity before scanning
+    const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
+    if (sessionToken) {
+      const valid = await isSessionValid(sessionToken);
+      if (!valid) {
+        performLogout("Your session has been ended remotely by administrator.");
+        return;
+      }
+    }
+
+    // Strict GPS Location Check
+    if (!currentLocation || locationError) {
+      toast({
+        title: "Location Permission Required",
+        description: locationError || "Exact GPS location permission is mandatory to use Face Hub.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const v = videoRef.current;
     if (!v.videoWidth || !v.videoHeight || v.readyState < 2) {
       setLastResult({ ok: false, msg: "Camera not ready. Please wait a moment and try again." });
@@ -394,6 +469,53 @@ export default function FaceHub() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* GPS Location Status Indicator */}
+                {loadingLocation ? (
+                  <div className="p-3 bg-muted rounded-lg flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span>Verifying exact GPS location...</span>
+                    </div>
+                  </div>
+                ) : locationError || !currentLocation ? (
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg space-y-3">
+                    <div className="flex items-start gap-3 text-destructive">
+                      <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                      <div className="space-y-1 text-sm">
+                        <p className="font-semibold">GPS Location Permission Required</p>
+                        <p>{locationError || "Exact location access is mandatory to use Face Hub."}</p>
+                        <p className="text-xs opacity-90">Please turn on GPS / Location services in your browser settings and retry.</p>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      onClick={fetchHighAccuracyLocation} 
+                      className="w-full"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Enable / Retry Location Access
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs sm:text-sm text-green-900">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <MapPin className="h-4 w-4 text-green-600 shrink-0" />
+                      <div className="truncate">
+                        <span className="font-semibold">GPS Verified</span>
+                        {currentLocation.address && (
+                          <span className="text-xs text-green-700 block truncate" title={currentLocation.address}>
+                            {currentLocation.address}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
+                      ±{Math.round(currentLocation.accuracy)}m
+                    </Badge>
+                  </div>
+                )}
+
                 <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[9/8] border-4 border-primary/30 shadow-2xl">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   {scanning && (
@@ -418,10 +540,19 @@ export default function FaceHub() {
                     </span>
                   </div>
                 )}
-                <Button onClick={handleScan} disabled={!modelsReady || scanning} size="lg" className="w-full h-14 text-lg">
+                <Button 
+                  onClick={handleScan} 
+                  disabled={!modelsReady || scanning || !currentLocation || !!locationError || loadingLocation} 
+                  size="lg" 
+                  className="w-full h-14 text-lg"
+                >
                   {scanning ? (
                     <>
                       <Loader2 className="h-6 w-6 mr-2 animate-spin" /> Scanning...
+                    </>
+                  ) : !currentLocation || locationError ? (
+                    <>
+                      <AlertTriangle className="h-6 w-6 mr-2 text-destructive-foreground" /> Location Permission Required
                     </>
                   ) : (
                     <>

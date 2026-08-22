@@ -66,35 +66,46 @@ export default function Auth() {
         loginEmail.toLowerCase() === "face@wazireducationsocity.com" &&
         loginPassword === "WES@12345"
       ) {
-        // Create session in database
-        const sessionToken = await createFaceSession();
-        
-        // Store session permanently in localStorage and sessionStorage
-        const authData = {
-          auth: "true",
-          token: sessionToken,
-          timestamp: Date.now().toString(),
-          email: loginEmail
-        };
-        
-        localStorage.setItem("faceAttendanceAuth", "true");
-        localStorage.setItem("faceSessionToken", sessionToken);
-        localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
-        localStorage.setItem("faceAuthData", JSON.stringify(authData));
-        
-        // Also set sessionStorage as backup
-        sessionStorage.setItem("faceAttendanceAuth", "true");
-        sessionStorage.setItem("faceSessionToken", sessionToken);
-        sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
-        
-        toast({
-          title: "Face Attendance Access",
-          description: "Redirecting to face hub...",
-        });
-        setTimeout(() => {
-          navigate("/face-hub");
-        }, 500);
-        return;
+        try {
+          // Create session in database - location is strictly mandatory
+          const sessionToken = await createFaceSession();
+          
+          // Store session permanently in localStorage and sessionStorage
+          const authData = {
+            auth: "true",
+            token: sessionToken,
+            timestamp: Date.now().toString(),
+            email: loginEmail
+          };
+          
+          localStorage.setItem("faceAttendanceAuth", "true");
+          localStorage.setItem("faceSessionToken", sessionToken);
+          localStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+          localStorage.setItem("faceAuthData", JSON.stringify(authData));
+          
+          // Also set sessionStorage as backup
+          sessionStorage.setItem("faceAttendanceAuth", "true");
+          sessionStorage.setItem("faceSessionToken", sessionToken);
+          sessionStorage.setItem("faceSessionCreatedAt", Date.now().toString());
+          
+          toast({
+            title: "Face Attendance Access",
+            description: "Location verified! Redirecting to face hub...",
+          });
+          setTimeout(() => {
+            navigate("/face-hub");
+          }, 500);
+          return;
+        } catch (locErr: any) {
+          console.error("[Auth] Face session error:", locErr);
+          toast({
+            title: "Location Permission Required",
+            description: locErr.message || "Face Hub requires GPS location permission to log in. Please enable location services.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
       }
 
       // Normal login flow
