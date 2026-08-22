@@ -434,6 +434,71 @@ export default function FaceHub() {
     navigate("/auth");
   };
 
+  // 1. Loading Screen while fetching location
+  if (loadingLocation) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
+            <MapPin className="h-10 w-10 text-primary animate-bounce" />
+            <Loader2 className="h-16 w-16 text-primary animate-spin absolute inset-0 opacity-40" />
+          </div>
+          <h2 className="text-xl font-bold">Verifying Location Access...</h2>
+          <p className="text-sm text-slate-400">
+            Face Attendance Hub requires active GPS location to allow access.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Full-Page Blocking Screen if Location is denied/disabled (Face Hub page won't load at all)
+  if (locationError || !currentLocation) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 text-center">
+          <div className="mx-auto w-20 h-20 rounded-full bg-destructive/10 border-2 border-destructive/30 flex items-center justify-center">
+            <AlertTriangle className="h-10 w-10 text-destructive animate-pulse" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-white">GPS Location Required</h2>
+            <p className="text-sm text-slate-300">
+              {locationError || "Face Hub access is strictly blocked because GPS location permission is missing or disabled."}
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-800/60 rounded-xl text-xs text-slate-300 text-left space-y-2 border border-slate-700">
+            <p className="font-semibold text-slate-200">Required Action:</p>
+            <ol className="list-decimal list-inside space-y-1 opacity-90">
+              <li>Turn ON Location/GPS services on your mobile or device.</li>
+              <li>Click <b>Allow</b> when your browser asks for location access.</li>
+              <li>Click the button below to grant access and open Face Hub.</li>
+            </ol>
+          </div>
+
+          <div className="space-y-3">
+            <Button
+              onClick={fetchHighAccuracyLocation}
+              size="lg"
+              className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90"
+            >
+              <RefreshCw className="h-5 w-5 mr-2" /> Allow GPS & Open Face Hub
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="w-full text-slate-300 border-slate-700 hover:bg-slate-800"
+            >
+              <LogOut className="h-4 w-4 mr-2" /> Back to Login
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
       <div className="max-w-xl mx-auto">
@@ -469,52 +534,23 @@ export default function FaceHub() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* GPS Location Status Indicator */}
-                {loadingLocation ? (
-                  <div className="p-3 bg-muted rounded-lg flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span>Verifying exact GPS location...</span>
+                {/* GPS Location Verified Status */}
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs sm:text-sm text-green-900">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="h-4 w-4 text-green-600 shrink-0" />
+                    <div className="truncate">
+                      <span className="font-semibold">GPS Verified</span>
+                      {currentLocation.address && (
+                        <span className="text-xs text-green-700 block truncate" title={currentLocation.address}>
+                          {currentLocation.address}
+                        </span>
+                      )}
                     </div>
                   </div>
-                ) : locationError || !currentLocation ? (
-                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg space-y-3">
-                    <div className="flex items-start gap-3 text-destructive">
-                      <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-                      <div className="space-y-1 text-sm">
-                        <p className="font-semibold">GPS Location Permission Required</p>
-                        <p>{locationError || "Exact location access is mandatory to use Face Hub."}</p>
-                        <p className="text-xs opacity-90">Please turn on GPS / Location services in your browser settings and retry.</p>
-                      </div>
-                    </div>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      onClick={fetchHighAccuracyLocation} 
-                      className="w-full"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Enable / Retry Location Access
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs sm:text-sm text-green-900">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <MapPin className="h-4 w-4 text-green-600 shrink-0" />
-                      <div className="truncate">
-                        <span className="font-semibold">GPS Verified</span>
-                        {currentLocation.address && (
-                          <span className="text-xs text-green-700 block truncate" title={currentLocation.address}>
-                            {currentLocation.address}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
-                      ±{Math.round(currentLocation.accuracy)}m
-                    </Badge>
-                  </div>
-                )}
+                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
+                    ±{Math.round(currentLocation.accuracy)}m
+                  </Badge>
+                </div>
 
                 <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[9/8] border-4 border-primary/30 shadow-2xl">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
