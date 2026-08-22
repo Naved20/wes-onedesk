@@ -11,9 +11,9 @@ const generateRandom6DigitCode = (): string => {
 };
 
 /**
- * Get or generate the current active 60-second OTP for Face Hub
+ * Get current active 60-second OTP for Face Hub (returns null if no active OTP)
  */
-export const getCurrentFaceOtp = async (): Promise<FaceOtpInfo> => {
+export const getCurrentFaceOtp = async (autoCreate: boolean = false): Promise<FaceOtpInfo | null> => {
   try {
     const nowIso = new Date().toISOString();
     
@@ -31,7 +31,7 @@ export const getCurrentFaceOtp = async (): Promise<FaceOtpInfo> => {
       const expiresAtMs = new Date(activeOtp.expires_at).getTime();
       const secondsRemaining = Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
 
-      if (secondsRemaining >= 3) {
+      if (secondsRemaining > 0) {
         return {
           code: activeOtp.otp_code,
           secondsRemaining,
@@ -40,17 +40,22 @@ export const getCurrentFaceOtp = async (): Promise<FaceOtpInfo> => {
       }
     }
 
-    // If no active OTP exists or it is expiring in < 3s, generate a fresh 60s OTP
-    return await generateNewFaceOtp();
+    if (autoCreate) {
+      return await generateNewFaceOtp();
+    }
+
+    return null;
   } catch (err) {
     console.error("[faceOtpManager] Error fetching current OTP:", err);
-    // Fallback: generate new OTP locally
-    return await generateNewFaceOtp();
+    if (autoCreate) {
+      return await generateNewFaceOtp();
+    }
+    return null;
   }
 };
 
 /**
- * Force-generate a brand new 60-second OTP (for Admin manual refresh or auto rotation)
+ * Force-generate a brand new 60-second OTP (called when login starts or Admin clicks Regenerate)
  */
 export const generateNewFaceOtp = async (): Promise<FaceOtpInfo> => {
   try {
@@ -124,9 +129,15 @@ export const verifyFaceOtp = async (inputOtp: string): Promise<{ valid: boolean;
     if (!data || data.length === 0) {
       return {
         valid: false,
-        message: "Invalid or Expired OTP! Please check the active 60-second OTP on the Admin Dashboard.",
+        message: "Invalid or Expired OTP! Please ask Administrator to generate a new 60-second OTP.",
       };
     }
+
+    // Mark OTP as used so it cannot be reused
+    await supabase
+      .from("face_hub_otp" as any)
+      .update({ is_used: true })
+      .eq("id", data[0].id);
 
     return { valid: true, message: "OTP verified successfully!" };
   } catch (err) {

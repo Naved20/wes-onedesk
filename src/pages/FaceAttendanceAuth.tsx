@@ -47,6 +47,7 @@ export default function FaceAttendanceAuth() {
         credentials.username.toLowerCase() === validCredentials.username.toLowerCase() &&
         credentials.password === validCredentials.password
       ) {
+        await generateNewFaceOtp();
         setShowOtpStep(true);
         setLoading(false);
         toast({

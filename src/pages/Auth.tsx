@@ -70,7 +70,8 @@ export default function Auth() {
         loginEmail.toLowerCase() === "face@wazireducationsocity.com" &&
         loginPassword === "WES@12345"
       ) {
-        // Move to Step 2 OTP Requirement
+        // Trigger fresh OTP generation for this login request
+        await generateNewFaceOtp();
         setShowOtpStep(true);
         setIsLoading(false);
         toast({
