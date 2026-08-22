@@ -38,16 +38,18 @@ export default function FaceAttendanceAuth() {
     setLoading(true);
 
     try {
-      const validCredentials = {
-        username: "facehub",
-        password: "wes@attendance2025"
-      };
+      const trimmedUser = credentials.username.trim().toLowerCase();
+      const trimmedPass = credentials.password.trim();
 
-      if (
-        credentials.username.toLowerCase() === validCredentials.username.toLowerCase() &&
-        credentials.password === validCredentials.password
-      ) {
-        await generateNewFaceOtp();
+      const validUsers = ["face@wazireducationsocity.com", "face@wes.lu", "facehub", "face@wes.com"];
+      const validPasses = ["WES@12345", "WES@naved123", "wes@attendance2025"];
+
+      if (validUsers.includes(trimmedUser) && validPasses.includes(trimmedPass)) {
+        try {
+          await generateNewFaceOtp();
+        } catch (otpErr) {
+          console.warn("[FaceAttendanceAuth] OTP generation warning:", otpErr);
+        }
         setShowOtpStep(true);
         setLoading(false);
         toast({

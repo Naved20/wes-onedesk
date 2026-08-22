@@ -80,21 +80,21 @@ export function FaceHubOtpCompact() {
   }, []);
 
   return (
-    <div className="inline-flex items-center gap-2 bg-slate-900 text-white rounded-full p-1.5 pl-3 border border-slate-700 shadow-sm text-xs sm:text-sm">
-      <KeyRound className="h-4 w-4 text-primary shrink-0" />
-      <span className="font-semibold text-slate-300 hidden sm:inline">OTP:</span>
+    <div className="inline-flex items-center gap-2 bg-background border border-input rounded-full p-1.5 pl-3 shadow-sm text-xs sm:text-sm text-foreground">
+      <KeyRound className="h-4 w-4 text-amber-600 shrink-0" />
+      <span className="font-semibold text-muted-foreground hidden sm:inline">OTP:</span>
 
       {otpInfo && otpInfo.secondsRemaining > 0 ? (
-        <div className="flex items-center gap-2">
-          <span className="font-mono font-bold tracking-wider text-primary text-sm sm:text-base">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono font-bold tracking-wider text-primary text-sm sm:text-base px-1.5 py-0.5 bg-muted/60 rounded">
             {otpInfo.code}
           </span>
           <Badge
             variant="outline"
             className={`text-[10px] sm:text-xs font-mono px-1.5 py-0.5 border ${
               otpInfo.secondsRemaining <= 10
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse"
-                : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                ? "bg-amber-100 text-amber-800 border-amber-300 font-semibold animate-pulse"
+                : "bg-green-100 text-green-800 border-green-300 font-semibold"
             }`}
           >
             {otpInfo.secondsRemaining}s
@@ -104,10 +104,10 @@ export function FaceHubOtpCompact() {
             onClick={handleCopy}
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-slate-400 hover:text-white hover:bg-slate-800"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
             title="Copy OTP"
           >
-            {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
           </Button>
 
           <Button
@@ -115,7 +115,7 @@ export function FaceHubOtpCompact() {
             disabled={loading}
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-slate-400 hover:text-white hover:bg-slate-800"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
             title="Regenerate OTP"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
@@ -123,7 +123,7 @@ export function FaceHubOtpCompact() {
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <span className="text-slate-400 text-xs italic">No active OTP</span>
+          <span className="text-muted-foreground text-xs italic">No active OTP</span>
           <Button
             onClick={handleGenerateNew}
             disabled={loading}

@@ -54,6 +54,29 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      const trimmedInput = loginEmail.trim().toLowerCase();
+      const trimmedPass = loginPassword.trim();
+
+      const validFaceUsers = ["face@wazireducationsocity.com", "face@wes.lu", "facehub", "face@wes.com"];
+      const validFacePasses = ["WES@12345", "WES@naved123", "wes@attendance2025"];
+
+      // Check if it's face attendance hub credentials
+      if (validFaceUsers.includes(trimmedInput) && validFacePasses.includes(trimmedPass)) {
+        // Trigger fresh OTP generation for this login request
+        try {
+          await generateNewFaceOtp();
+        } catch (otpErr) {
+          console.warn("[Auth] OTP generation warning:", otpErr);
+        }
+        setShowOtpStep(true);
+        setIsLoading(false);
+        toast({
+          title: "Security Step 2 Required",
+          description: "Password verified! Please enter the active 60-second OTP from Admin Dashboard.",
+        });
+        return;
+      }
+
       const validation = loginSchema.safeParse({ email: loginEmail, password: loginPassword });
       if (!validation.success) {
         toast({
@@ -62,22 +85,6 @@ export default function Auth() {
           variant: "destructive",
         });
         setIsLoading(false);
-        return;
-      }
-
-      // Check if it's face attendance hub credentials
-      if (
-        loginEmail.toLowerCase() === "face@wazireducationsocity.com" &&
-        loginPassword === "WES@12345"
-      ) {
-        // Trigger fresh OTP generation for this login request
-        await generateNewFaceOtp();
-        setShowOtpStep(true);
-        setIsLoading(false);
-        toast({
-          title: "Security Step 2 Required",
-          description: "Password verified! Please enter the active 60-second OTP from Admin Dashboard.",
-        });
         return;
       }
 
