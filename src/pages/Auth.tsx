@@ -233,7 +233,7 @@ export default function Auth() {
               <Button type="submit" className="w-full h-11 text-base" disabled={verifyingOtp}>
                 {verifyingOtp ? (
                   <>
-                    <Lock className="mr-2 h-4 w-4 animate-spin" /> Verifying OTP & GPS Location...
+                    <Lock className="mr-2 h-4 w-4 " /> Verifying OTP & GPS Location...
                   </>
                 ) : (
                   "Verify OTP & Access Face Hub"

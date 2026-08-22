@@ -186,7 +186,7 @@ export default function FaceAttendanceAuth() {
               <Button type="submit" className="w-full h-11 text-base" disabled={verifyingOtp}>
                 {verifyingOtp ? (
                   <>
-                    <Lock className="mr-2 h-4 w-4 animate-spin" /> Verifying OTP & GPS...
+                    <Lock className="mr-2 h-4 w-4 " /> Verifying OTP & GPS...
                   </>
                 ) : (
                   "Verify OTP & Access System"

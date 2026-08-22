@@ -130,7 +130,7 @@ export function FaceHubOtpCompact() {
             size="sm"
             className="h-7 text-xs px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-full"
           >
-            <Zap className={`h-3 w-3 mr-1 ${loading ? "animate-spin" : ""}`} />
+            <Zap className={`h-3 w-3 mr-1 `} />
             Generate OTP
           </Button>
         </div>
