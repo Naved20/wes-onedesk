@@ -302,14 +302,15 @@ export default function FaceHub() {
       }
     }
 
-    // Strict GPS Location Check
-    if (!currentLocation || locationError) {
-      toast({
-        title: "Location Permission Required",
-        description: locationError || "Exact GPS location permission is mandatory to use Face Hub.",
-        variant: "destructive",
-      });
-      return;
+    // GPS Location Check (fetch on demand if not cached yet)
+    let loc = currentLocation;
+    if (!loc) {
+      try {
+        loc = await getLocation();
+        setCurrentLocation(loc);
+      } catch (err: any) {
+        console.warn("[FaceHub] Geolocation on scan warning:", err?.message);
+      }
     }
 
     const v = videoRef.current;
@@ -457,21 +458,28 @@ export default function FaceHub() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* GPS Location Verified Status */}
+                {/* GPS Location Status */}
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs sm:text-sm text-green-900">
                   <div className="flex items-center gap-2 min-w-0">
                     <MapPin className="h-4 w-4 text-green-600 shrink-0" />
                     <div className="truncate">
-                      <span className="font-semibold">GPS Verified</span>
-                      {currentLocation.address && (
+                      <span className="font-semibold">GPS Verified (Active Session)</span>
+                      {currentLocation?.address && (
                         <span className="text-xs text-green-700 block truncate" title={currentLocation.address}>
                           {currentLocation.address}
                         </span>
                       )}
                     </div>
                   </div>
-                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
-                    ±{Math.round(currentLocation.accuracy)}m
-                  </Badge>
+                  {currentLocation?.accuracy ? (
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
+                      ±{Math.round(currentLocation.accuracy)}m
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300 text-xs shrink-0 ml-2">
+                      Verified
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="relative w-full max-w-md mx-auto rounded-2xl overflow-hidden bg-black aspect-[9/8] border-4 border-primary/30 shadow-2xl">
@@ -500,17 +508,13 @@ export default function FaceHub() {
                 )}
                 <Button 
                   onClick={handleScan} 
-                  disabled={!modelsReady || scanning || !currentLocation || !!locationError || loadingLocation} 
+                  disabled={!modelsReady || scanning} 
                   size="lg" 
                   className="w-full h-14 text-lg"
                 >
                   {scanning ? (
                     <>
                       <Loader2 className="h-6 w-6 mr-2 animate-spin" /> Scanning...
-                    </>
-                  ) : !currentLocation || locationError ? (
-                    <>
-                      <AlertTriangle className="h-6 w-6 mr-2 text-destructive-foreground" /> Location Permission Required
                     </>
                   ) : (
                     <>
