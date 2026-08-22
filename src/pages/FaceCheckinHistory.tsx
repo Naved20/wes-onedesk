@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow, isToday, isYesterday, subDays, parseISO } from "date-fns";
+import { MaterialDateRangePicker } from "@/components/ui/date-range-picker";
 import {
   History,
   ArrowLeft,
@@ -59,7 +60,8 @@ export default function FaceCheckinHistory() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "matched" | "unmatched">("all");
-  const [dateRangeFilter, setDateRangeFilter] = useState<"all" | "today" | "yesterday" | "7days" | "30days">("today");
+  const [startDateFilter, setStartDateFilter] = useState<string>("");
+  const [endDateFilter, setEndDateFilter] = useState<string>("");
 
   // Sorting
   const [sortField, setSortField] = useState<"created_at" | "employee_name" | "match_distance">("created_at");
@@ -218,12 +220,13 @@ export default function FaceCheckinHistory() {
         if (statusFilter === "unmatched" && record.matched) return false;
 
         // Date range filter
-        if (dateRangeFilter !== "all") {
-          const recDate = parseISO(record.created_at);
-          if (dateRangeFilter === "today" && !isToday(recDate)) return false;
-          if (dateRangeFilter === "yesterday" && !isYesterday(recDate)) return false;
-          if (dateRangeFilter === "7days" && recDate < subDays(new Date(), 7)) return false;
-          if (dateRangeFilter === "30days" && recDate < subDays(new Date(), 30)) return false;
+        if (startDateFilter) {
+          const recDateStr = format(parseISO(record.created_at), "yyyy-MM-dd");
+          if (recDateStr < startDateFilter) return false;
+        }
+        if (endDateFilter) {
+          const recDateStr = format(parseISO(record.created_at), "yyyy-MM-dd");
+          if (recDateStr > endDateFilter) return false;
         }
 
         // Search query filter
@@ -254,7 +257,7 @@ export default function FaceCheckinHistory() {
         }
         return 0;
       });
-  }, [records, statusFilter, dateRangeFilter, searchQuery, sortField, sortDirection]);
+  }, [records, statusFilter, startDateFilter, endDateFilter, searchQuery, sortField, sortDirection]);
 
   // Statistics KPIs
   const stats = useMemo(() => {
@@ -458,29 +461,26 @@ export default function FaceCheckinHistory() {
                   </Select>
                 </div>
 
-                <div className="w-[150px]">
-                  <Select value={dateRangeFilter} onValueChange={(v: any) => setDateRangeFilter(v)}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Timeframe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="today">Today</SelectItem>
-                      <SelectItem value="yesterday">Yesterday</SelectItem>
-                      <SelectItem value="7days">Last 7 Days</SelectItem>
-                      <SelectItem value="30days">Last 30 Days</SelectItem>
-                      <SelectItem value="all">All Time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <MaterialDateRangePicker
+                  startDate={startDateFilter}
+                  endDate={endDateFilter}
+                  onRangeChange={(start, end) => {
+                    setStartDateFilter(start);
+                    setEndDateFilter(end);
+                  }}
+                  placeholder="Select Date Range"
+                  className="w-full sm:w-[220px]"
+                />
 
-                {(searchQuery || statusFilter !== "all" || dateRangeFilter !== "today") && (
+                {(searchQuery || statusFilter !== "all" || startDateFilter || endDateFilter) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setSearchQuery("");
                       setStatusFilter("all");
-                      setDateRangeFilter("today");
+                      setStartDateFilter("");
+                      setEndDateFilter("");
                     }}
                     className="text-xs text-muted-foreground hover:text-foreground h-10"
                   >
