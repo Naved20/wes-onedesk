@@ -259,22 +259,24 @@ export default function FaceCheckinHistory() {
       });
   }, [records, statusFilter, startDateFilter, endDateFilter, searchQuery, sortField, sortDirection]);
 
-  // Statistics KPIs
+  // Statistics KPIs calculated dynamically from processedRecords
   const stats = useMemo(() => {
-    const todayRecords = records.filter((r) => isToday(parseISO(r.created_at)));
-    const matchedToday = todayRecords.filter((r) => r.matched).length;
-    const unmatchedToday = todayRecords.filter((r) => !r.matched).length;
-    const totalToday = todayRecords.length;
-    const successRate = totalToday > 0 ? Math.round((matchedToday / totalToday) * 100) : 100;
+    const targetRecords = processedRecords;
+    const matched = targetRecords.filter((r) => r.matched).length;
+    const unmatched = targetRecords.filter((r) => !r.matched).length;
+    const total = targetRecords.length;
+    const successRate = total > 0 ? Math.round((matched / total) * 100) : 100;
+    const isFiltered = !!(searchQuery || statusFilter !== "all" || startDateFilter || endDateFilter);
 
     return {
-      totalToday,
-      matchedToday,
-      unmatchedToday,
+      total,
+      matched,
+      unmatched,
       successRate,
       totalCount: records.length,
+      isFiltered,
     };
-  }, [records]);
+  }, [processedRecords, records.length, searchQuery, statusFilter, startDateFilter, endDateFilter]);
 
   // Toggle sorting
   const handleSort = (field: "created_at" | "employee_name" | "match_distance") => {
@@ -374,18 +376,20 @@ export default function FaceCheckinHistory() {
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* Dynamic KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-card border border-border shadow-sm">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                Today's Scans
+                {stats.isFiltered ? "Filtered Scans" : "Total Scans"}
                 <Clock className="h-4 w-4 text-primary" />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{stats.totalToday}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Total attempts recorded today</p>
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {stats.isFiltered ? "Attempts in active filter" : "Total attempts shown"}
+              </p>
             </CardContent>
           </Card>
 
@@ -397,7 +401,7 @@ export default function FaceCheckinHistory() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold text-emerald-600">{stats.matchedToday}</div>
+              <div className="text-2xl font-bold text-emerald-600">{stats.matched}</div>
               <p className="text-[11px] text-emerald-600/80 font-medium mt-0.5">
                 {stats.successRate}% Success Rate
               </p>
@@ -412,7 +416,7 @@ export default function FaceCheckinHistory() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold text-destructive">{stats.unmatchedToday}</div>
+              <div className="text-2xl font-bold text-destructive">{stats.unmatched}</div>
               <p className="text-[11px] text-muted-foreground mt-0.5">Not enrolled or score low</p>
             </CardContent>
           </Card>
@@ -420,13 +424,13 @@ export default function FaceCheckinHistory() {
           <Card className="bg-card border border-border shadow-sm">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                Total Logged History
+                Total Database Logs
                 <Zap className="h-4 w-4 text-amber-500" />
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="text-2xl font-bold">{stats.totalCount}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">All-time scan entries</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">All-time database entries</p>
             </CardContent>
           </Card>
         </div>
