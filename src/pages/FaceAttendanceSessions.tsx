@@ -19,6 +19,7 @@ import {
   Globe
 } from "lucide-react";
 import { getAllSessions, adminLogoutSession } from "@/lib/faceSessionManager";
+import { FaceHubOtpCard } from "@/components/face-hub/FaceHubOtpCard";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertDialog,
@@ -146,6 +147,9 @@ export default function FaceAttendanceSessions() {
             </Button>
           </div>
         </div>
+
+        {/* Live Security OTP */}
+        <FaceHubOtpCard />
 
         {/* Active Sessions */}
         <Card>
