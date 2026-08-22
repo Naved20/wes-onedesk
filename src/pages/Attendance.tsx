@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, isSameDay, isSunday } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check } from "lucide-react";
+import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check, History, ShieldCheck } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
 import { AttendanceApprovalDialog } from "@/components/attendance/AttendanceApprovalDialog";
@@ -47,6 +48,7 @@ interface Leave {
 }
 
 export default function Attendance() {
+  const navigate = useNavigate();
   const { user, role } = useAuth();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceWithEmployee[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -875,9 +877,31 @@ export default function Attendance() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
-          <p className="text-muted-foreground">Track and manage attendance records</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
+            <p className="text-muted-foreground">Track and manage attendance records</p>
+          </div>
+          {(role === "admin" || role === "manager") && (
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => navigate("/face-attendance-history")}
+                variant="outline"
+                className="gap-2 bg-background border border-primary/30 text-primary hover:bg-primary/5 shadow-sm"
+              >
+                <History className="h-4 w-4" />
+                Face Check-in History
+              </Button>
+              <Button
+                onClick={() => navigate("/face-sessions")}
+                variant="outline"
+                className="gap-2 shadow-sm"
+              >
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                Active Sessions
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Month/Year Selector - For all users */}
@@ -1008,14 +1032,7 @@ export default function Attendance() {
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="pending" className="relative">
-                Pending
-                {pendingRecords.length > 0 && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-yellow-500 text-white">
-                    {pendingRecords.length}
-                  </span>
-                )}
-              </TabsTrigger>
+  
               {lateRecords.length > 0 && (
                 <TabsTrigger value="late" className="relative">
                   Late Check-ins

@@ -36,6 +36,7 @@ import FaceAttendance from "./pages/FaceAttendance";
 import FaceHub from "./pages/FaceHub";
 import FaceIdManagement from "./pages/FaceIdManagement";
 import FaceAttendanceSessions from "./pages/FaceAttendanceSessions";
+import FaceCheckinHistory from "./pages/FaceCheckinHistory";
 import WESTeacherReports from "./pages/WESTeacherReports";
 import WESWeeklyReportForm from "./pages/WESWeeklyReportForm";
 import UploadedReports from "./pages/UploadedReports";
@@ -57,6 +58,8 @@ const App = () => (
             <Route path="/face-hub" element={<FaceHub />} />
             <Route path="/face-id-management" element={<ProtectedRoute allowedRoles={["admin"]}><FaceIdManagement /></ProtectedRoute>} />
             <Route path="/face-sessions" element={<ProtectedRoute allowedRoles={["admin"]}><FaceAttendanceSessions /></ProtectedRoute>} />
+            <Route path="/face-attendance-history" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><FaceCheckinHistory /></ProtectedRoute>} />
+            <Route path="/face-history" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><FaceCheckinHistory /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Employees /></ProtectedRoute>} />
             <Route path="/employee/:id" element={<ProtectedRoute><EmployeeProfile /></ProtectedRoute>} />
