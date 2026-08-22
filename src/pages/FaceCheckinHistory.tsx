@@ -376,64 +376,7 @@ export default function FaceCheckinHistory() {
           </div>
         </div>
 
-        {/* Dynamic KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-card border border-border shadow-sm">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                {stats.isFiltered ? "Filtered Scans" : "Total Scans"}
-                <Clock className="h-4 w-4 text-primary" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {stats.isFiltered ? "Attempts in active filter" : "Total attempts shown"}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border border-border shadow-sm">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                Successful Matches
-                <UserCheck className="h-4 w-4 text-emerald-600" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold text-emerald-600">{stats.matched}</div>
-              <p className="text-[11px] text-emerald-600/80 font-medium mt-0.5">
-                {stats.successRate}% Success Rate
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border border-border shadow-sm">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                Unrecognized / Failed
-                <UserX className="h-4 w-4 text-destructive" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold text-destructive">{stats.unmatched}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Not enrolled or score low</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border border-border shadow-sm">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-                Total Database Logs
-                <Zap className="h-4 w-4 text-amber-500" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-2xl font-bold">{stats.totalCount}</div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">All-time database entries</p>
-            </CardContent>
-          </Card>
-        </div>
+ 
 
         {/* Filters & Search Controls */}
         <Card className="shadow-sm">
