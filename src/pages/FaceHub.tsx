@@ -12,7 +12,7 @@ import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 import { updateSessionActivity, logoutFaceSession, isSessionValid, getLocation } from "@/lib/faceSessionManager";
-import { speakAttendanceEnrolled } from "@/lib/speak";
+import { speakAttendanceEnrolled, speakAlreadyCheckedIn } from "@/lib/speak";
 
 interface HistoryRow {
   id: string;
@@ -34,6 +34,7 @@ export default function FaceHub() {
   const [lastDistance, setLastDistance] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [showAlreadyCheckedInDialog, setShowAlreadyCheckedInDialog] = useState(false);
   const [showNotEnrolledDialog, setShowNotEnrolledDialog] = useState(false);
   const [notEnrolledDistance, setNotEnrolledDistance] = useState<number | null>(null);
   const [checkInData, setCheckInData] = useState<{ 
@@ -374,23 +375,42 @@ export default function FaceHub() {
       
       // If successful, play sound and show popup
       if (data.ok) {
-        console.log("[FaceHub] Face match successful:", data.employeeName);
-        playSuccessSound();
-        speakAttendanceEnrolled(data.employeeName || "Employee");
-        setCheckInData({
-          name: data.employeeName || "Employee",
-          time: format(new Date(), "hh:mm a"),
-          shiftName: data.shiftName,
-          shiftStartTime: data.shiftStartTime,
-          shiftEndTime: data.shiftEndTime,
-        });
-        setShowSuccessDialog(true);
-        
-        // Auto-close after 3 seconds
-        setTimeout(() => {
-          setShowSuccessDialog(false);
-          setCheckInData(null);
-        }, 3000);
+        if (data.alreadyCheckedIn) {
+          console.log("[FaceHub] Face match already checked in today:", data.employeeName);
+          playSuccessSound();
+          const timeDisplay = data.formattedCheckInTime || format(new Date(), "hh:mm a");
+          speakAlreadyCheckedIn(data.employeeName || "Employee", timeDisplay);
+          setCheckInData({
+            name: data.employeeName || "Employee",
+            time: timeDisplay,
+            shiftName: data.shiftName,
+            shiftStartTime: data.shiftStartTime,
+            shiftEndTime: data.shiftEndTime,
+          });
+          setShowAlreadyCheckedInDialog(true);
+
+          setTimeout(() => {
+            setShowAlreadyCheckedInDialog(false);
+            setCheckInData(null);
+          }, 4000);
+        } else {
+          console.log("[FaceHub] Face match successful:", data.employeeName);
+          playSuccessSound();
+          speakAttendanceEnrolled(data.employeeName || "Employee");
+          setCheckInData({
+            name: data.employeeName || "Employee",
+            time: format(new Date(), "hh:mm a"),
+            shiftName: data.shiftName,
+            shiftStartTime: data.shiftStartTime,
+            shiftEndTime: data.shiftEndTime,
+          });
+          setShowSuccessDialog(true);
+
+          setTimeout(() => {
+            setShowSuccessDialog(false);
+            setCheckInData(null);
+          }, 3000);
+        }
       }
       
       fetchHistory();
@@ -591,6 +611,43 @@ export default function FaceHub() {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div className="success-progress-bar h-full bg-green-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Already Checked In Dialog */}
+      <Dialog open={showAlreadyCheckedInDialog} onOpenChange={setShowAlreadyCheckedInDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-amber-100 p-3">
+              <AlertTriangle className="h-12 w-12 text-amber-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-amber-600">Already Checked In Today</h3>
+              {checkInData && (
+                <>
+                  <p className="text-lg font-semibold">{checkInData.name}</p>
+                  <p className="text-muted-foreground text-sm">
+                    Your attendance for today was already marked at <span className="font-semibold text-foreground">{checkInData.time}</span>
+                  </p>
+                  {checkInData.shiftName && (
+                    <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-sm font-medium text-amber-900">
+                        Shift: {checkInData.shiftName}
+                      </p>
+                      {checkInData.shiftStartTime && checkInData.shiftEndTime && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          {checkInData.shiftStartTime} - {checkInData.shiftEndTime}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="warning-progress-bar h-full bg-amber-500 rounded-full"></div>
             </div>
           </div>
         </DialogContent>

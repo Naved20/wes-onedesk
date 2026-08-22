@@ -17,3 +17,11 @@ export const speak = (text: string, lang = "en-IN") => {
 export const speakAttendanceEnrolled = (name: string) => {
   speak(`Your attendance enrolled, ${name}`);
 };
+
+export const speakAlreadyCheckedIn = (name: string, formattedTime?: string) => {
+  if (formattedTime) {
+    speak(`${name}, your attendance for today was already marked at ${formattedTime}`);
+  } else {
+    speak(`${name}, your attendance for today was already marked`);
+  }
+};

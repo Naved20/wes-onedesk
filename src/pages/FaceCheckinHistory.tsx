@@ -365,14 +365,7 @@ export default function FaceCheckinHistory() {
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate("/face-sessions")}
-              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Active Sessions
-            </Button>
+     
           </div>
         </div>
 

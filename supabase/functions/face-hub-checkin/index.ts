@@ -174,10 +174,20 @@ serve(async (req) => {
 
     let attendanceId: string | null = null;
     let message = `Welcome, ${employeeName}! Check-in recorded.`;
+    let alreadyCheckedIn = false;
+    let formattedCheckInTime = "";
 
     if (existing?.check_in_time) {
+      alreadyCheckedIn = true;
       attendanceId = existing.id;
-      message = `${employeeName} already checked in today.`;
+      const dt = new Date(existing.check_in_time);
+      formattedCheckInTime = dt.toLocaleTimeString("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      message = `${employeeName} already checked in today at ${formattedCheckInTime}.`;
     } else if (existing) {
       const { data: updated, error: updateError } = await supabaseAdmin
         .from("attendance")
@@ -232,11 +242,13 @@ serve(async (req) => {
       matched: true,
       match_distance: bestMatch.distance,
       attendance_id: attendanceId,
-      notes: `Matched ${employeeName}${sessionDetails}`,
+      notes: `${alreadyCheckedIn ? "Duplicate Scan (Already checked in) - " : ""}Matched ${employeeName}${sessionDetails}`,
     });
 
     return json({
       ok: true,
+      alreadyCheckedIn,
+      formattedCheckInTime,
       message,
       distance: bestMatch.distance,
       enrolledCount: validEnrollments.length,
