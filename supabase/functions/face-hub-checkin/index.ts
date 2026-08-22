@@ -215,14 +215,15 @@ serve(async (req) => {
     if (body.session_token) {
       const { data: sessData } = await supabaseAdmin
         .from("face_attendance_sessions")
-        .select("os_name, browser_name, location_address")
+        .select("os_name, browser_name, location_address, ip_address")
         .eq("session_token", body.session_token)
         .maybeSingle();
 
       if (sessData) {
         const deviceStr = [sessData.os_name, sessData.browser_name].filter(Boolean).join(" - ");
+        const ipStr = sessData.ip_address ? ` [IP: ${sessData.ip_address}]` : "";
         const locStr = sessData.location_address ? ` (${sessData.location_address})` : "";
-        sessionDetails = deviceStr ? ` | ${deviceStr}${locStr}` : "";
+        sessionDetails = deviceStr ? ` | ${deviceStr}${ipStr}${locStr}` : "";
       }
     }
 

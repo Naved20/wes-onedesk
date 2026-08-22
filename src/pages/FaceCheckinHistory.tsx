@@ -24,6 +24,7 @@ import {
   Smartphone,
   Monitor,
   MapPin,
+  Globe,
   Clock,
   Zap,
   ChevronUp,
@@ -46,6 +47,7 @@ interface CheckinRecord {
   profile_photo_url?: string;
   device_info?: string;
   location_address?: string;
+  ip_address?: string;
 }
 
 export default function FaceCheckinHistory() {
@@ -105,10 +107,10 @@ export default function FaceCheckinHistory() {
         }
       }
 
-      // 3. Fetch face attendance sessions to accurately match terminal device & GPS per check-in timestamp
+      // 3. Fetch face attendance sessions to accurately match terminal device, IP & GPS per check-in timestamp
       const { data: sessions } = await supabase
         .from("face_attendance_sessions" as any)
-        .select("login_time, logout_time, created_at, device_type, os_name, browser_name, location_address")
+        .select("login_time, logout_time, created_at, device_type, os_name, browser_name, location_address, ip_address")
         .order("login_time", { ascending: false });
 
       const allSessions = (sessions || []) as any[];
@@ -119,13 +121,17 @@ export default function FaceCheckinHistory() {
         
         let deviceStr = "Face Hub Terminal";
         let locationAddr: string | undefined = undefined;
-        let deviceType = "desktop";
+        let ipAddr: string | undefined = undefined;
 
         // A. Check if notes has embedded session details (from updated edge function)
         if (row.notes && row.notes.includes(" | ")) {
           const parts = row.notes.split(" | ");
           if (parts.length >= 2) {
-            deviceStr = parts[1].replace(/\s*\([^)]*\)/, "").trim();
+            deviceStr = parts[1].replace(/\s*\[IP:[^\]]+\]/, "").replace(/\s*\([^)]*\)/, "").trim();
+            const ipMatch = parts[1].match(/\[IP:\s*([^\]]+)\]/);
+            if (ipMatch) {
+              ipAddr = ipMatch[1];
+            }
             const locMatch = parts[1].match(/\(([^)]+)\)/);
             if (locMatch) {
               locationAddr = locMatch[1];
@@ -134,21 +140,21 @@ export default function FaceCheckinHistory() {
         }
 
         // B. If not parsed from notes, match active session during check-in time
-        if (deviceStr === "Face Hub Terminal" && allSessions.length > 0) {
-          const recTime = new Date(row.created_at).getTime();
+        const recTime = new Date(row.created_at).getTime();
 
-          const matchedSession = allSessions.find((s) => {
-            const loginT = new Date(s.login_time || s.created_at).getTime();
-            const logoutT = s.logout_time ? new Date(s.logout_time).getTime() : Infinity;
-            // Allow 5 minute window before session login time
-            return (loginT - 300000) <= recTime && recTime <= logoutT;
-          });
+        const matchedSession = allSessions.find((s) => {
+          const loginT = new Date(s.login_time || s.created_at).getTime();
+          const logoutT = s.logout_time ? new Date(s.logout_time).getTime() : Infinity;
+          // Allow 5 minute window before session login time
+          return (loginT - 300000) <= recTime && recTime <= logoutT;
+        });
 
-          if (matchedSession) {
+        if (matchedSession) {
+          if (deviceStr === "Face Hub Terminal") {
             deviceStr = [matchedSession.os_name, matchedSession.browser_name].filter(Boolean).join(" - ") || "Face Hub Terminal";
-            locationAddr = matchedSession.location_address || undefined;
-            deviceType = matchedSession.device_type || "desktop";
           }
+          if (!locationAddr) locationAddr = matchedSession.location_address || undefined;
+          if (!ipAddr) ipAddr = matchedSession.ip_address || undefined;
         }
 
         return {
@@ -165,6 +171,7 @@ export default function FaceCheckinHistory() {
           profile_photo_url: profile?.photo,
           device_info: deviceStr,
           location_address: locationAddr,
+          ip_address: ipAddr,
         };
       });
 
@@ -283,7 +290,7 @@ export default function FaceCheckinHistory() {
       return;
     }
 
-    const headers = ["Timestamp", "Employee Name", "Employee ID", "Department", "Status", "Match Score", "Notes", "Device Info"];
+    const headers = ["Timestamp", "Employee Name", "Employee ID", "Department", "Status", "Match Score", "Device Info", "IP Address", "Location Address", "Notes"];
     const csvRows = processedRecords.map((r) => [
       format(parseISO(r.created_at), "yyyy-MM-dd HH:mm:ss"),
       `"${r.employee_name || ""}"`,
@@ -291,8 +298,10 @@ export default function FaceCheckinHistory() {
       `"${r.department || ""}"`,
       r.matched ? "Matched" : "Unmatched",
       r.match_distance !== null ? r.match_distance.toFixed(4) : "N/A",
-      `"${r.notes || ""}"`,
       `"${r.device_info || ""}"`,
+      `"${r.ip_address || ""}"`,
+      `"${r.location_address || ""}"`,
+      `"${r.notes || ""}"`,
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...csvRows.map((e) => e.join(","))].join("\n");
@@ -643,18 +652,31 @@ export default function FaceCheckinHistory() {
                             )}
                           </TableCell>
 
-                          {/* Device / Terminal */}
+                          {/* Device / Terminal & IP & Location */}
                           <TableCell>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                               <Smartphone className="h-3.5 w-3.5 text-primary shrink-0" />
                               <span className="truncate max-w-[180px]" title={record.device_info}>
                                 {record.device_info}
                               </span>
                             </div>
-                            {record.location_address && (
+
+                            {record.ip_address && (
+                              <div className="flex items-center gap-1 text-[10px] font-mono text-slate-500 mt-0.5" title={`IP Address: ${record.ip_address}`}>
+                                <Globe className="h-3 w-3 text-blue-500 shrink-0" />
+                                <span>IP: {record.ip_address}</span>
+                              </div>
+                            )}
+
+                            {record.location_address ? (
                               <div className="flex items-center gap-1 text-[10px] text-slate-500 truncate max-w-[200px]" title={record.location_address}>
                                 <MapPin className="h-3 w-3 text-emerald-600 shrink-0" />
                                 <span className="truncate">{record.location_address}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                                <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
+                                <span>GPS Logged</span>
                               </div>
                             )}
                           </TableCell>
