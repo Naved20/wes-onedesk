@@ -44,37 +44,24 @@ export default function FaceHub() {
     shiftEndTime?: string;
   } | null>(null);
 
-  // Mandatory Location states
+  // Location states (Location verified at login time)
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number; accuracy: number; address?: string } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
+  const [loadingLocation, setLoadingLocation] = useState<boolean>(false);
 
   const fetchHighAccuracyLocation = async () => {
-    setLoadingLocation(true);
     try {
       const loc = await getLocation();
       setCurrentLocation(loc);
       setLocationError(null);
     } catch (err: any) {
-      console.error("[FaceHub] Geolocation error:", err);
-      setCurrentLocation(null);
-      setLocationError(err.message || "Exact GPS Location is required to use Face Hub.");
-    } finally {
-      setLoadingLocation(false);
+      console.warn("[FaceHub] Background geolocation info:", err?.message);
     }
   };
 
   useEffect(() => {
+    // Soft single location fetch on mount
     fetchHighAccuracyLocation();
-    
-    // Periodically re-verify location every 45 seconds
-    const locationInterval = setInterval(() => {
-      fetchHighAccuracyLocation();
-    }, 45000);
-
-    return () => {
-      clearInterval(locationInterval);
-    };
   }, []);
 
   const performLogout = (reason: string = "Session ended by administrator") => {
@@ -433,71 +420,6 @@ export default function FaceHub() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     navigate("/auth");
   };
-
-  // 1. Loading Screen while fetching location
-  if (loadingLocation) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-            <MapPin className="h-10 w-10 text-primary animate-bounce" />
-            <Loader2 className="h-16 w-16 text-primary animate-spin absolute inset-0 opacity-40" />
-          </div>
-          <h2 className="text-xl font-bold">Verifying Location Access...</h2>
-          <p className="text-sm text-slate-400">
-            Face Attendance Hub requires active GPS location to allow access.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Full-Page Blocking Screen if Location is denied/disabled (Face Hub page won't load at all)
-  if (locationError || !currentLocation) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 text-center">
-          <div className="mx-auto w-20 h-20 rounded-full bg-destructive/10 border-2 border-destructive/30 flex items-center justify-center">
-            <AlertTriangle className="h-10 w-10 text-destructive animate-pulse" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-white">GPS Location Required</h2>
-            <p className="text-sm text-slate-300">
-              {locationError || "Face Hub access is strictly blocked because GPS location permission is missing or disabled."}
-            </p>
-          </div>
-
-          <div className="p-4 bg-slate-800/60 rounded-xl text-xs text-slate-300 text-left space-y-2 border border-slate-700">
-            <p className="font-semibold text-slate-200">Required Action:</p>
-            <ol className="list-decimal list-inside space-y-1 opacity-90">
-              <li>Turn ON Location/GPS services on your mobile or device.</li>
-              <li>Click <b>Allow</b> when your browser asks for location access.</li>
-              <li>Click the button below to grant access and open Face Hub.</li>
-            </ol>
-          </div>
-
-          <div className="space-y-3">
-            <Button
-              onClick={fetchHighAccuracyLocation}
-              size="lg"
-              className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90"
-            >
-              <RefreshCw className="h-5 w-5 mr-2" /> Allow GPS & Open Face Hub
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={handleLogout}
-              className="w-full text-slate-300 border-slate-700 hover:bg-slate-800"
-            >
-              <LogOut className="h-4 w-4 mr-2" /> Back to Login
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">

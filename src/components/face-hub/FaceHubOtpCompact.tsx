@@ -118,7 +118,7 @@ export function FaceHubOtpCompact() {
             className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
             title="Regenerate OTP"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "" : ""}`} />
           </Button>
         </div>
       ) : (

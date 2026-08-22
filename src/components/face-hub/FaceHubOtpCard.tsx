@@ -118,7 +118,7 @@ export function FaceHubOtpCard() {
             disabled={loading}
             className="bg-slate-800/80 text-slate-200 border-slate-700 hover:bg-slate-700 hover:text-white shrink-0"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "" : ""}`} />
             Regenerate OTP
           </Button>
         </div>
