@@ -105,22 +105,50 @@ export default function FaceCheckinHistory() {
         }
       }
 
-      // 3. Fetch active/recent face attendance sessions for device & location details
+      // 3. Fetch face attendance sessions to accurately match terminal device & GPS per check-in timestamp
       const { data: sessions } = await supabase
         .from("face_attendance_sessions" as any)
-        .select("created_at, device_type, os_name, browser_name, location_address")
-        .order("created_at", { ascending: false })
-        .limit(20);
+        .select("login_time, logout_time, created_at, device_type, os_name, browser_name, location_address")
+        .order("login_time", { ascending: false });
 
-      const latestSession = sessions && sessions.length > 0 ? sessions[0] : null;
+      const allSessions = (sessions || []) as any[];
 
       // 4. Combine into complete record object
       const formattedRecords: CheckinRecord[] = historyData.map((row) => {
         const profile = row.user_id ? profileMap.get(row.user_id) : null;
         
         let deviceStr = "Face Hub Terminal";
-        if (latestSession) {
-          deviceStr = `${latestSession.os_name || "Device"} (${latestSession.browser_name || "Browser"})`;
+        let locationAddr: string | undefined = undefined;
+        let deviceType = "desktop";
+
+        // A. Check if notes has embedded session details (from updated edge function)
+        if (row.notes && row.notes.includes(" | ")) {
+          const parts = row.notes.split(" | ");
+          if (parts.length >= 2) {
+            deviceStr = parts[1].replace(/\s*\([^)]*\)/, "").trim();
+            const locMatch = parts[1].match(/\(([^)]+)\)/);
+            if (locMatch) {
+              locationAddr = locMatch[1];
+            }
+          }
+        }
+
+        // B. If not parsed from notes, match active session during check-in time
+        if (deviceStr === "Face Hub Terminal" && allSessions.length > 0) {
+          const recTime = new Date(row.created_at).getTime();
+
+          const matchedSession = allSessions.find((s) => {
+            const loginT = new Date(s.login_time || s.created_at).getTime();
+            const logoutT = s.logout_time ? new Date(s.logout_time).getTime() : Infinity;
+            // Allow 5 minute window before session login time
+            return (loginT - 300000) <= recTime && recTime <= logoutT;
+          });
+
+          if (matchedSession) {
+            deviceStr = [matchedSession.os_name, matchedSession.browser_name].filter(Boolean).join(" - ") || "Face Hub Terminal";
+            locationAddr = matchedSession.location_address || undefined;
+            deviceType = matchedSession.device_type || "desktop";
+          }
         }
 
         return {
@@ -136,7 +164,7 @@ export default function FaceCheckinHistory() {
           department: profile ? profile.dept : "-",
           profile_photo_url: profile?.photo,
           device_info: deviceStr,
-          location_address: latestSession?.location_address || undefined,
+          location_address: locationAddr,
         };
       });
 

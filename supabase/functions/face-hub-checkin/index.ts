@@ -211,12 +211,27 @@ serve(async (req) => {
       attendanceId = inserted?.id ?? null;
     }
 
+    let sessionDetails = "";
+    if (body.session_token) {
+      const { data: sessData } = await supabaseAdmin
+        .from("face_attendance_sessions")
+        .select("os_name, browser_name, location_address")
+        .eq("session_token", body.session_token)
+        .maybeSingle();
+
+      if (sessData) {
+        const deviceStr = [sessData.os_name, sessData.browser_name].filter(Boolean).join(" - ");
+        const locStr = sessData.location_address ? ` (${sessData.location_address})` : "";
+        sessionDetails = deviceStr ? ` | ${deviceStr}${locStr}` : "";
+      }
+    }
+
     await supabaseAdmin.from("face_checkin_history").insert({
       user_id: bestMatch.user_id,
       matched: true,
       match_distance: bestMatch.distance,
       attendance_id: attendanceId,
-      notes: `Matched ${employeeName}`,
+      notes: `Matched ${employeeName}${sessionDetails}`,
     });
 
     return json({

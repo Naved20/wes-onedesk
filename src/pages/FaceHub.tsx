@@ -344,8 +344,9 @@ export default function FaceHub() {
       }
 
       console.log("[FaceHub] Face descriptor obtained, calling edge function...");
+      const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
       const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
-        body: { descriptor: Array.from(descriptor) },
+        body: { descriptor: Array.from(descriptor), session_token: sessionToken },
       });
 
       console.log("[FaceHub] Edge function response:", { data, error, ok: data?.ok, message: data?.message });
