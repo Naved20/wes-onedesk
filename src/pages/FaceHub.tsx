@@ -12,6 +12,7 @@ import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 import { updateSessionActivity, logoutFaceSession, isSessionValid, getLocation } from "@/lib/faceSessionManager";
+import { validateUserGeoFence } from "@/lib/geoFenceManager";
 import { speakAttendanceEnrolled, speakAlreadyCheckedIn } from "@/lib/speak";
 
 interface HistoryRow {
@@ -303,15 +304,41 @@ export default function FaceHub() {
       }
     }
 
-    // GPS Location Check (fetch on demand if not cached yet)
+    // Real-time GPS Location Check & Geo-Fence Re-Validation
     let loc = currentLocation;
-    if (!loc) {
-      try {
-        loc = await getLocation();
-        setCurrentLocation(loc);
-      } catch (err: any) {
-        console.warn("[FaceHub] Geolocation on scan warning:", err?.message);
-      }
+    try {
+      loc = await getLocation();
+      setCurrentLocation(loc);
+    } catch (err: any) {
+      console.warn("[FaceHub] Geolocation on scan warning:", err?.message);
+      toast({
+        title: "GPS Location Access Required",
+        description: err?.message || "Location access is mandatory for Face Attendance.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!loc || typeof loc.latitude !== "number" || typeof loc.longitude !== "number") {
+      toast({
+        title: "Location Unavailable",
+        description: "Could not retrieve GPS coordinates for Geo-Fence check.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Enforce Geo-Fence Boundary Validation on every face scan
+    const geoCheck = await validateUserGeoFence(loc.latitude, loc.longitude);
+    if (!geoCheck.allowed) {
+      console.warn("[FaceHub] Check-in blocked by Geo-Fence:", geoCheck.message);
+      setLastResult({ ok: false, msg: geoCheck.message });
+      toast({
+        title: "Out of Bounds (Geo-Fence Blocked)",
+        description: geoCheck.message,
+        variant: "destructive",
+      });
+      return;
     }
 
     const v = videoRef.current;

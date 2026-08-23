@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import {
   MapPin,
-  Shield,
   ShieldCheck,
   ShieldAlert,
   Navigation,
@@ -24,17 +22,182 @@ import {
   Volume2,
   Globe,
   Sliders,
-  CheckCircle2,
-  HelpCircle,
   ExternalLink,
+  LocateFixed,
 } from "lucide-react";
 import {
   GeoFenceSettings,
   getGeoFenceSettings,
   saveGeoFenceSettings,
   playGeoBeep,
-  calculateHaversineDistance,
 } from "@/lib/geoFenceManager";
+
+interface LeafletMapProps {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  onLocationSelect: (lat: number, lng: number, addressStr?: string) => void;
+}
+
+function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: LeafletMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const L = (window as any).L;
+    if (!L) {
+      console.warn("[LeafletGeoMap] Leaflet JS library (window.L) is loading...");
+      return;
+    }
+
+    if (!leafletInstanceRef.current) {
+      // Initialize Leaflet Map
+      const map = L.map(mapRef.current, {
+        center: [latitude, longitude],
+        zoom: 16,
+        zoomControl: true,
+      });
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+
+      // Sleek emerald custom SVG marker icon
+      const customIcon = L.divIcon({
+        className: "custom-leaflet-marker",
+        html: `
+          <div style="
+            width: 36px;
+            height: 36px;
+            background: #10b981;
+            border: 3px solid #ffffff;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 4px 12px rgba(16,185,129,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: -18px;
+            margin-top: -36px;
+            cursor: grab;
+          ">
+            <div style="
+              width: 10px;
+              height: 10px;
+              background: #ffffff;
+              border-radius: 50%;
+              transform: rotate(45deg);
+            "></div>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+      });
+
+      // Draggable marker
+      const marker = L.marker([latitude, longitude], {
+        icon: customIcon,
+        draggable: true,
+      }).addTo(map);
+
+      // Geofence visual boundary circle
+      const circle = L.circle([latitude, longitude], {
+        radius: radiusMeters,
+        color: "#10b981",
+        fillColor: "#10b981",
+        fillOpacity: 0.22,
+        weight: 25,
+        dashArray: "6, 6",
+      }).addTo(map);
+
+      markerRef.current = marker;
+      circleRef.current = circle;
+      leafletInstanceRef.current = map;
+
+      // Handle marker dragend event
+      marker.on("dragend", async () => {
+        const position = marker.getLatLng();
+        const lat = parseFloat(position.lat.toFixed(6));
+        const lng = parseFloat(position.lng.toFixed(6));
+        circle.setLatLng([lat, lng]);
+
+        let addressStr = "";
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const data = await res.json();
+          if (data.display_name) addressStr = data.display_name;
+        } catch (e) {
+          console.warn("Reverse geocode failed", e);
+        }
+
+        onLocationSelect(lat, lng, addressStr);
+      });
+
+      // Handle map click to move pin
+      map.on("click", async (e: any) => {
+        const lat = parseFloat(e.latlng.lat.toFixed(6));
+        const lng = parseFloat(e.latlng.lng.toFixed(6));
+        
+        marker.setLatLng([lat, lng]);
+        circle.setLatLng([lat, lng]);
+
+        let addressStr = "";
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const data = await res.json();
+          if (data.display_name) addressStr = data.display_name;
+        } catch (err) {
+          console.warn("Reverse geocode failed", err);
+        }
+
+        onLocationSelect(lat, lng, addressStr);
+      });
+
+      // Refresh map size rendering inside modal dialog
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 300);
+    } else {
+      // Update position on existing Leaflet map instance
+      const map = leafletInstanceRef.current;
+      const marker = markerRef.current;
+      const circle = circleRef.current;
+
+      if (marker && circle && map) {
+        const currentLatLng = marker.getLatLng();
+        if (Math.abs(currentLatLng.lat - latitude) > 0.00001 || Math.abs(currentLatLng.lng - longitude) > 0.00001) {
+          marker.setLatLng([latitude, longitude]);
+          circle.setLatLng([latitude, longitude]);
+          map.panTo([latitude, longitude]);
+        }
+
+        if (circle.getRadius() !== radiusMeters) {
+          circle.setRadius(radiusMeters);
+        }
+      }
+    }
+  }, [latitude, longitude, radiusMeters, onLocationSelect]);
+
+  return (
+    <div className="relative rounded-xl overflow-hidden border border-border shadow-inner bg-slate-900 h-64 w-full z-0">
+      <div ref={mapRef} className="w-full h-full min-h-[256px] z-0" />
+      <div className="absolute top-2 right-2 z-[1000] bg-background/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-sm text-xs flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+        <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+          Leaflet Geo Circle ({radiusMeters}m radius)
+        </span>
+      </div>
+      <div className="absolute bottom-2 left-2 z-[1000] bg-background/95 backdrop-blur-md px-2.5 py-1 rounded-md border border-border text-[11px] text-muted-foreground shadow-sm flex items-center gap-1.5">
+        <LocateFixed className="h-3 w-3 text-emerald-600" />
+        <span>Drag pin marker or click anywhere on map to set location</span>
+      </div>
+    </div>
+  );
+}
 
 export function FaceHubGeoFenceModal() {
   const [open, setOpen] = useState(false);
@@ -134,6 +297,16 @@ export function FaceHubGeoFenceModal() {
     );
   };
 
+  const handleLocationSelectedFromMap = (lat: number, lng: number, addressStr?: string) => {
+    playGeoBeep.selectMapLocation();
+    setSettings((prev) => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      address: addressStr || prev.address || `${lat}, ${lng}`,
+    }));
+  };
+
   const handleSave = async () => {
     if (settings.radius_meters <= 0) {
       toast({
@@ -165,12 +338,9 @@ export function FaceHubGeoFenceModal() {
     }
   };
 
-  // Construct Google Maps embed URL centered at latitude, longitude
-  const mapIframeUrl = `https://maps.google.com/maps?q=${settings.latitude},${settings.longitude}&z=16&output=embed`;
-
   return (
     <>
-      {/* Trigger Button next to OTP button */}
+      {/* Trigger Button */}
       <Button
         variant={settings.is_enabled ? "default" : "outline"}
         onClick={() => setOpen(true)}
@@ -192,7 +362,7 @@ export function FaceHubGeoFenceModal() {
 
       {/* Main Settings Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-7">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-7 z-[50]">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -208,7 +378,7 @@ export function FaceHubGeoFenceModal() {
                 <div>
                   <DialogTitle className="text-xl font-bold">FaceHub Geo-Fencing Configuration</DialogTitle>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                    Restrict FaceHub login & attendance check-ins within a specific location & radius boundary
+                    Restrict FaceHub login & attendance check-ins within a specific location & Leaflet radius boundary
                   </DialogDescription>
                 </div>
               </div>
@@ -234,7 +404,7 @@ export function FaceHubGeoFenceModal() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {settings.is_enabled
-                    ? `Users can only login when physically inside ${settings.radius_meters}m of the office location.`
+                    ? `Users can only login & scan attendance when physically inside ${settings.radius_meters}m of the office location.`
                     : "Employees can log into FaceHub from any location without distance restriction."}
                 </p>
               </div>
@@ -255,7 +425,7 @@ export function FaceHubGeoFenceModal() {
                   Area Range Radius (Meters)
                 </Label>
                 <span className="text-xs font-mono font-bold px-2.5 py-1 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 rounded-md">
-                  {settings.radius_meters} Meters ({ (settings.radius_meters / 1000).toFixed(2) } km)
+                  {settings.radius_meters} Meters ({(settings.radius_meters / 1000).toFixed(2)} km)
                 </span>
               </div>
 
@@ -308,12 +478,12 @@ export function FaceHubGeoFenceModal() {
               </div>
             </div>
 
-            {/* Section 2: Location Setup & Map */}
+            {/* Section 2: Interactive Leaflet Map Setup */}
             <div className="space-y-3 p-4 rounded-xl border border-border/60 bg-card">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <Globe className="h-4 w-4 text-emerald-600" />
-                  Target Geo-Fence Location & Map
+                  Interactive Leaflet Map & Boundary
                 </Label>
 
                 <Button
@@ -322,7 +492,7 @@ export function FaceHubGeoFenceModal() {
                   size="sm"
                   onClick={handleFetchCurrentLocation}
                   disabled={gettingLocation}
-                  className="h-8 text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-70 font-medium hover:bg-emerald-100 dark:bg-emerald-950/60"
+                  className="h-8 text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-950/60"
                 >
                   <Navigation className={`h-3.5 w-3.5 ${gettingLocation ? "animate-spin" : ""}`} />
                   {gettingLocation ? "Detecting GPS..." : "Set to My Current Location"}
@@ -384,10 +554,10 @@ export function FaceHubGeoFenceModal() {
                 />
               </div>
 
-              {/* Google Maps Embed */}
+              {/* Leaflet Map Interactive Container */}
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Google Maps Location Preview:</span>
+                  <span>Leaflet OpenStreetMap Boundary Preview:</span>
                   <a
                     href={`https://www.google.com/maps?q=${settings.latitude},${settings.longitude}`}
                     target="_blank"
@@ -398,27 +568,12 @@ export function FaceHubGeoFenceModal() {
                   </a>
                 </div>
 
-                <div className="relative rounded-xl overflow-hidden border border-border shadow-inner bg-muted h-52">
-                  <iframe
-                    title="Geo-Fence Location Map"
-                    width="100%"
-                    height="100%"
-                    frameBorder="0"
-                    scrolling="no"
-                    marginHeight={0}
-                    marginWidth={0}
-                    src={mapIframeUrl}
-                    className="w-full h-full border-0"
-                  />
-
-                  {/* Radius Overlay Badge */}
-                  <div className="absolute top-2 right-2 bg-background/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-sm text-xs flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                      Center Pin Target ({settings.radius_meters}m radius)
-                    </span>
-                  </div>
-                </div>
+                <LeafletGeoMap
+                  latitude={settings.latitude}
+                  longitude={settings.longitude}
+                  radiusMeters={settings.radius_meters}
+                  onLocationSelect={handleLocationSelectedFromMap}
+                />
               </div>
             </div>
           </div>
