@@ -165,12 +165,8 @@ export function FaceHubGeoFenceModal() {
     }
   };
 
-  // Construct OSM Iframe URL centered at latitude, longitude
-  const mapIframeUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${
-    settings.longitude - 0.005
-  },${settings.latitude - 0.003},${settings.longitude + 0.005},${
-    settings.latitude + 0.003
-  }&layer=mapnik&marker=${settings.latitude},${settings.longitude}`;
+  // Construct Google Maps embed URL centered at latitude, longitude
+  const mapIframeUrl = `https://maps.google.com/maps?q=${settings.latitude},${settings.longitude}&z=16&output=embed`;
 
   return (
     <>
@@ -388,10 +384,10 @@ export function FaceHubGeoFenceModal() {
                 />
               </div>
 
-              {/* Interactive OpenStreetMap Embed */}
+              {/* Google Maps Embed */}
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Interactive Map Preview:</span>
+                  <span>Google Maps Location Preview:</span>
                   <a
                     href={`https://www.google.com/maps?q=${settings.latitude},${settings.longitude}`}
                     target="_blank"
