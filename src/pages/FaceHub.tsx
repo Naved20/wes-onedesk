@@ -305,9 +305,10 @@ export default function FaceHub() {
     }
 
     // Real-time GPS Location Check & Geo-Fence Re-Validation
+    // useCached:true = uses 30s cached GPS position for speed (avoids 15s wait on every scan)
     let loc = currentLocation;
     try {
-      loc = await getLocation();
+      loc = await getLocation({ useCached: true, timeoutMs: 5000 });
       setCurrentLocation(loc);
     } catch (err: any) {
       console.warn("[FaceHub] Geolocation on scan warning:", err?.message);

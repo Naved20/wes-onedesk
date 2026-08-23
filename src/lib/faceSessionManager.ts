@@ -54,7 +54,8 @@ export const getDeviceInfo = (): DeviceInfo => {
 };
 
 // Get user's geolocation (Mandatory & High Accuracy)
-export const getLocation = (): Promise<LocationInfo> => {
+// Pass { useCached: true } in scan context for faster response (avoids 15s GPS wait on every scan)
+export const getLocation = (opts?: { useCached?: boolean; timeoutMs?: number }): Promise<LocationInfo> => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("Geolocation is not supported by your browser/device. Location access is required for Face Hub."));
@@ -69,17 +70,19 @@ export const getLocation = (): Promise<LocationInfo> => {
           accuracy: position.coords.accuracy,
         };
 
-        // Try to get human-readable address using reverse geocoding
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${locationInfo.latitude}&lon=${locationInfo.longitude}`
-          );
-          const data = await response.json();
-          if (data.display_name) {
-            locationInfo.address = data.display_name;
+        // Skip reverse geocoding in scan context (adds unnecessary latency)
+        if (!opts?.useCached) {
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${locationInfo.latitude}&lon=${locationInfo.longitude}`
+            );
+            const data = await response.json();
+            if (data.display_name) {
+              locationInfo.address = data.display_name;
+            }
+          } catch (error) {
+            console.error("Failed to get address:", error);
           }
-        } catch (error) {
-          console.error("Failed to get address:", error);
         }
 
         resolve(locationInfo);
@@ -98,8 +101,10 @@ export const getLocation = (): Promise<LocationInfo> => {
       },
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
+        // In scan context: use cached GPS (30s cache) + faster 5s timeout
+        // In login context: always fresh GPS with 15s timeout
+        timeout: opts?.timeoutMs ?? (opts?.useCached ? 5000 : 15000),
+        maximumAge: opts?.useCached ? 30000 : 0,
       }
     );
   });

@@ -235,6 +235,7 @@ export function FaceHubGeoFenceModal() {
   const [searchingAddress, setSearchingAddress] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Synchronously initialize state from local storage so button shows correct status on page refresh
   const [settings, setSettings] = useState<GeoFenceSettings>(() => {
@@ -369,9 +370,9 @@ export function FaceHubGeoFenceModal() {
     );
   };
 
-  // Live address search / autocomplete fetching
+  // Live address search / autocomplete fetching (with India-scoped results)
   const triggerAddressSearch = async (query: string) => {
-    if (!query || query.trim().length < 3) {
+    if (!query || query.trim().length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
@@ -380,11 +381,24 @@ export function FaceHubGeoFenceModal() {
     setSearchingAddress(true);
     setShowSearchResults(true);
     try {
+      // Primary: India-scoped search for fast & accurate results
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=7&addressdetails=1&countrycodes=in&accept-language=en`,
+        { headers: { "Accept-Language": "en" } }
       );
       const data = await res.json();
-      setSearchResults(data || []);
+
+      if (data && data.length > 0) {
+        setSearchResults(data);
+      } else {
+        // Fallback: worldwide search if no India results
+        const fallbackRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
+          { headers: { "Accept-Language": "en" } }
+        );
+        const fallbackData = await fallbackRes.json();
+        setSearchResults(fallbackData || []);
+      }
     } catch (err) {
       console.warn("Address search API error", err);
       setSearchResults([]);
@@ -393,16 +407,26 @@ export function FaceHubGeoFenceModal() {
     }
   };
 
-  // Debounced input change handler
+  // Debounced input change handler (500ms delay to avoid spamming API)
   const handleAddressInputChange = (val: string) => {
     setAddressInput(val);
     setSettings((prev) => ({ ...prev, address: val }));
 
-    if (val.trim().length >= 3) {
-      triggerAddressSearch(val);
+    // Clear previous debounce timer
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (val.trim().length >= 2) {
+      setShowSearchResults(true);
+      setSearchingAddress(true);
+      searchDebounceRef.current = setTimeout(() => {
+        triggerAddressSearch(val);
+      }, 500);
     } else {
       setSearchResults([]);
       setShowSearchResults(false);
+      setSearchingAddress(false);
     }
   };
 
@@ -453,18 +477,21 @@ export function FaceHubGeoFenceModal() {
     try {
       await saveGeoFenceSettings(settings);
       toast({
-        title: "Geo-Fencing Saved Successfully",
+        title: "✅ Geo-Fencing Saved Successfully",
         description: settings.is_enabled
-          ? `Geo-Fencing is ACTIVE within ${settings.radius_meters}m boundary.`
-          : "Geo-Fencing is currently DISABLED.",
+          ? `Geo-Fencing is ACTIVE within ${settings.radius_meters}m boundary. All scans will now enforce this zone.`
+          : "Geo-Fencing is currently DISABLED. All employees can login from any location.",
       });
       setOpen(false);
-    } catch (err) {
+    } catch (err: any) {
+      // DB save failed but local cache was updated — warn admin clearly
       toast({
-        title: "Save Failed",
-        description: "Could not save Geo-Fencing configuration.",
+        title: "⚠️ Saved Locally Only",
+        description: err?.message || "Geo-Fence config saved in this browser only. Database sync failed — check Supabase connection.",
         variant: "destructive",
       });
+      // Still close modal since local config is active
+      setOpen(false);
     } finally {
       setLoading(false);
     }

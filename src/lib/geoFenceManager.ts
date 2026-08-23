@@ -87,10 +87,21 @@ export const playGeoBeep = {
 
 /**
  * Fetch current Geo-Fence settings from database (with local fallback & sync)
+ * IMPORTANT: Fail-safe to CACHED settings (not defaults) on DB error
  */
 export const getGeoFenceSettings = async (): Promise<GeoFenceSettings> => {
+  // Always try local cache first as the fastest path
+  const local = localStorage.getItem(STORAGE_KEY);
+  let cachedSettings: GeoFenceSettings | null = null;
+  if (local) {
+    try {
+      cachedSettings = JSON.parse(local);
+    } catch (e) {
+      console.error("[geoFenceManager] Local parse error", e);
+    }
+  }
+
   try {
-    // Attempt to fetch from Supabase table face_hub_otp or face_attendance_sessions system config if table exists
     const { data, error } = await (supabase as any)
       .from("face_hub_geofence" as any)
       .select("*")
@@ -107,28 +118,32 @@ export const getGeoFenceSettings = async (): Promise<GeoFenceSettings> => {
         address: config.address || "",
         updated_at: config.updated_at,
       };
+      // Sync fresh DB data into cache
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
       return settings;
     }
-  } catch (err) {
-    console.warn("[geoFenceManager] Database fetch warning, using stored local settings:", err);
-  }
 
-  // Fallback to localStorage or default settings
-  const local = localStorage.getItem(STORAGE_KEY);
-  if (local) {
-    try {
-      return JSON.parse(local);
-    } catch (e) {
-      console.error("[geoFenceManager] Local parse error", e);
+    // DB returned no rows — use cache if available; else defaults
+    if (cachedSettings) {
+      console.info("[geoFenceManager] DB has no rows, using cached settings (is_enabled:", cachedSettings.is_enabled, ")");
+      return cachedSettings;
+    }
+  } catch (err) {
+    // DB unreachable — NEVER default to is_enabled:false, use cache
+    console.warn("[geoFenceManager] DB fetch failed, falling back to CACHED local settings:", err);
+    if (cachedSettings) {
+      console.info("[geoFenceManager] Using cache — is_enabled:", cachedSettings.is_enabled);
+      return cachedSettings;
     }
   }
 
+  // Last resort: true defaults (no DB, no cache)
   return DEFAULT_GEOFENCE;
 };
 
 /**
  * Save Geo-Fence settings to database & local storage
+ * Returns true on full success, throws on DB failure so UI can show proper error
  */
 export const saveGeoFenceSettings = async (
   settings: GeoFenceSettings
@@ -142,7 +157,7 @@ export const saveGeoFenceSettings = async (
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedSettings));
 
   try {
-    // Attempt DB upsert/insert
+    // Attempt DB upsert
     const { error } = await (supabase as any)
       .from("face_hub_geofence" as any)
       .upsert({
@@ -156,10 +171,15 @@ export const saveGeoFenceSettings = async (
       });
 
     if (error) {
-      console.warn("[geoFenceManager] DB save error (will rely on synced local state):", error.message);
+      console.error("[geoFenceManager] DB save error:", error.message);
+      // Throw so the caller (modal) can show a destructive toast
+      throw new Error(`Database save failed: ${error.message}. Settings saved locally only.`);
     }
-  } catch (err) {
-    console.warn("[geoFenceManager] DB exception during save:", err);
+  } catch (err: any) {
+    // Re-throw for proper error handling in UI
+    if (err?.message?.startsWith("Database save failed")) throw err;
+    console.error("[geoFenceManager] DB exception during save:", err);
+    throw new Error("Network error: Could not sync Geo-Fence settings to database. Saved locally only.");
   }
 
   // Play save beep sound
