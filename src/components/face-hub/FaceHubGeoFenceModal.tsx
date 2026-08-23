@@ -24,6 +24,9 @@ import {
   Sliders,
   ExternalLink,
   LocateFixed,
+  Search,
+  Loader2,
+  Check,
 } from "lucide-react";
 import {
   GeoFenceSettings,
@@ -45,6 +48,17 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
   const markerRef = useRef<any>(null);
   const circleRef = useRef<any>(null);
 
+  // Inject Leaflet CSS dynamically if missing to guarantee correct tile grid rendering
+  useEffect(() => {
+    if (!document.getElementById("leaflet-css-cdn")) {
+      const link = document.createElement("link");
+      link.id = "leaflet-css-cdn";
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+  }, []);
+
   useEffect(() => {
     if (!mapRef.current) return;
     const L = (window as any).L;
@@ -61,12 +75,19 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
         zoomControl: true,
       });
 
-      // OpenStreetMap Tile Layer (Fast & Reliable CartoDB / OSM tiles)
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      // Google Maps Tile Layer inside Leaflet (100% reliable high-res street map tiles)
+      const googleTiles = L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
+        maxZoom: 20,
+        attribution: '&copy; Google Maps',
+      });
+
+      // OpenStreetMap Tile Layer as fallback
+      const osmTiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
-        subdomains: "abcd",
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      }).addTo(map);
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      });
+
+      googleTiles.addTo(map);
 
       // Sleek emerald custom SVG marker icon
       const customIcon = L.divIcon({
@@ -160,7 +181,7 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
       });
 
       // Refresh map size rendering inside modal dialog animation
-      [100, 300, 600].forEach((delay) => {
+      [100, 300, 600, 1000].forEach((delay) => {
         setTimeout(() => {
           if (map) map.invalidateSize();
         }, delay);
@@ -187,17 +208,17 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
   }, [latitude, longitude, radiusMeters, onLocationSelect]);
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-border shadow-inner bg-slate-900 h-64 w-full z-0">
-      <div ref={mapRef} className="w-full h-full min-h-[256px] z-0" />
+    <div className="relative rounded-xl overflow-hidden border border-border shadow-inner bg-slate-100 dark:bg-slate-900 h-72 w-full z-0">
+      <div ref={mapRef} className="w-full h-full min-h-[288px] z-0" />
       <div className="absolute top-2 right-2 z-[1000] bg-background/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-border shadow-sm text-xs flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-ping"></span>
         <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-          Leaflet Geo Circle ({radiusMeters}m radius)
+          Leaflet Map ({radiusMeters}m Boundary)
         </span>
       </div>
       <div className="absolute bottom-2 left-2 z-[1000] bg-background/95 backdrop-blur-md px-2.5 py-1 rounded-md border border-border text-[11px] text-muted-foreground shadow-sm flex items-center gap-1.5">
         <LocateFixed className="h-3 w-3 text-emerald-600" />
-        <span>Drag pin marker or click anywhere on map to set location</span>
+        <span>Drag pin or click map to set coordinates</span>
       </div>
     </div>
   );
@@ -207,6 +228,13 @@ export function FaceHubGeoFenceModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+
+  // Address search & autocomplete states
+  const [addressInput, setAddressInput] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const [searchingAddress, setSearchingAddress] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Synchronously initialize state from local storage so button shows correct status on page refresh
   const [settings, setSettings] = useState<GeoFenceSettings>(() => {
@@ -229,6 +257,13 @@ export function FaceHubGeoFenceModal() {
 
   const presetRadius = [50, 100, 200, 500, 1000];
 
+  // Keep addressInput in sync with settings.address when modal opens or settings change
+  useEffect(() => {
+    if (settings.address && !addressInput) {
+      setAddressInput(settings.address);
+    }
+  }, [settings.address]);
+
   // Fetch freshest settings from Supabase database on mount & when dialog opens
   useEffect(() => {
     loadSettings();
@@ -240,11 +275,25 @@ export function FaceHubGeoFenceModal() {
     }
   }, [open]);
 
+  // Handle clicking outside of address search dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const loadSettings = async () => {
     setLoading(true);
     try {
       const data = await getGeoFenceSettings();
       setSettings(data);
+      if (data.address) {
+        setAddressInput(data.address);
+      }
     } catch (err) {
       console.error("Failed to load geofence settings", err);
     } finally {
@@ -292,11 +341,13 @@ export function FaceHubGeoFenceModal() {
           console.warn("Address reverse geocode failed", e);
         }
 
+        const finalAddress = addressStr || `${lat}, ${lng}`;
+        setAddressInput(finalAddress);
         setSettings((prev) => ({
           ...prev,
           latitude: lat,
           longitude: lng,
-          address: addressStr || prev.address || `${lat}, ${lng}`,
+          address: finalAddress,
         }));
 
         setGettingLocation(false);
@@ -318,13 +369,73 @@ export function FaceHubGeoFenceModal() {
     );
   };
 
-  const handleLocationSelectedFromMap = (lat: number, lng: number, addressStr?: string) => {
+  // Live address search / autocomplete fetching
+  const triggerAddressSearch = async (query: string) => {
+    if (!query || query.trim().length < 3) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setSearchingAddress(true);
+    setShowSearchResults(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      );
+      const data = await res.json();
+      setSearchResults(data || []);
+    } catch (err) {
+      console.warn("Address search API error", err);
+      setSearchResults([]);
+    } finally {
+      setSearchingAddress(false);
+    }
+  };
+
+  // Debounced input change handler
+  const handleAddressInputChange = (val: string) => {
+    setAddressInput(val);
+    setSettings((prev) => ({ ...prev, address: val }));
+
+    if (val.trim().length >= 3) {
+      triggerAddressSearch(val);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+
+  // Handle selecting an address suggestion from dropdown
+  const handleSelectSearchResult = (result: { display_name: string; lat: string; lon: string }) => {
+    const lat = parseFloat(parseFloat(result.lat).toFixed(6));
+    const lng = parseFloat(parseFloat(result.lon).toFixed(6));
+
     playGeoBeep.selectMapLocation();
+    setAddressInput(result.display_name);
     setSettings((prev) => ({
       ...prev,
       latitude: lat,
       longitude: lng,
-      address: addressStr || prev.address || `${lat}, ${lng}`,
+      address: result.display_name,
+    }));
+
+    setShowSearchResults(false);
+    toast({
+      title: "Location Selected",
+      description: `Map centered to: ${result.display_name.substring(0, 45)}...`,
+    });
+  };
+
+  const handleLocationSelectedFromMap = (lat: number, lng: number, addressStr?: string) => {
+    playGeoBeep.selectMapLocation();
+    const finalAddr = addressStr || `${lat}, ${lng}`;
+    setAddressInput(finalAddr);
+    setSettings((prev) => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+      address: finalAddr,
     }));
   };
 
@@ -499,12 +610,12 @@ export function FaceHubGeoFenceModal() {
               </div>
             </div>
 
-            {/* Section 2: Interactive Leaflet Map Setup */}
-            <div className="space-y-3 p-4 rounded-xl border border-border/60 bg-card">
+            {/* Section 2: Interactive Leaflet Map & Address Autocomplete */}
+            <div className="space-y-4 p-4 rounded-xl border border-border/60 bg-card">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <Globe className="h-4 w-4 text-emerald-600" />
-                  Interactive Leaflet Map & Boundary
+                  Target Geo-Fence Location & Map
                 </Label>
 
                 <Button
@@ -515,9 +626,83 @@ export function FaceHubGeoFenceModal() {
                   disabled={gettingLocation}
                   className="h-8 text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-950/60"
                 >
-                  <Navigation className={`h-3.5 w-3.5 `} />
+                  <Navigation className={`h-3.5 w-3.5 ${gettingLocation ? "animate-spin" : ""}`} />
                   {gettingLocation ? "Detecting GPS..." : "Set to My Current Location"}
                 </Button>
+              </div>
+
+              {/* Address Search / Autocomplete Input (Google Maps Style) */}
+              <div className="space-y-1.5 relative" ref={searchContainerRef}>
+                <Label htmlFor="address-name" className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span>Search Location Address (Google Maps Style Autocomplete):</span>
+                  {searchingAddress && (
+                    <span className="text-[11px] text-emerald-600 flex items-center gap-1 animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Searching suggestions...
+                    </span>
+                  )}
+                </Label>
+
+                <div className="relative flex items-center">
+                  <Search className="h-4 w-4 absolute left-3 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="address-name"
+                    type="text"
+                    value={addressInput}
+                    onChange={(e) => handleAddressInputChange(e.target.value)}
+                    onFocus={() => {
+                      if (searchResults.length > 0) setShowSearchResults(true);
+                    }}
+                    placeholder="Type address or place name (e.g. Connaught Place, Delhi or HQ Office)"
+                    className="pl-9 pr-20 text-sm font-medium focus-visible:ring-emerald-500"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => triggerAddressSearch(addressInput)}
+                    className="absolute right-1 h-7 text-xs px-2.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                  >
+                    Search
+                  </Button>
+                </div>
+
+                {/* Autocomplete Suggestions Dropdown Menu */}
+                {showSearchResults && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-[2000] bg-background border border-border rounded-xl shadow-xl max-h-60 overflow-y-auto divide-y divide-border/50 backdrop-blur-md">
+                    {searchingAddress ? (
+                      <div className="p-3 text-xs text-muted-foreground flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                        <span>Searching location options...</span>
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground text-center">
+                        No matching locations found. Try typing a broader address or landmark.
+                      </div>
+                    ) : (
+                      searchResults.map((item, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSelectSearchResult(item)}
+                          className="w-full text-left p-3 text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors flex items-start gap-2.5 group"
+                        >
+                          <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                          <div className="space-y-0.5 min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-slate-100 truncate">
+                              {item.display_name.split(",")[0]}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground line-clamp-2">
+                              {item.display_name}
+                            </p>
+                            <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                              Lat: {parseFloat(item.lat).toFixed(6)}, Lng: {parseFloat(item.lon).toFixed(6)}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Coordinates input */}
@@ -558,27 +743,10 @@ export function FaceHubGeoFenceModal() {
                 </div>
               </div>
 
-              {/* Location Address input */}
-              <div className="space-y-1">
-                <Label htmlFor="address-name" className="text-xs text-muted-foreground">
-                  Location Name / Address
-                </Label>
-                <Input
-                  id="address-name"
-                  type="text"
-                  value={settings.address || ""}
-                  onChange={(e) =>
-                    setSettings((prev) => ({ ...prev, address: e.target.value }))
-                  }
-                  placeholder="e.g. Main Campus / HQ Office Building"
-                  className="text-sm"
-                />
-              </div>
-
-              {/* Leaflet Map Interactive Container */}
+              {/* Leaflet Map Container */}
               <div className="space-y-2 mt-2">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Leaflet OpenStreetMap Boundary Preview:</span>
+                  <span>Leaflet Interactive Boundary Preview:</span>
                   <a
                     href={`https://www.google.com/maps?q=${settings.latitude},${settings.longitude}`}
                     target="_blank"
