@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { validateUserGeoFence } from "@/lib/geoFenceManager";
 
 interface DeviceInfo {
   browser_name: string;
@@ -126,6 +127,12 @@ export const createFaceSession = async (): Promise<string> => {
 
   if (!locationInfo || typeof locationInfo.latitude !== "number" || typeof locationInfo.longitude !== "number") {
     throw new Error("Exact GPS location is required to access Face Attendance Hub.");
+  }
+
+  // Strict Geo-Fence Boundary Validation
+  const geoCheck = await validateUserGeoFence(locationInfo.latitude, locationInfo.longitude);
+  if (!geoCheck.allowed) {
+    throw new Error(geoCheck.message);
   }
 
   const ipAddress = await getIPAddress();

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { getAllSessions, adminLogoutSession } from "@/lib/faceSessionManager";
 import { FaceHubOtpCompact } from "@/components/face-hub/FaceHubOtpCompact";
+import { FaceHubGeoFenceModal } from "@/components/face-hub/FaceHubGeoFenceModal";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   AlertDialog,
@@ -139,6 +140,7 @@ export default function FaceAttendanceSessions() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <FaceHubOtpCompact />
+            <FaceHubGeoFenceModal />
             <Badge variant="outline" className="text-base px-4 py-2">
               Active: {activeSessions.length}
             </Badge>
