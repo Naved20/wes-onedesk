@@ -653,7 +653,7 @@ export function FaceHubGeoFenceModal() {
                   disabled={gettingLocation}
                   className="h-8 text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-950/60"
                 >
-                  <Navigation className={`h-3.5 w-3.5 ${gettingLocation ? "animate-spin" : ""}`} />
+                  <Navigation className={`h-3.5 w-3.5 `} />
                   {gettingLocation ? "Detecting GPS..." : "Set to My Current Location"}
                 </Button>
               </div>
