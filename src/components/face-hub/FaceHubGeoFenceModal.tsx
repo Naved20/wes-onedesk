@@ -48,7 +48,7 @@ export function FaceHubGeoFenceModal() {
     address: "",
   });
 
-  const [presetRadius] = [50, 100, 200, 500, 1000];
+  const presetRadius = [50, 100, 200, 500, 1000];
 
   useEffect(() => {
     if (open) {
