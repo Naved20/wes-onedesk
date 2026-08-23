@@ -61,9 +61,11 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
         zoomControl: true,
       });
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      // OpenStreetMap Tile Layer (Fast & Reliable CartoDB / OSM tiles)
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        subdomains: "abcd",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       }).addTo(map);
 
       // Sleek emerald custom SVG marker icon
@@ -104,13 +106,13 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
         draggable: true,
       }).addTo(map);
 
-      // Geofence visual boundary circle
+      // Geofence visual boundary circle (weight: 2px, subtle 0.15 opacity)
       const circle = L.circle([latitude, longitude], {
         radius: radiusMeters,
         color: "#10b981",
         fillColor: "#10b981",
-        fillOpacity: 0.22,
-        weight: 25,
+        fillOpacity: 0.15,
+        weight: 2,
         dashArray: "6, 6",
       }).addTo(map);
 
@@ -157,10 +159,12 @@ function LeafletGeoMap({ latitude, longitude, radiusMeters, onLocationSelect }: 
         onLocationSelect(lat, lng, addressStr);
       });
 
-      // Refresh map size rendering inside modal dialog
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 300);
+      // Refresh map size rendering inside modal dialog animation
+      [100, 300, 600].forEach((delay) => {
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, delay);
+      });
     } else {
       // Update position on existing Leaflet map instance
       const map = leafletInstanceRef.current;
