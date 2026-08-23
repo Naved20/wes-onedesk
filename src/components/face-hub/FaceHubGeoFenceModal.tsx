@@ -203,15 +203,32 @@ export function FaceHubGeoFenceModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [settings, setSettings] = useState<GeoFenceSettings>({
-    is_enabled: false,
-    latitude: 28.6139,
-    longitude: 77.2090,
-    radius_meters: 200,
-    address: "",
+
+  // Synchronously initialize state from local storage so button shows correct status on page refresh
+  const [settings, setSettings] = useState<GeoFenceSettings>(() => {
+    try {
+      const stored = localStorage.getItem("face_hub_geofence_config");
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn("Local geofence config parse error", e);
+    }
+    return {
+      is_enabled: false,
+      latitude: 28.6139,
+      longitude: 77.2090,
+      radius_meters: 200,
+      address: "",
+    };
   });
 
   const presetRadius = [50, 100, 200, 500, 1000];
+
+  // Fetch freshest settings from Supabase database on mount & when dialog opens
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -494,7 +511,7 @@ export function FaceHubGeoFenceModal() {
                   disabled={gettingLocation}
                   className="h-8 text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 dark:bg-emerald-950/60"
                 >
-                  <Navigation className={`h-3.5 w-3.5 ${gettingLocation ? "animate-spin" : ""}`} />
+                  <Navigation className={`h-3.5 w-3.5 `} />
                   {gettingLocation ? "Detecting GPS..." : "Set to My Current Location"}
                 </Button>
               </div>
