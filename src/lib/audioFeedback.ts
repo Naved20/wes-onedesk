@@ -16,7 +16,7 @@ const getAudioContext = () => {
 /**
  * Play a beep sound with specified frequency and duration
  */
-const playBeep = (frequency: number, duration: number, volume: number = 0.3) => {
+export const playBeep = (frequency: number, duration: number, volume: number = 0.3) => {
   try {
     const ctx = getAudioContext();
     const oscillator = ctx.createOscillator();
