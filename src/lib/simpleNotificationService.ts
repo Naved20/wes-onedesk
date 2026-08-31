@@ -78,44 +78,50 @@ export async function sendBrowserNotification(
  * Listen for real-time notifications and show browser notifications
  */
 export function setupRealtimeNotifications(userId: string) {
-  if (Notification.permission !== "granted") {
-    return;
+  if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
+    return null;
   }
 
-  // Subscribe to new notifications for this user
-  const subscription = supabase
-    .channel(`notifications:${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        const notification = payload.new as any;
-        
-        // Show browser notification
-        sendBrowserNotification(notification.title, {
-          body: notification.message,
-          tag: notification.id,
-          data: {
-            id: notification.id,
-            type: notification.type,
-            relatedId: notification.related_id,
-          },
-        });
+  stopRealtimeNotifications(userId);
 
-        // Log to console
-        console.log("New notification received:", notification);
-      }
-    )
-    .subscribe((status) => {
+  const topicName = `notifications:${userId}`;
+  const channel = supabase.channel(topicName);
+
+  channel.on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "notifications",
+      filter: `user_id=eq.${userId}`,
+    },
+    (payload) => {
+      const notification = payload.new as any;
+      
+      // Show browser notification
+      sendBrowserNotification(notification.title, {
+        body: notification.message,
+        tag: notification.id,
+        data: {
+          id: notification.id,
+          type: notification.type,
+          relatedId: notification.related_id,
+        },
+      });
+
+      console.log("New notification received:", notification);
+    }
+  );
+
+  channel.subscribe((status, err) => {
+    if (err) {
+      console.error("Realtime notification subscription status error:", err);
+    } else {
       console.log("Realtime notification subscription status:", status);
-    });
+    }
+  });
 
-  return subscription;
+  return channel;
 }
 
 /**
@@ -123,7 +129,13 @@ export function setupRealtimeNotifications(userId: string) {
  */
 export async function stopRealtimeNotifications(userId: string) {
   try {
-    await supabase.removeChannel(supabase.channel(`notifications:${userId}`));
+    const topicName = `notifications:${userId}`;
+    const existing = supabase.getChannels().find(
+      (ch) => ch.topic === `realtime:${topicName}` || ch.topic === topicName
+    );
+    if (existing) {
+      await supabase.removeChannel(existing);
+    }
   } catch (error) {
     console.error("Error removing notification channel:", error);
   }

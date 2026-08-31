@@ -64,18 +64,35 @@ export function AttendanceStats({ userId, year, month, attendanceRecords = [], h
     fetchStats();
     fetchLeaves();
 
-    // Auto-refresh when attendance or leaves change for this user
-    const channel = supabase
-      .channel(`attendance-stats-${userId}-${year}-${month}`)
+    const channelName = `attendance-stats-${userId}-${year}-${month}`;
+    const existingChannels = supabase.getChannels();
+    existingChannels.forEach((ch) => {
+      if (ch.topic === `realtime:${channelName}` || ch.topic === channelName) {
+        try {
+          supabase.removeChannel(ch);
+        } catch {}
+      }
+    });
+
+    const channel = supabase.channel(channelName);
+    
+    channel
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance', filter: `user_id=eq.${userId}` }, () => fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves', filter: `user_id=eq.${userId}` }, () => {
         fetchStats();
         fetchLeaves();
-      })
-      .subscribe();
+      });
+
+    channel.subscribe((status, err) => {
+      if (err) {
+        console.error("[AttendanceStats] Realtime subscription error:", err);
+      }
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [userId, year, month]);
 

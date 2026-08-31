@@ -74,49 +74,66 @@ export function NotificationBell() {
   useEffect(() => {
     if (!user?.id) return;
     
-    // Use a unique channel name to avoid conflicts
-    const channelName = `notif-${user.id}-${Date.now()}`;
+    const channelName = `notif-${user.id}`;
     
-    // Create channel and configure it BEFORE subscribing
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const n = payload.new as Notification;
-          if (seenIds.current.has(n.id)) return;
-          seenIds.current.add(n.id);
-          setItems((prev) => [n, ...prev].slice(0, 50));
-          
-          // Play notification sound
-          playNotificationSound(n.title);
-          
-          // Browser push notification (foreground)
-          if (
-            typeof window !== "undefined" &&
-            "Notification" in window &&
-            Notification.permission === "granted"
-          ) {
-            try {
-              new Notification(n.title, {
-                body: n.message,
-                icon: "/favicon.ico",
-                tag: n.id,
-              });
-            } catch {}
-          }
+    // Safely remove any existing channel with the same topic to prevent subscription state conflicts
+    const existingChannels = supabase.getChannels();
+    existingChannels.forEach((ch) => {
+      if (ch.topic === `realtime:${channelName}` || ch.topic === channelName) {
+        try {
+          supabase.removeChannel(ch);
+        } catch (e) {
+          console.warn("[NotificationBell] Failed to remove previous channel:", e);
         }
-      )
-      .subscribe(); // Subscribe AFTER all .on() listeners are added
-      
+      }
+    });
+
+    const channel = supabase.channel(channelName);
+
+    channel.on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "notifications",
+        filter: `user_id=eq.${user.id}`,
+      },
+      (payload) => {
+        const n = payload.new as Notification;
+        if (seenIds.current.has(n.id)) return;
+        seenIds.current.add(n.id);
+        setItems((prev) => [n, ...prev].slice(0, 50));
+        
+        // Play notification sound
+        playNotificationSound(n.title);
+        
+        // Browser push notification (foreground)
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            new Notification(n.title, {
+              body: n.message,
+              icon: "/favicon.ico",
+              tag: n.id,
+            });
+          } catch {}
+        }
+      }
+    );
+
+    channel.subscribe((status, err) => {
+      if (err) {
+        console.error("[NotificationBell] Realtime subscription status error:", err);
+      }
+    });
+
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [user?.id]);
 
