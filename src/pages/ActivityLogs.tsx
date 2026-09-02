@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -43,6 +45,10 @@ import {
   Calendar,
   Layers,
   Filter,
+  Users,
+  ChevronDown,
+  X,
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -62,14 +68,26 @@ export interface ActivityLogItem {
   user_agent: string | null;
 }
 
+export interface EmployeeOption {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+}
+
 export default function ActivityLogs() {
   const [logs, setLogs] = useState<ActivityLogItem[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedActorType, setSelectedActorType] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<ActivityLogItem | null>(null);
+
+  // Multi-select state for employees
+  const [selectedEmployeeUserIds, setSelectedEmployeeUserIds] = useState<string[]>([]);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 
   const fetchLogs = async () => {
     try {
@@ -78,7 +96,7 @@ export default function ActivityLogs() {
         .from('activity_logs' as any)
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(300);
 
       if (error) {
         console.error("Error fetching logs:", error);
@@ -94,9 +112,72 @@ export default function ActivityLogs() {
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("employee_profiles")
+        .select("id, user_id, first_name, last_name, email")
+        .order("first_name", { ascending: true });
+
+      if (!error && data) {
+        const mapped = data.map((emp) => ({
+          id: emp.id,
+          user_id: emp.user_id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email,
+          email: emp.email,
+        }));
+        setEmployees(mapped);
+      }
+    } catch (err) {
+      console.error("Error fetching employees:", err);
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
+    fetchEmployees();
   }, []);
+
+  // Filtered employees list for the multi-select dropdown search
+  const filteredEmployeeOptions = useMemo(() => {
+    if (!employeeSearchQuery.trim()) return employees;
+    const query = employeeSearchQuery.toLowerCase();
+    return employees.filter(
+      (emp) =>
+        emp.name.toLowerCase().includes(query) ||
+        emp.email.toLowerCase().includes(query)
+    );
+  }, [employees, employeeSearchQuery]);
+
+  // Selected employee emails array for quick email matching
+  const selectedEmployeeEmails = useMemo(() => {
+    const emailSet = new Set<string>();
+    employees.forEach((emp) => {
+      if (selectedEmployeeUserIds.includes(emp.user_id)) {
+        emailSet.add(emp.email.toLowerCase());
+      }
+    });
+    return Array.from(emailSet);
+  }, [employees, selectedEmployeeUserIds]);
+
+  // Toggle individual employee selection
+  const toggleEmployeeSelection = (userId: string) => {
+    setSelectedEmployeeUserIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  // Select all employees
+  const handleSelectAllEmployees = () => {
+    setSelectedEmployeeUserIds(employees.map((emp) => emp.user_id));
+  };
+
+  // Clear all employee selections
+  const handleClearEmployeeSelections = () => {
+    setSelectedEmployeeUserIds([]);
+  };
 
   // Unique modules list for filter dropdown
   const modulesList = useMemo(() => {
@@ -107,22 +188,37 @@ export default function ActivityLogs() {
     return Array.from(set).sort();
   }, [logs]);
 
-  // Filtered logs
+  // Filtered logs calculation
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       // Filter by Actor Type
       if (selectedActorType !== "all" && log.actor_type !== selectedActorType) {
         return false;
       }
+
+      // Filter by Selected Employees (when specific employees selected)
+      if (
+        (selectedActorType === "user" || selectedActorType === "admin" || selectedActorType === "all") &&
+        selectedEmployeeUserIds.length > 0
+      ) {
+        const matchesId = log.actor_id ? selectedEmployeeUserIds.includes(log.actor_id) : false;
+        const matchesEmail = log.actor_email ? selectedEmployeeEmails.includes(log.actor_email.toLowerCase()) : false;
+        if (!matchesId && !matchesEmail) {
+          return false;
+        }
+      }
+
       // Filter by Module
       if (selectedModule !== "all" && log.module !== selectedModule) {
         return false;
       }
+
       // Filter by Status
       if (selectedStatus !== "all" && log.status !== selectedStatus) {
         return false;
       }
-      // Search term
+
+      // Search term filter
       if (searchTerm.trim() !== "") {
         const query = searchTerm.toLowerCase();
         const matchesAction = log.action.toLowerCase().includes(query);
@@ -132,12 +228,13 @@ export default function ActivityLogs() {
         const matchesName = (log.actor_name || "").toLowerCase().includes(query);
         return matchesAction || matchesModule || matchesDesc || matchesEmail || matchesName;
       }
+
       return true;
     });
-  }, [logs, selectedActorType, selectedModule, selectedStatus, searchTerm]);
+  }, [logs, selectedActorType, selectedEmployeeUserIds, selectedEmployeeEmails, selectedModule, selectedStatus, searchTerm]);
 
   // Actor type badge renderer
-  const renderActorBadge = (type: ActivityLogItem['actor_type'], email?: string | null) => {
+  const renderActorBadge = (type: ActivityLogItem['actor_type']) => {
     switch (type) {
       case 'admin':
         return (
@@ -228,7 +325,7 @@ export default function ActivityLogs() {
               <Filter className="h-4 w-4 text-primary" /> Filter Activity Logs
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search input */}
               <div className="relative">
@@ -242,13 +339,19 @@ export default function ActivityLogs() {
               </div>
 
               {/* Actor Type Filter */}
-              <Select value={selectedActorType} onValueChange={setSelectedActorType}>
+              <Select value={selectedActorType} onValueChange={(val) => {
+                setSelectedActorType(val);
+                // Clear employee selection if switching away from user/admin/all
+                if (val !== 'user' && val !== 'admin' && val !== 'all') {
+                  setSelectedEmployeeUserIds([]);
+                }
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Actor Type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Actors (Users, Bots, Scripts)</SelectItem>
-                  <SelectItem value="user">Users</SelectItem>
+                  <SelectItem value="user">Users (Employees)</SelectItem>
                   <SelectItem value="admin">Admins</SelectItem>
                   <SelectItem value="bot">Bots</SelectItem>
                   <SelectItem value="script">Scripts / Cron Jobs</SelectItem>
@@ -284,6 +387,138 @@ export default function ActivityLogs() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Dynamic Multi-Select Employee Filter (Shown when Actor Type is 'user', 'admin', or 'all') */}
+            {(selectedActorType === 'user' || selectedActorType === 'admin' || selectedActorType === 'all') && (
+              <div className="pt-2 border-t flex flex-wrap items-center gap-3">
+                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                  <Users className="h-3.5 w-3.5 text-primary" /> Filter Employees:
+                </span>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 justify-between min-w-[240px] text-xs">
+                      <div className="flex items-center gap-2 truncate">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                        {selectedEmployeeUserIds.length === 0 ? (
+                          <span className="font-normal text-muted-foreground">All Employees ({employees.length})</span>
+                        ) : selectedEmployeeUserIds.length === 1 ? (
+                          <span className="font-medium text-foreground">
+                            {employees.find((e) => e.user_id === selectedEmployeeUserIds[0])?.name || "1 Employee Selected"}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-primary">
+                            {selectedEmployeeUserIds.length} Employees Selected
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-2" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[320px] p-3 shadow-lg" align="start">
+                    <div className="space-y-3">
+                      {/* Search employee input inside popover */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Search employee name or email..."
+                          value={employeeSearchQuery}
+                          onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                          className="h-8 pl-8 text-xs"
+                        />
+                      </div>
+
+                      {/* Quick Select All / Clear buttons */}
+                      <div className="flex items-center justify-between text-xs px-1">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllEmployees}
+                          className="text-primary hover:underline font-medium text-[11px]"
+                        >
+                          Select All ({employees.length})
+                        </button>
+                        {selectedEmployeeUserIds.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearEmployeeSelections}
+                            className="text-rose-500 hover:underline font-medium text-[11px] flex items-center gap-0.5"
+                          >
+                            <X className="h-3 w-3" /> Clear Selection
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Employee List with Checkboxes */}
+                      <div className="max-h-[220px] overflow-y-auto space-y-1 pr-1 border-t pt-2">
+                        {filteredEmployeeOptions.length === 0 ? (
+                          <p className="text-xs text-center py-4 text-muted-foreground">No employees found.</p>
+                        ) : (
+                          filteredEmployeeOptions.map((emp) => {
+                            const isChecked = selectedEmployeeUserIds.includes(emp.user_id);
+                            return (
+                              <label
+                                key={emp.id}
+                                className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors text-xs ${
+                                  isChecked ? "bg-primary/10 font-medium" : "hover:bg-muted/50"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                  <Checkbox
+                                    checked={isChecked}
+                                    onCheckedChange={() => toggleEmployeeSelection(emp.user_id)}
+                                  />
+                                  <div className="flex flex-col overflow-hidden">
+                                    <span className="truncate text-foreground font-medium">{emp.name}</span>
+                                    <span className="text-[10px] text-muted-foreground truncate">{emp.email}</span>
+                                  </div>
+                                </div>
+                                {isChecked && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-1" />}
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Selected Employee Badges */}
+                {selectedEmployeeUserIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {selectedEmployeeUserIds.slice(0, 3).map((userId) => {
+                      const emp = employees.find((e) => e.user_id === userId);
+                      if (!emp) return null;
+                      return (
+                        <Badge
+                          key={userId}
+                          variant="secondary"
+                          className="bg-primary/10 text-primary border-primary/20 text-[11px] gap-1 pr-1"
+                        >
+                          {emp.name}
+                          <X
+                            className="h-3 w-3 cursor-pointer hover:text-rose-600"
+                            onClick={() => toggleEmployeeSelection(userId)}
+                          />
+                        </Badge>
+                      );
+                    })}
+                    {selectedEmployeeUserIds.length > 3 && (
+                      <Badge variant="outline" className="text-[11px]">
+                        +{selectedEmployeeUserIds.length - 3} more
+                      </Badge>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearEmployeeSelections}
+                      className="h-6 px-2 text-[11px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
