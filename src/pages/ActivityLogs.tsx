@@ -49,6 +49,10 @@ import {
   ChevronDown,
   X,
   Check,
+  Code,
+  UserCheck,
+  Sparkles,
+  FileText,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -84,6 +88,7 @@ export default function ActivityLogs() {
   const [selectedModule, setSelectedModule] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<ActivityLogItem | null>(null);
+  const [detailViewMode, setDetailViewMode] = useState<'admin' | 'developer'>('admin');
 
   // Multi-select state for employees
   const [selectedEmployeeUserIds, setSelectedEmployeeUserIds] = useState<string[]>([]);
@@ -291,6 +296,110 @@ export default function ActivityLogs() {
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  // Human-friendly metadata renderer for Admin View
+  const renderAdminMetadataView = (metadata: Record<string, any> | null) => {
+    if (!metadata || Object.keys(metadata).length === 0) {
+      return (
+        <div className="p-4 text-center text-xs text-muted-foreground border rounded-lg bg-muted/20">
+          No extra details attached.
+        </div>
+      );
+    }
+
+    const newData = metadata.new_data || (!metadata.old_data && !metadata.new_data ? metadata : null);
+    const oldData = metadata.old_data || null;
+
+    if (oldData && newData) {
+      // Comparison / Diff Table for DB Update
+      const keys = Array.from(new Set([...Object.keys(newData), ...Object.keys(oldData)]));
+      const displayKeys = keys.filter(
+        (k) => !['updated_at', 'created_at', 'id', 'user_id', 'actor_id'].includes(k)
+      );
+
+      return (
+        <div className="border rounded-lg overflow-hidden text-xs bg-card shadow-sm">
+          <div className="bg-muted/80 p-2.5 font-semibold text-foreground border-b grid grid-cols-3 gap-2">
+            <span>Field Name</span>
+            <span className="text-rose-600 dark:text-rose-400">Previous Value</span>
+            <span className="text-emerald-600 dark:text-emerald-400">Updated Value</span>
+          </div>
+          <div className="divide-y max-h-[280px] overflow-y-auto">
+            {displayKeys.map((key) => {
+              const oldVal = oldData[key];
+              const newVal = newData[key];
+              const isChanged = JSON.stringify(oldVal) !== JSON.stringify(newVal);
+
+              return (
+                <div
+                  key={key}
+                  className={`p-2.5 grid grid-cols-3 gap-2 items-center transition-colors ${
+                    isChanged ? 'bg-amber-500/10 dark:bg-amber-950/20' : 'hover:bg-muted/30'
+                  }`}
+                >
+                  <span className="font-semibold text-foreground capitalize">
+                    {key.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-muted-foreground font-mono text-[11px] truncate pr-2">
+                    {oldVal === null || oldVal === undefined ? '—' : String(oldVal)}
+                  </span>
+                  <span
+                    className={`font-mono text-[11px] truncate ${
+                      isChanged
+                        ? 'font-bold text-emerald-600 dark:text-emerald-400'
+                        : 'text-foreground'
+                    }`}
+                  >
+                    {newVal === null || newVal === undefined ? '—' : String(newVal)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (newData) {
+      // Grid of Key-Value cards
+      const keys = Object.keys(newData).filter(
+        (k) => !['updated_at', 'created_at', 'id', 'user_id', 'actor_id'].includes(k)
+      );
+      const displayKeys = keys.length > 0 ? keys : Object.keys(newData);
+
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border rounded-lg p-3 bg-muted/20">
+          {displayKeys.map((key) => {
+            const val = newData[key];
+            return (
+              <div key={key} className="p-2.5 bg-card border rounded-md shadow-2xs flex flex-col gap-0.5">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                  {key.replace(/_/g, ' ')}
+                </span>
+                <span className="font-medium text-foreground text-xs break-all">
+                  {val === null || val === undefined
+                    ? '—'
+                    : typeof val === 'boolean'
+                    ? val
+                      ? 'Yes'
+                      : 'No'
+                    : typeof val === 'object'
+                    ? JSON.stringify(val)
+                    : String(val)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <pre className="p-3 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto max-h-[250px]">
+        {JSON.stringify(metadata, null, 2)}
+      </pre>
+    );
   };
 
   return (
@@ -623,12 +732,38 @@ export default function ActivityLogs() {
         <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-                <Activity className="h-5 w-5 text-primary" /> Log Entry Details
-              </DialogTitle>
-              <DialogDescription>
-                Full execution payload and environmental metadata.
-              </DialogDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-6">
+                <div>
+                  <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <Activity className="h-5 w-5 text-primary" /> Log Entry Details
+                  </DialogTitle>
+                  <DialogDescription className="text-xs">
+                    Full execution payload and environmental metadata.
+                  </DialogDescription>
+                </div>
+
+                {/* View Mode Toggle: Admin View (Default) vs Developer View */}
+                <div className="flex items-center bg-muted/80 p-1 rounded-lg self-start sm:self-auto border">
+                  <Button
+                    type="button"
+                    variant={detailViewMode === 'admin' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 text-[11px] px-2.5 gap-1.5 font-medium"
+                    onClick={() => setDetailViewMode('admin')}
+                  >
+                    <UserCheck className="h-3.5 w-3.5" /> Admin View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={detailViewMode === 'developer' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 text-[11px] px-2.5 gap-1.5 font-medium"
+                    onClick={() => setDetailViewMode('developer')}
+                  >
+                    <Code className="h-3.5 w-3.5" /> Developer View
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
             {selectedLog && (
               <div className="space-y-4 text-sm pt-2">
@@ -662,9 +797,39 @@ export default function ActivityLogs() {
                 {selectedLog.description && (
                   <div>
                     <span className="text-xs font-semibold text-muted-foreground block mb-1">Description</span>
-                    <p className="p-2 bg-card border rounded text-xs text-foreground">{selectedLog.description}</p>
+                    <p className="p-2.5 bg-card border rounded-md text-xs text-foreground font-medium">{selectedLog.description}</p>
                   </div>
                 )}
+
+                {/* View Container */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      {detailViewMode === 'admin' ? (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5 text-primary" /> Log Details & Field Changes (Admin View)
+                        </>
+                      ) : (
+                        <>
+                          <Code className="h-3.5 w-3.5 text-primary" /> Raw JSON Payload (Developer View)
+                        </>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground italic">
+                      {detailViewMode === 'admin' ? 'Normal readable view' : 'Raw metadata code view'}
+                    </span>
+                  </div>
+
+                  {detailViewMode === 'admin' ? (
+                    renderAdminMetadataView(selectedLog.metadata)
+                  ) : (
+                    <pre className="p-3 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto max-h-[300px]">
+                      {selectedLog.metadata
+                        ? JSON.stringify(selectedLog.metadata, null, 2)
+                        : "// No extra payload metadata attached"}
+                    </pre>
+                  )}
+                </div>
 
                 {selectedLog.user_agent && (
                   <div>
@@ -674,15 +839,6 @@ export default function ActivityLogs() {
                     </p>
                   </div>
                 )}
-
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground block mb-1">Payload / JSON Metadata</span>
-                  <pre className="p-3 bg-slate-950 text-slate-100 rounded-lg text-xs font-mono overflow-x-auto max-h-[300px]">
-                    {selectedLog.metadata
-                      ? JSON.stringify(selectedLog.metadata, null, 2)
-                      : "// No extra payload metadata attached"}
-                  </pre>
-                </div>
               </div>
             )}
           </DialogContent>
