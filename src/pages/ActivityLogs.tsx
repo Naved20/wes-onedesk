@@ -703,27 +703,27 @@ export default function ActivityLogs() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Top Controls Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search input */}
+            {/* Top Controls Grid (5 Columns) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* 1. Search input */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search actions, emails, IPs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 text-xs"
                 />
               </div>
 
-              {/* Actor Type Filter */}
+              {/* 2. Actor Type Filter */}
               <Select value={selectedActorType} onValueChange={(val) => {
                 setSelectedActorType(val);
                 if (val !== 'user') {
                   setSelectedEmployeeUserIds([]);
                 }
               }}>
-                <SelectTrigger>
+                <SelectTrigger className="text-xs">
                   <SelectValue placeholder="Actor Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -736,9 +736,9 @@ export default function ActivityLogs() {
                 </SelectContent>
               </Select>
 
-              {/* Module Filter */}
+              {/* 3. Module Filter */}
               <Select value={selectedModule} onValueChange={setSelectedModule}>
-                <SelectTrigger>
+                <SelectTrigger className="text-xs">
                   <SelectValue placeholder="All Modules" />
                 </SelectTrigger>
                 <SelectContent>
@@ -751,9 +751,9 @@ export default function ActivityLogs() {
                 </SelectContent>
               </Select>
 
-              {/* Status Filter */}
+              {/* 4. Status Filter */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger>
+                <SelectTrigger className="text-xs">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -763,111 +763,23 @@ export default function ActivityLogs() {
                   <SelectItem value="warning">Warning</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
 
-            {/* Date Range Material Style Modal & Presets */}
-            <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-semibold text-muted-foreground flex items-center gap-1">
-                  <CalendarDays className="h-3.5 w-3.5 text-primary" /> Date Filter:
-                </span>
-                
-                {/* Material Date Range Picker Trigger Modal matching screenshot */}
-                <MaterialDateRangePicker
-                  startDate={startDate}
-                  endDate={endDate}
-                  onRangeChange={(start, end) => {
-                    setStartDate(start);
-                    setEndDate(end);
-                    if (start || end) {
-                      setDatePreset("custom");
-                    } else {
-                      setDatePreset("all");
-                    }
-                  }}
-                  placeholder="Select Date Range"
-                  className="w-[240px]"
-                />
-
-                {/* Quick Presets */}
-                <div className="flex items-center bg-muted/40 p-1 rounded-full border gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDatePreset("all");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
-                      datePreset === "all"
-                        ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    All Time
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDatePreset("today");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
-                      datePreset === "today"
-                        ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDatePreset("7days");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
-                      datePreset === "7days"
-                        ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    Last 7 Days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDatePreset("30days");
-                      setStartDate("");
-                      setEndDate("");
-                    }}
-                    className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
-                      datePreset === "30days"
-                        ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    Last 30 Days
-                  </button>
-                </div>
-              </div>
-
-              {(startDate || endDate) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStartDate("");
-                    setEndDate("");
+              {/* 5. Date Range Material Modal Trigger */}
+              <MaterialDateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onRangeChange={(start, end) => {
+                  setStartDate(start);
+                  setEndDate(end);
+                  if (start || end) {
+                    setDatePreset("custom");
+                  } else {
                     setDatePreset("all");
-                  }}
-                  className="h-7 text-xs text-rose-500 hover:text-rose-600 gap-1 rounded-full"
-                >
-                  <X className="h-3.5 w-3.5" /> Clear Range
-                </Button>
-              )}
+                  }
+                }}
+                placeholder="Select Date Range"
+                className="w-full"
+              />
             </div>
 
             {/* Dynamic Multi-Select Employee Filter (STRICTLY shown ONLY when Actor Type is 'user') */}
