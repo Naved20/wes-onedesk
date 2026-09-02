@@ -22,6 +22,7 @@ import {
   UserCheck,
   HelpCircle,
   BookOpen,
+  Activity,
 } from "lucide-react";
 
 interface NavItem {
@@ -49,6 +50,7 @@ const navItems: NavItem[] = [
   { label: "Shift Management", href: "/shifts", icon: <Clock className="h-5 w-5" />, roles: ["admin"] },
   { label: "Shift Assignments", href: "/shift-assignments", icon: <Users className="h-5 w-5" />, roles: ["admin", "manager"] },
   { label: "Face ID Management", href: "/face-id-management", icon: <ScanFace className="h-5 w-5" />, roles: ["admin"] },
+  { label: "Activity Logs", href: "/activity-logs", icon: <Activity className="h-5 w-5" />, roles: ["admin"] },
   { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" />, roles: ["admin", "manager", "employee"] },
 ];
 
