@@ -196,11 +196,8 @@ export default function ActivityLogs() {
         return false;
       }
 
-      // Filter by Selected Employees (when specific employees selected)
-      if (
-        (selectedActorType === "user" || selectedActorType === "admin" || selectedActorType === "all") &&
-        selectedEmployeeUserIds.length > 0
-      ) {
+      // Filter by Selected Employees (STRICTLY when Actor Type is 'user' and specific employees selected)
+      if (selectedActorType === "user" && selectedEmployeeUserIds.length > 0) {
         const matchesId = log.actor_id ? selectedEmployeeUserIds.includes(log.actor_id) : false;
         const matchesEmail = log.actor_email ? selectedEmployeeEmails.includes(log.actor_email.toLowerCase()) : false;
         if (!matchesId && !matchesEmail) {
@@ -341,8 +338,8 @@ export default function ActivityLogs() {
               {/* Actor Type Filter */}
               <Select value={selectedActorType} onValueChange={(val) => {
                 setSelectedActorType(val);
-                // Clear employee selection if switching away from user/admin/all
-                if (val !== 'user' && val !== 'admin' && val !== 'all') {
+                // Clear employee selection if switching away from 'user'
+                if (val !== 'user') {
                   setSelectedEmployeeUserIds([]);
                 }
               }}>
@@ -388,8 +385,8 @@ export default function ActivityLogs() {
               </Select>
             </div>
 
-            {/* Dynamic Multi-Select Employee Filter (Shown when Actor Type is 'user', 'admin', or 'all') */}
-            {(selectedActorType === 'user' || selectedActorType === 'admin' || selectedActorType === 'all') && (
+            {/* Dynamic Multi-Select Employee Filter (STRICTLY shown ONLY when Actor Type is 'user') */}
+            {selectedActorType === 'user' && (
               <div className="pt-2 border-t flex flex-wrap items-center gap-3">
                 <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                   <Users className="h-3.5 w-3.5 text-primary" /> Filter Employees:
