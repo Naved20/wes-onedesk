@@ -53,6 +53,7 @@ import {
   UserCheck,
   Sparkles,
   FileText,
+  Globe,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -69,6 +70,7 @@ export interface ActivityLogItem {
   description: string | null;
   metadata: Record<string, any> | null;
   status: 'success' | 'failed' | 'warning';
+  ip_address: string | null;
   user_agent: string | null;
 }
 
@@ -690,6 +692,11 @@ export default function ActivityLogs() {
                                 {log.actor_email}
                               </span>
                             )}
+                            {log.ip_address && (
+                              <span className="text-[10px] font-mono text-primary flex items-center gap-0.5 mt-0.5">
+                                <Globe className="h-2.5 w-2.5" /> {log.ip_address}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -767,14 +774,22 @@ export default function ActivityLogs() {
             </DialogHeader>
             {selectedLog && (
               <div className="space-y-4 text-sm pt-2">
-                <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 rounded-lg text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-muted/40 rounded-lg text-xs">
                   <div>
                     <span className="text-muted-foreground block">Log ID:</span>
-                    <span className="font-mono">{selectedLog.id}</span>
+                    <span className="font-mono text-[11px] truncate block">{selectedLog.id}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block">Timestamp:</span>
-                    <span className="font-mono">{format(new Date(selectedLog.created_at), "yyyy-MM-dd HH:mm:ss (xxx)")}</span>
+                    <span className="font-mono text-[11px]">{format(new Date(selectedLog.created_at), "yyyy-MM-dd HH:mm:ss")}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Globe className="h-3.5 w-3.5 text-primary" /> IP Address:
+                    </span>
+                    <span className="font-mono font-bold text-primary text-xs">
+                      {selectedLog.ip_address || (selectedLog.metadata?.ip ? String(selectedLog.metadata.ip) : "Network IP")}
+                    </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block">Actor Type:</span>
@@ -782,15 +797,11 @@ export default function ActivityLogs() {
                   </div>
                   <div>
                     <span className="text-muted-foreground block">Actor Email:</span>
-                    <span className="font-medium">{selectedLog.actor_email || "N/A"}</span>
+                    <span className="font-medium truncate block">{selectedLog.actor_email || "N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block">Module:</span>
-                    <span className="font-mono">{selectedLog.module}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block">Action:</span>
-                    <span className="font-mono font-bold text-primary">{selectedLog.action}</span>
+                    <span className="text-muted-foreground block">Module / Action:</span>
+                    <span className="font-mono font-bold text-foreground">{selectedLog.module} / {selectedLog.action}</span>
                   </div>
                 </div>
 

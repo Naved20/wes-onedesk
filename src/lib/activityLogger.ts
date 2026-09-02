@@ -15,6 +15,29 @@ export interface LogActivityParams {
   status?: LogStatus;
 }
 
+let cachedIpAddress: string | null = null;
+
+async function getClientIp(): Promise<string | null> {
+  if (cachedIpAddress) return cachedIpAddress;
+  if (typeof window === 'undefined') return null;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ip) {
+        cachedIpAddress = data.ip;
+        return cachedIpAddress;
+      }
+    }
+  } catch (e) {
+    // Fail silently without blocking logging
+  }
+  return null;
+}
+
 /**
  * Safely log an action performed by a user, admin, bot, script, or system.
  * Will NEVER throw errors or block primary application logic.
@@ -37,6 +60,9 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
     let actorEmail = overrideActorEmail || null;
     let actorName = overrideActorName || null;
     let actorType = overrideActorType || 'user';
+
+    // Fetch IP address in background with timeout
+    const ipAddress = await getClientIp();
 
     // Auto-detect user session if not explicitly provided as bot/script
     if (!overrideActorType || overrideActorType === 'user' || overrideActorType === 'admin') {
@@ -80,6 +106,7 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
       description: description || `${action} in ${module}`,
       metadata,
       status,
+      ip_address: ipAddress,
       user_agent: typeof window !== 'undefined' ? window.navigator.userAgent : 'Server/Script',
     });
 
