@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { MaterialDateRangePicker } from "@/components/ui/date-range-picker";
 import {
   ResponsiveContainer,
   BarChart,
@@ -764,18 +765,39 @@ export default function ActivityLogs() {
               </Select>
             </div>
 
-            {/* Date Range Material Pill Style Filters */}
+            {/* Date Range Material Style Modal & Presets */}
             <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-semibold text-muted-foreground flex items-center gap-1">
                   <CalendarDays className="h-3.5 w-3.5 text-primary" /> Date Filter:
                 </span>
                 
-                {/* Pill Presets */}
+                {/* Material Date Range Picker Trigger Modal matching screenshot */}
+                <MaterialDateRangePicker
+                  startDate={startDate}
+                  endDate={endDate}
+                  onRangeChange={(start, end) => {
+                    setStartDate(start);
+                    setEndDate(end);
+                    if (start || end) {
+                      setDatePreset("custom");
+                    } else {
+                      setDatePreset("all");
+                    }
+                  }}
+                  placeholder="Select Date Range"
+                  className="w-[240px]"
+                />
+
+                {/* Quick Presets */}
                 <div className="flex items-center bg-muted/40 p-1 rounded-full border gap-1">
                   <button
                     type="button"
-                    onClick={() => setDatePreset("all")}
+                    onClick={() => {
+                      setDatePreset("all");
+                      setStartDate("");
+                      setEndDate("");
+                    }}
                     className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
                       datePreset === "all"
                         ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
@@ -786,7 +808,11 @@ export default function ActivityLogs() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDatePreset("today")}
+                    onClick={() => {
+                      setDatePreset("today");
+                      setStartDate("");
+                      setEndDate("");
+                    }}
                     className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
                       datePreset === "today"
                         ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
@@ -797,7 +823,11 @@ export default function ActivityLogs() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDatePreset("7days")}
+                    onClick={() => {
+                      setDatePreset("7days");
+                      setStartDate("");
+                      setEndDate("");
+                    }}
                     className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
                       datePreset === "7days"
                         ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
@@ -808,7 +838,11 @@ export default function ActivityLogs() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDatePreset("30days")}
+                    onClick={() => {
+                      setDatePreset("30days");
+                      setStartDate("");
+                      setEndDate("");
+                    }}
                     className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
                       datePreset === "30days"
                         ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
@@ -817,73 +851,22 @@ export default function ActivityLogs() {
                   >
                     Last 30 Days
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDatePreset("custom")}
-                    className={`h-7 text-xs px-3 rounded-full font-medium transition-all ${
-                      datePreset === "custom"
-                        ? "bg-primary text-primary-foreground shadow-2xs font-semibold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    Custom
-                  </button>
                 </div>
               </div>
 
-              {/* Custom Date Inputs in Material Pill Style: [ dd / mm / yyyy 📅 ] to [ dd / mm / yyyy 📅 ] */}
-              {datePreset === "custom" ? (
-                <div className="flex items-center gap-2 animate-in fade-in">
-                  <div className="relative flex items-center">
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="h-8 rounded-full border border-input bg-card px-4 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs cursor-pointer"
-                    />
-                  </div>
-                  <span className="text-xs font-semibold text-muted-foreground px-1">to</span>
-                  <div className="relative flex items-center">
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="h-8 rounded-full border border-input bg-card px-4 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs cursor-pointer"
-                    />
-                  </div>
-                  {(startDate || endDate) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStartDate("");
-                        setEndDate("");
-                      }}
-                      className="h-7 w-7 rounded-full bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 flex items-center justify-center transition-colors"
-                      title="Clear Custom Range"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              ) : (
-                /* Collapsed Pill Button: [ 📅 Select Date Range  > ] */
-                <button
-                  type="button"
-                  onClick={() => setDatePreset("custom")}
-                  className="h-8 px-4 rounded-full border border-input bg-muted/40 hover:bg-muted text-xs font-medium text-muted-foreground flex items-center gap-2 shadow-2xs transition-colors"
+              {(startDate || endDate) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                    setDatePreset("all");
+                  }}
+                  className="h-7 text-xs text-rose-500 hover:text-rose-600 gap-1 rounded-full"
                 >
-                  <Calendar className="h-3.5 w-3.5 text-primary" />
-                  <span>
-                    {datePreset === "today"
-                      ? "Today"
-                      : datePreset === "7days"
-                      ? "Last 7 Days"
-                      : datePreset === "30days"
-                      ? "Last 30 Days"
-                      : "Select Date Range"}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1 opacity-70" />
-                </button>
+                  <X className="h-3.5 w-3.5" /> Clear Range
+                </Button>
               )}
             </div>
 

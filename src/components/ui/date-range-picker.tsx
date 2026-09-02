@@ -180,31 +180,40 @@ export function MaterialDateRangePicker({
 
       {/* Material Range Picker Modal */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[720px] p-0 overflow-hidden rounded-2xl border border-border shadow-2xl">
-          {/* Material Header */}
-          <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-5 space-y-3">
+        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden rounded-3xl border-0 shadow-2xl bg-card">
+          {/* Material Header (Amber Gradient matching screenshot) */}
+          <div className="bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 text-white p-6 space-y-4 relative">
             <div className="flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider font-semibold opacity-90 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5" /> Select Date Range
+              <span className="text-xs uppercase tracking-wider font-bold opacity-90 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4" /> SELECT DATE RANGE
               </span>
-              {totalDays > 0 && (
-                <Badge variant="secondary" className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-md border-0 text-xs font-semibold px-2.5 py-0.5">
-                  {totalDays} {totalDays === 1 ? "Day" : "Days"} Selected
-                </Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {totalDays > 0 && (
+                  <Badge variant="secondary" className="bg-white/20 text-white backdrop-blur-md border-0 text-xs font-semibold px-3 py-1 rounded-full">
+                    {totalDays} {totalDays === 1 ? "Day" : "Days"} Selected
+                  </Badge>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="h-6 w-6 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Display active start and end dates */}
-            <div className="grid grid-cols-2 gap-4 pt-1">
-              <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/15">
-                <span className="text-[11px] uppercase tracking-wide text-white/70 block">Start Date</span>
-                <span className="text-base font-semibold block mt-0.5 text-white">
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/25 shadow-inner">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-white/80 block">START DATE</span>
+                <span className="text-base sm:text-lg font-bold block mt-1 text-white truncate">
                   {tempRange?.from ? format(tempRange.from, "EEE, MMM dd, yyyy") : "Pick Start Date"}
                 </span>
               </div>
-              <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/15">
-                <span className="text-[11px] uppercase tracking-wide text-white/70 block">End Date</span>
-                <span className="text-base font-semibold block mt-0.5 text-white">
+              <div className="bg-white/20 backdrop-blur-md rounded-2xl p-4 border border-white/25 shadow-inner">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-white/80 block">END DATE</span>
+                <span className="text-base sm:text-lg font-bold block mt-1 text-white truncate">
                   {tempRange?.to
                     ? format(tempRange.to, "EEE, MMM dd, yyyy")
                     : tempRange?.from
@@ -215,30 +224,25 @@ export function MaterialDateRangePicker({
             </div>
           </div>
 
-          {/* Modal Body with Presets + DayPicker Calendar */}
-          <div className="flex flex-col md:flex-row bg-background">
-       
-
-            {/* Calendar Component */}
-            <div className="p-4 flex-1 flex justify-center items-center overflow-x-auto">
-              <Calendar
-                mode="range"
-                selected={tempRange}
-                onSelect={setTempRange}
-                numberOfMonths={1}
-                className="rounded-md border-0"
-              />
-            </div>
+          {/* Modal Body with DayPicker Calendar */}
+          <div className="p-4 flex flex-col items-center justify-center bg-background">
+            <Calendar
+              mode="range"
+              selected={tempRange}
+              onSelect={setTempRange}
+              numberOfMonths={1}
+              className="rounded-xl border-0 p-2"
+            />
           </div>
 
           {/* Modal Footer */}
-          <div className="border-t p-3 bg-muted/20 flex items-center justify-between">
+          <div className="border-t p-4 bg-muted/20 flex items-center justify-between">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => setTempRange(undefined)}
-              className="text-xs text-muted-foreground hover:text-foreground gap-1.5"
+              className="text-xs text-muted-foreground hover:text-foreground gap-1.5 rounded-full"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Reset
             </Button>
@@ -249,7 +253,7 @@ export function MaterialDateRangePicker({
                 variant="outline"
                 size="sm"
                 onClick={() => setOpen(false)}
-                className="text-xs h-8"
+                className="text-xs h-9 px-4 rounded-full border-border"
               >
                 Cancel
               </Button>
@@ -258,9 +262,9 @@ export function MaterialDateRangePicker({
                 size="sm"
                 onClick={handleApply}
                 disabled={!tempRange?.from}
-                className="text-xs h-8 gap-1.5"
+                className="text-xs h-9 px-5 gap-1.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-semibold shadow-md disabled:opacity-50"
               >
-                <Check className="h-3.5 w-3.5" /> Apply Range
+                <Check className="h-4 w-4" /> Apply Range
               </Button>
             </div>
           </div>
