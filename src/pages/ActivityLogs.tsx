@@ -712,7 +712,7 @@ export default function ActivityLogs() {
                   placeholder="Search actions, emails, IPs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 text-xs"
+                  className="pl-9 text-xs rounded-full"
                 />
               </div>
 
@@ -723,7 +723,7 @@ export default function ActivityLogs() {
                   setSelectedEmployeeUserIds([]);
                 }
               }}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs rounded-full">
                   <SelectValue placeholder="Actor Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -738,7 +738,7 @@ export default function ActivityLogs() {
 
               {/* 3. Module Filter */}
               <Select value={selectedModule} onValueChange={setSelectedModule}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs rounded-full">
                   <SelectValue placeholder="All Modules" />
                 </SelectTrigger>
                 <SelectContent>
@@ -753,7 +753,7 @@ export default function ActivityLogs() {
 
               {/* 4. Status Filter */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs rounded-full">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
