@@ -54,9 +54,24 @@ import {
   Sparkles,
   FileText,
   Globe,
+  Download,
+  TrendingUp,
+  AlertOctagon,
+  LogIn,
+  BarChart3,
+  CalendarDays,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  Cell,
+} from "recharts";
 
 export interface ActivityLogItem {
   id: string;
@@ -81,6 +96,8 @@ export interface EmployeeOption {
   email: string;
 }
 
+const BAR_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#6366f1'];
+
 export default function ActivityLogs() {
   const [logs, setLogs] = useState<ActivityLogItem[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -91,6 +108,11 @@ export default function ActivityLogs() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedLog, setSelectedLog] = useState<ActivityLogItem | null>(null);
   const [detailViewMode, setDetailViewMode] = useState<'admin' | 'developer'>('admin');
+
+  // Date Range Filter States
+  const [datePreset, setDatePreset] = useState<"all" | "today" | "7days" | "30days" | "custom">("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   // Multi-select state for employees
   const [selectedEmployeeUserIds, setSelectedEmployeeUserIds] = useState<string[]>([]);
@@ -103,7 +125,7 @@ export default function ActivityLogs() {
         .from('activity_logs' as any)
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(300);
+        .limit(400);
 
       if (error) {
         console.error("Error fetching logs:", error);
@@ -145,7 +167,7 @@ export default function ActivityLogs() {
     fetchEmployees();
   }, []);
 
-  // Filtered employees list for the multi-select dropdown search
+  // Filtered employees list for multi-select dropdown search
   const filteredEmployeeOptions = useMemo(() => {
     if (!employeeSearchQuery.trim()) return employees;
     const query = employeeSearchQuery.toLowerCase();
@@ -166,6 +188,106 @@ export default function ActivityLogs() {
     });
     return Array.from(emailSet);
   }, [employees, selectedEmployeeUserIds]);
+
+  // Analytics Stats & Chart Data Calculation
+  const analyticsStats = useMemo(() => {
+    const total = logs.length;
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+
+    let loginsToday = 0;
+    let failedAttempts = 0;
+    const uniqueActors = new Set<string>();
+    const moduleCounts: Record<string, number> = {};
+
+    logs.forEach((log) => {
+      const logDateStr = format(new Date(log.created_at), "yyyy-MM-dd");
+
+      // Logins today
+      if (logDateStr === todayStr && log.module === "auth" && log.action.includes("LOGIN")) {
+        loginsToday++;
+      }
+
+      // Security alerts / failures
+      if (log.status === "failed" || log.status === "warning" || log.action.includes("FAILED")) {
+        failedAttempts++;
+      }
+
+      // Unique actors
+      if (log.actor_email) uniqueActors.add(log.actor_email);
+      else if (log.actor_id) uniqueActors.add(log.actor_id);
+
+      // Module distribution
+      const mod = (log.module || "SYSTEM").toUpperCase();
+      moduleCounts[mod] = (moduleCounts[mod] || 0) + 1;
+    });
+
+    const chartData = Object.entries(moduleCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    return {
+      total,
+      loginsToday,
+      failedAttempts,
+      uniqueActorsCount: uniqueActors.size,
+      chartData,
+    };
+  }, [logs]);
+
+  // Export Filtered Logs to CSV
+  const exportToCSV = () => {
+    if (filteredLogs.length === 0) {
+      toast.error("No activity logs available to export");
+      return;
+    }
+
+    const headers = [
+      "Log ID",
+      "Timestamp",
+      "Actor Type",
+      "Actor Name",
+      "Actor Email",
+      "Module",
+      "Action",
+      "Description",
+      "Status",
+      "IP Address",
+      "User Agent"
+    ];
+
+    const csvRows = [
+      headers.join(","),
+      ...filteredLogs.map((log) => {
+        const cleanField = (val: string | null | undefined) =>
+          `"${(val || "").replace(/"/g, '""')}"`;
+
+        return [
+          cleanField(log.id),
+          cleanField(format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss")),
+          cleanField(log.actor_type),
+          cleanField(log.actor_name),
+          cleanField(log.actor_email),
+          cleanField(log.module),
+          cleanField(log.action),
+          cleanField(log.description),
+          cleanField(log.status),
+          cleanField(log.ip_address),
+          cleanField(log.user_agent),
+        ].join(",");
+      }),
+    ];
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `activity_logs_${format(new Date(), "yyyyMMdd_HHmmss")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Successfully exported ${filteredLogs.length} activity log records!`);
+  };
 
   // Toggle individual employee selection
   const toggleEmployeeSelection = (userId: string) => {
@@ -212,6 +334,31 @@ export default function ActivityLogs() {
         }
       }
 
+      // Filter by Date Presets & Custom Range
+      const logTime = new Date(log.created_at).getTime();
+
+      if (datePreset === "today") {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        if (logTime < todayStart.getTime()) return false;
+      } else if (datePreset === "7days") {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        if (logTime < sevenDaysAgo) return false;
+      } else if (datePreset === "30days") {
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        if (logTime < thirtyDaysAgo) return false;
+      } else if (datePreset === "custom") {
+        if (startDate) {
+          const start = new Date(startDate).getTime();
+          if (logTime < start) return false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (logTime > end.getTime()) return false;
+        }
+      }
+
       // Filter by Module
       if (selectedModule !== "all" && log.module !== selectedModule) {
         return false;
@@ -230,12 +377,13 @@ export default function ActivityLogs() {
         const matchesDesc = (log.description || "").toLowerCase().includes(query);
         const matchesEmail = (log.actor_email || "").toLowerCase().includes(query);
         const matchesName = (log.actor_name || "").toLowerCase().includes(query);
-        return matchesAction || matchesModule || matchesDesc || matchesEmail || matchesName;
+        const matchesIp = (log.ip_address || "").toLowerCase().includes(query);
+        return matchesAction || matchesModule || matchesDesc || matchesEmail || matchesName || matchesIp;
       }
 
       return true;
     });
-  }, [logs, selectedActorType, selectedEmployeeUserIds, selectedEmployeeEmails, selectedModule, selectedStatus, searchTerm]);
+  }, [logs, selectedActorType, selectedEmployeeUserIds, selectedEmployeeEmails, datePreset, startDate, endDate, selectedModule, selectedStatus, searchTerm]);
 
   // Actor type badge renderer
   const renderActorBadge = (type: ActivityLogItem['actor_type']) => {
@@ -420,26 +568,147 @@ export default function ActivityLogs() {
               Real-time audit trail of all actions performed by Users, Admins, Bots, Automated Scripts, and System Triggers.
             </p>
           </div>
-          <Button onClick={fetchLogs} disabled={loading} className="gap-2 self-start md:self-auto">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh Logs
-          </Button>
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <Button
+              variant="outline"
+              onClick={exportToCSV}
+              className="gap-2 border-primary/20 text-primary hover:bg-primary/10"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+            <Button onClick={fetchLogs} disabled={loading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh Logs
+            </Button>
+          </div>
         </div>
 
+        {/* Security Anomaly Alert Banner (If failed attempts detected) */}
+        {analyticsStats.failedAttempts > 0 && (
+          <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 text-xs shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <AlertOctagon className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <span className="font-bold text-amber-700 dark:text-amber-300">
+                  Security Alert: {analyticsStats.failedAttempts} Warning / Failed Attempt(s) Detected
+                </span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Some login or operational attempts were flagged. Filter by "Status = Failed" to investigate details.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-amber-500/40 hover:bg-amber-500/20 text-amber-800 dark:text-amber-200"
+              onClick={() => setSelectedStatus("failed")}
+            >
+              Inspect Failed Logs
+            </Button>
+          </div>
+        )}
+
+        {/* Analytics Summary Cards & Module Activity Chart */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardDescription className="text-xs flex items-center justify-between">
+                Total Logs <TrendingUp className="h-4 w-4 text-blue-500" />
+              </CardDescription>
+              <CardTitle className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {analyticsStats.total}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground">
+              Total system events tracked
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardDescription className="text-xs flex items-center justify-between">
+                Logins Today <LogIn className="h-4 w-4 text-emerald-500" />
+              </CardDescription>
+              <CardTitle className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {analyticsStats.loginsToday}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground">
+              Successful auth sessions today
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardDescription className="text-xs flex items-center justify-between">
+                Security Alerts <AlertOctagon className="h-4 w-4 text-rose-500" />
+              </CardDescription>
+              <CardTitle className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                {analyticsStats.failedAttempts}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground">
+              Failed logins / warning logs
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="p-4 pb-2">
+              <CardDescription className="text-xs flex items-center justify-between">
+                Active Actors <Users className="h-4 w-4 text-purple-500" />
+              </CardDescription>
+              <CardTitle className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                {analyticsStats.uniqueActorsCount}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground">
+              Unique active users / bots
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Module Distribution Mini Chart */}
+        {analyticsStats.chartData.length > 0 && (
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" /> Activity Distribution by Module
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[140px] pt-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={analyticsStats.chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#888888" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#888888" />
+                  <RechartsTooltip
+                    contentStyle={{ backgroundColor: "#090d16", borderRadius: "6px", border: "1px solid #1e293b", color: "#fff", fontSize: "12px" }}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {analyticsStats.chartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Filters Card */}
-        <Card className="border-border/60 shadow-sm">
+        <Card className="border-border/60 shadow-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Filter className="h-4 w-4 text-primary" /> Filter Activity Logs
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Top Controls Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search input */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search actions, emails, text..."
+                  placeholder="Search actions, emails, IPs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9"
@@ -449,7 +718,6 @@ export default function ActivityLogs() {
               {/* Actor Type Filter */}
               <Select value={selectedActorType} onValueChange={(val) => {
                 setSelectedActorType(val);
-                // Clear employee selection if switching away from 'user'
                 if (val !== 'user') {
                   setSelectedEmployeeUserIds([]);
                 }
@@ -494,6 +762,94 @@ export default function ActivityLogs() {
                   <SelectItem value="warning">Warning</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Date Range Material Style Filters */}
+            <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-muted-foreground flex items-center gap-1">
+                  <CalendarDays className="h-3.5 w-3.5 text-primary" /> Date Range:
+                </span>
+                <div className="flex items-center bg-muted/60 p-1 rounded-lg border gap-1">
+                  <Button
+                    type="button"
+                    variant={datePreset === "all" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setDatePreset("all")}
+                  >
+                    All Time
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={datePreset === "today" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setDatePreset("today")}
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={datePreset === "7days" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setDatePreset("7days")}
+                  >
+                    Last 7 Days
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={datePreset === "30days" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setDatePreset("30days")}
+                  >
+                    Last 30 Days
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={datePreset === "custom" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setDatePreset("custom")}
+                  >
+                    Custom
+                  </Button>
+                </div>
+              </div>
+
+              {/* Custom Date Inputs (Shown when 'custom' is selected) */}
+              {datePreset === "custom" && (
+                <div className="flex items-center gap-2 animate-in fade-in">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-8 text-xs w-[140px]"
+                  />
+                  <span className="text-muted-foreground">to</span>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="h-8 text-xs w-[140px]"
+                  />
+                  {(startDate || endDate) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                      className="h-8 px-2 text-rose-500"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Dynamic Multi-Select Employee Filter (STRICTLY shown ONLY when Actor Type is 'user') */}
@@ -631,7 +987,7 @@ export default function ActivityLogs() {
         </Card>
 
         {/* Logs Table Card */}
-        <Card className="border-border/60 shadow-sm overflow-hidden">
+        <Card className="border-border/60 shadow-xs overflow-hidden">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-semibold flex items-center gap-2">
