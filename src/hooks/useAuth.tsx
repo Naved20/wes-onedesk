@@ -5,6 +5,7 @@ import { Database } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
 import { initializeFirebaseMessaging } from "@/lib/firebaseMessaging";
 import { requestNotificationPermission, setupRealtimeNotifications, stopRealtimeNotifications } from "@/lib/simpleNotificationService";
+import { logActivity } from "@/lib/activityLogger";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -162,17 +163,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
         if (profile && profile.is_active === false) {
           await supabase.auth.signOut();
+          logActivity({
+            module: 'auth',
+            action: 'LOGIN_BLOCKED',
+            description: `Deactivated user attempt: ${email}`,
+            actorEmail: email,
+            status: 'failed',
+          });
           return { error: new Error("Account has been deactivated. Please contact admin.") };
         }
+
+        // Log successful login
+        logActivity({
+          module: 'auth',
+          action: 'LOGIN',
+          description: `User logged in successfully: ${email}`,
+          actorEmail: email,
+          actorId: authData.user.id,
+          status: 'success',
+        });
+      } else if (error) {
+        // Log failed login
+        logActivity({
+          module: 'auth',
+          action: 'LOGIN_FAILED',
+          description: `Failed login attempt for email: ${email}`,
+          actorEmail: email,
+          metadata: { error_message: error.message },
+          status: 'failed',
+        });
       }
       
       return { error: error as Error | null };
-    } catch (error) {
+    } catch (error: any) {
+      logActivity({
+        module: 'auth',
+        action: 'LOGIN_ERROR',
+        description: `Login error for ${email}: ${error?.message}`,
+        actorEmail: email,
+        status: 'failed',
+      });
       return { error: error as Error };
     }
   };
 
   const signOut = async () => {
+    if (user) {
+      logActivity({
+        module: 'auth',
+        action: 'LOGOUT',
+        description: `User logged out: ${user.email}`,
+        actorEmail: user.email,
+        actorId: user.id,
+      });
+    }
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);

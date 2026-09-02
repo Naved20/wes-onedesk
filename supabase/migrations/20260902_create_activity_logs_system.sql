@@ -120,15 +120,18 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Add automatic triggers for key tables if needed
-DROP TRIGGER IF EXISTS trg_audit_tasks ON simple_tasks;
-CREATE TRIGGER trg_audit_tasks
-  AFTER INSERT OR UPDATE OR DELETE ON simple_tasks
-  FOR EACH ROW EXECUTE FUNCTION fn_auto_audit_log_change();
-
-DROP TRIGGER IF EXISTS trg_audit_leaves ON leave_applications;
-CREATE TRIGGER trg_audit_leaves
-  AFTER INSERT OR UPDATE OR DELETE ON leave_applications
-  FOR EACH ROW EXECUTE FUNCTION fn_auto_audit_log_change();
+-- Add automatic triggers dynamically for all key tables if they exist
+DO $$
+DECLARE
+  tbl TEXT;
+  target_tables TEXT[] := ARRAY['tasks', 'leaves', 'attendance', 'employee_profiles', 'support_requests', 'announcements', 'documents', 'salary_slips', 'company_documents'];
+BEGIN
+  FOREACH tbl IN ARRAY target_tables LOOP
+    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = tbl) THEN
+      EXECUTE format('DROP TRIGGER IF EXISTS trg_audit_%I ON %I;', tbl, tbl);
+      EXECUTE format('CREATE TRIGGER trg_audit_%I AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION fn_auto_audit_log_change();', tbl, tbl);
+    END IF;
+  END LOOP;
+END $$;
 
 COMMENT ON TABLE activity_logs IS 'Audit log of all user, admin, bot, script, and system actions across WES OneDesk';
