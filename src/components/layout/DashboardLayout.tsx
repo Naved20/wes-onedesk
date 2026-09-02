@@ -117,7 +117,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex flex-col leading-tight">
               <h1 className="font-bold text-xl text-primary">WES OneDesk</h1>
               <span className="text-[10px] text-muted-foreground font-medium">
-                v 2.9.2.5             </span>
+                v 2.9.2.5
+              </span>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 overflow-y-auto">
+            <ul className="space-y-1">
               {filteredNavItems.map((item) => (
                 <li key={item.href}>
                   <button
