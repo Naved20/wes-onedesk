@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check, History, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check, History, ShieldCheck, X, Building2, Filter } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
 import { AttendanceApprovalDialog } from "@/components/attendance/AttendanceApprovalDialog";
@@ -67,6 +67,7 @@ export default function Attendance() {
   const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string | null>(null);
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   // Dialogue-specific attendance records to load correct historical logs
   const [dialogAttendanceRecords, setDialogAttendanceRecords] = useState<AttendanceWithEmployee[]>([]);
@@ -904,64 +905,127 @@ export default function Attendance() {
           )}
         </div>
 
-        {/* Month/Year Selector - For all users */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex gap-3 w-full md:w-auto">
-              <div className="flex-1 md:flex-none">
-                <Label className="text-xs text-muted-foreground mb-1 block">Month</Label>
-                <Select 
-                  value={String(currentMonth)} 
-                  onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[
-                      { value: 1, label: 'January' },
-                      { value: 2, label: 'February' },
-                      { value: 3, label: 'March' },
-                      { value: 4, label: 'April' },
-                      { value: 5, label: 'May' },
-                      { value: 6, label: 'June' },
-                      { value: 7, label: 'July' },
-                      { value: 8, label: 'August' },
-                      { value: 9, label: 'September' },
-                      { value: 10, label: 'October' },
-                      { value: 11, label: 'November' },
-                      { value: 12, label: 'December' },
-                    ].map((month) => (
-                      <SelectItem key={month.value} value={String(month.value)}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        {/* Unified Filter Bar Card */}
+        <Card className="border-border/50 shadow-sm bg-card">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3 flex-1">
+                {/* Month Selector */}
+                <div className="w-36">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Month</Label>
+                  <Select 
+                    value={String(currentMonth)} 
+                    onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: 1, label: 'January' },
+                        { value: 2, label: 'February' },
+                        { value: 3, label: 'March' },
+                        { value: 4, label: 'April' },
+                        { value: 5, label: 'May' },
+                        { value: 6, label: 'June' },
+                        { value: 7, label: 'July' },
+                        { value: 8, label: 'August' },
+                        { value: 9, label: 'September' },
+                        { value: 10, label: 'October' },
+                        { value: 11, label: 'November' },
+                        { value: 12, label: 'December' },
+                      ].map((month) => (
+                        <SelectItem key={month.value} value={String(month.value)}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Year Selector */}
+                <div className="w-28">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Year</Label>
+                  <Select 
+                    value={String(currentYear)} 
+                    onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        new Date().getFullYear() - 1,
+                        new Date().getFullYear(),
+                        new Date().getFullYear() + 1,
+                      ].map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Institution Selector */}
+                {(role === "admin" || role === "manager") && institutions.length > 0 && (
+                  <div className="w-52">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Institution</Label>
+                    <Select value={selectedInstitution} onValueChange={setSelectedInstitution}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="All Institutions" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Institutions</SelectItem>
+                        {institutions.map((inst) => (
+                          <SelectItem key={inst} value={inst}>
+                            {inst}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Clear Filter Button */}
+                {(selectedInstitution !== "all" || employeeSearchQuery.trim() !== "") && (
+                  <div className="self-end pb-0.5">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setSelectedInstitution("all");
+                        setEmployeeSearchQuery("");
+                      }}
+                      className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
               </div>
-              
-              <div className="flex-1 md:flex-none">
-                <Label className="text-xs text-muted-foreground mb-1 block">Year</Label>
-                <Select 
-                  value={String(currentYear)} 
-                  onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[
-                      new Date().getFullYear() - 1,
-                      new Date().getFullYear(),
-                      new Date().getFullYear() + 1,
-                    ].map((year) => (
-                      <SelectItem key={year} value={String(year)}>
-                        {year}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+
+              {/* Search Field */}
+              {(role === "admin" || role === "manager") && (
+                <div className="relative w-full md:w-64 self-end">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={activeTab === "holidays" ? "Search holidays..." : "Search employees..."}
+                    value={employeeSearchQuery}
+                    onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                    className="pl-9 pr-8 h-9"
+                  />
+                  {employeeSearchQuery && (
+                    <button
+                      onClick={() => setEmployeeSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -980,56 +1044,7 @@ export default function Attendance() {
 
         {/* Manager/Admin View with Tabs */}
         {(role === "admin" || role === "manager") ? (
-          <>
-
-
-            {/* Institution Filter */}
-            {institutions.length > 0 && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <Label htmlFor="institution-filter" className="whitespace-nowrap">
-                      Filter by Institution:
-                    </Label>
-                    <Select value={selectedInstitution} onValueChange={setSelectedInstitution}>
-                      <SelectTrigger id="institution-filter" className="w-[300px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Institutions</SelectItem>
-                        {institutions.map((inst) => (
-                          <SelectItem key={inst} value={inst}>
-                            {inst}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedInstitution !== "all" && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setSelectedInstitution("all")}
-                      >
-                        Clear Filter
-                      </Button>
-                    )}
-                    <div className="relative ml-auto w-64">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search employees..."
-                        value={employeeSearchQuery}
-                        onChange={(e) => setEmployeeSearchQuery(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-
-
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
   
@@ -1057,63 +1072,6 @@ export default function Attendance() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Month and Year Filters */}
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <Label className="text-xs text-muted-foreground mb-1 block">Month</Label>
-                        <Select 
-                          value={String(currentMonth)} 
-                          onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[
-                              { value: 1, label: 'January' },
-                              { value: 2, label: 'February' },
-                              { value: 3, label: 'March' },
-                              { value: 4, label: 'April' },
-                              { value: 5, label: 'May' },
-                              { value: 6, label: 'June' },
-                              { value: 7, label: 'July' },
-                              { value: 8, label: 'August' },
-                              { value: 9, label: 'September' },
-                              { value: 10, label: 'October' },
-                              { value: 11, label: 'November' },
-                              { value: 12, label: 'December' },
-                            ].map((month) => (
-                              <SelectItem key={month.value} value={String(month.value)}>
-                                {month.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="flex-1">
-                        <Label className="text-xs text-muted-foreground mb-1 block">Year</Label>
-                        <Select 
-                          value={String(currentYear)} 
-                          onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
-                        >
-                          <SelectTrigger className="h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[
-                              new Date().getFullYear() - 1,
-                              new Date().getFullYear(),
-                              new Date().getFullYear() + 1,
-                            ].map((year) => (
-                              <SelectItem key={year} value={String(year)}>
-                                {year}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
 
                     {/* Calendar */}
                     <div>
@@ -1351,11 +1309,16 @@ export default function Attendance() {
 
             {role === "admin" && (
               <TabsContent value="holidays">
-                <HolidayManager />
+                <HolidayManager
+                  selectedYear={currentYear}
+                  selectedMonth={currentMonth}
+                  selectedInstitution={selectedInstitution}
+                  searchQuery={employeeSearchQuery}
+                  onInstitutionChange={setSelectedInstitution}
+                />
               </TabsContent>
             )}
           </Tabs>
-          </>
         ) : (
           /* Employee View - Calendar Grid */
           <Card>
