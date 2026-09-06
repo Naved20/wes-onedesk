@@ -209,183 +209,185 @@ export default function ShiftManagement() {
                 Create Shift
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
+            <DialogContent className="sm:max-w-[620px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+              <DialogHeader className="p-6 pb-4 border-b shrink-0">
                 <DialogTitle>{editingShift ? "Edit Shift" : "Create New Shift"}</DialogTitle>
                 <DialogDescription>
                   {editingShift ? "Update shift details and thresholds" : "Configure a new shift with timings and attendance rules"}
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Shift Name</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Input
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start_time">Start Time</Label>
-                    <Input
-                      id="start_time"
-                      type="time"
-                      value={formData.start_time}
-                      onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end_time">End Time</Label>
-                    <Input
-                      id="end_time"
-                      type="time"
-                      value={formData.end_time}
-                      onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="late_threshold">Late Threshold (minutes after start)</Label>
-                  <Input
-                    id="late_threshold"
-                    type="number"
-                    min="0"
-                    value={formData.late_threshold_minutes}
-                    onChange={(e) => setFormData({ ...formData, late_threshold_minutes: parseInt(e.target.value) })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">Check-in after this many minutes marks as late</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="half_day_threshold">Half Day Threshold (hours from start)</Label>
-                  <Input
-                    id="half_day_threshold"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={formData.half_day_threshold_hours}
-                    onChange={(e) => setFormData({ ...formData, half_day_threshold_hours: parseFloat(e.target.value) })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">Check-in after this many hours marks as half day</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="last_checkin">Last Check-in Limit (hours before end)</Label>
-                  <Input
-                    id="last_checkin"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={formData.last_checkin_hours_before_end}
-                    onChange={(e) => setFormData({ ...formData, last_checkin_hours_before_end: parseFloat(e.target.value) || 0 })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">Check-in after this limit marks as absent</p>
-                </div>
-
-                {/* Check-out Rules Section */}
-                <div className="pt-4 border-t space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold text-sm">Check-out & Departure Rules</h3>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/40">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="checkout_mandatory" className="text-sm font-semibold cursor-pointer">
-                        Mandatory Check-out
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        Require employees in this shift to scan face for check-out
-                      </p>
-                    </div>
-                    <Switch
-                      id="checkout_mandatory"
-                      checked={formData.is_checkout_mandatory}
-                      onCheckedChange={(checked) => setFormData({ ...formData, is_checkout_mandatory: checked })}
-                    />
-                  </div>
-
+              <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="early_checkout">Early Checkout Grace (mins)</Label>
+                      <Label htmlFor="name">Shift Name</Label>
                       <Input
-                        id="early_checkout"
-                        type="number"
-                        min="0"
-                        value={formData.early_checkout_threshold_minutes}
-                        onChange={(e) => setFormData({ ...formData, early_checkout_threshold_minutes: parseInt(e.target.value) || 0 })}
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        required
                       />
-                      <p className="text-xs text-muted-foreground">Allowed mins before end without penalty</p>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="max_checkout">Max Late Checkout Window (hours)</Label>
+                      <Label htmlFor="description">Description</Label>
                       <Input
-                        id="max_checkout"
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={formData.max_checkout_hours_after_end}
-                        onChange={(e) => setFormData({ ...formData, max_checkout_hours_after_end: parseFloat(e.target.value) || 0 })}
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       />
-                      <p className="text-xs text-muted-foreground">Hours after shift end to accept checkout</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="min_hours">Min Hours for Full Day</Label>
+                      <Label htmlFor="start_time">Start Time</Label>
                       <Input
-                        id="min_hours"
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={formData.min_hours_full_day}
-                        onChange={(e) => setFormData({ ...formData, min_hours_full_day: parseFloat(e.target.value) || 0 })}
+                        id="start_time"
+                        type="time"
+                        value={formData.start_time}
+                        onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                        required
                       />
-                      <p className="text-xs text-muted-foreground">Minimum working hours required</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end_time">End Time</Label>
+                      <Input
+                        id="end_time"
+                        type="time"
+                        value={formData.end_time}
+                        onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="late_threshold">Late Threshold (minutes after start)</Label>
+                    <Input
+                      id="late_threshold"
+                      type="number"
+                      min="0"
+                      value={formData.late_threshold_minutes}
+                      onChange={(e) => setFormData({ ...formData, late_threshold_minutes: parseInt(e.target.value) || 0 })}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Check-in after this many minutes marks as late</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="half_day_threshold">Half Day Threshold (hours from start)</Label>
+                    <Input
+                      id="half_day_threshold"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={formData.half_day_threshold_hours}
+                      onChange={(e) => setFormData({ ...formData, half_day_threshold_hours: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Check-in after this many hours marks as half day</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="last_checkin_limit">Last Check-in Limit (hours before end)</Label>
+                    <Input
+                      id="last_checkin_limit"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={formData.last_checkin_limit_hours}
+                      onChange={(e) => setFormData({ ...formData, last_checkin_limit_hours: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Check-in after this limit marks as absent</p>
+                  </div>
+
+                  {/* Check-out & Departure Rules */}
+                  <div className="border-t pt-4 space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <ShieldCheck className="h-4 w-4 text-amber-500" />
+                      <span>Check-out & Departure Rules</span>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="missing_action">Action on Missing Check-out</Label>
-                      <Select
-                        value={formData.missing_checkout_action}
-                        onValueChange={(val) => setFormData({ ...formData, missing_checkout_action: val })}
-                      >
-                        <SelectTrigger id="missing_action">
-                          <SelectValue placeholder="Select action" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="no_penalty">No Penalty (Keep Full Day)</SelectItem>
-                          <SelectItem value="mark_half_day">Mark as Half Day</SelectItem>
-                          <SelectItem value="pending_review">Manager Review Required</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">If mandatory ON but checkout missed</p>
+                    <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="checkout_mandatory" className="text-sm font-medium cursor-pointer">
+                          Mandatory Check-out
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Require employees in this shift to scan face for check-out
+                        </p>
+                      </div>
+                      <Switch
+                        id="checkout_mandatory"
+                        checked={formData.is_checkout_mandatory}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_checkout_mandatory: checked })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="early_checkout">Early Checkout Grace (mins)</Label>
+                        <Input
+                          id="early_checkout"
+                          type="number"
+                          min="0"
+                          value={formData.early_checkout_threshold_minutes}
+                          onChange={(e) => setFormData({ ...formData, early_checkout_threshold_minutes: parseInt(e.target.value) || 0 })}
+                        />
+                        <p className="text-xs text-muted-foreground">Allowed mins before end without penalty</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="max_checkout">Max Late Checkout Window (hours)</Label>
+                        <Input
+                          id="max_checkout"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={formData.max_checkout_hours_after_end}
+                          onChange={(e) => setFormData({ ...formData, max_checkout_hours_after_end: parseFloat(e.target.value) || 0 })}
+                        />
+                        <p className="text-xs text-muted-foreground">Hours after shift end to accept checkout</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="min_hours">Min Hours for Full Day</Label>
+                        <Input
+                          id="min_hours"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={formData.min_hours_full_day}
+                          onChange={(e) => setFormData({ ...formData, min_hours_full_day: parseFloat(e.target.value) || 0 })}
+                        />
+                        <p className="text-xs text-muted-foreground">Minimum working hours required</p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="missing_action">Action on Missing Check-out</Label>
+                        <Select
+                          value={formData.missing_checkout_action}
+                          onValueChange={(val) => setFormData({ ...formData, missing_checkout_action: val })}
+                        >
+                          <SelectTrigger id="missing_action">
+                            <SelectValue placeholder="Select action" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="no_penalty">No Penalty (Keep Full Day)</SelectItem>
+                            <SelectItem value="mark_half_day">Mark as Half Day</SelectItem>
+                            <SelectItem value="pending_review">Manager Review Required</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">If mandatory ON but checkout missed</p>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 p-4 px-6 border-t bg-muted/20 shrink-0">
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                     Cancel
                   </Button>
