@@ -81,10 +81,25 @@ export default function ShiftManagement() {
     e.preventDefault();
 
     try {
+      const shiftPayload = {
+        name: formData.name,
+        description: formData.description || null,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
+        late_threshold_minutes: formData.late_threshold_minutes,
+        half_day_threshold_hours: formData.half_day_threshold_hours,
+        last_checkin_hours_before_end: formData.last_checkin_hours_before_end,
+        is_checkout_mandatory: formData.is_checkout_mandatory,
+        early_checkout_threshold_minutes: formData.early_checkout_threshold_minutes,
+        max_checkout_hours_after_end: formData.max_checkout_hours_after_end,
+        min_hours_full_day: formData.min_hours_full_day,
+        missing_checkout_action: formData.missing_checkout_action,
+      };
+
       if (editingShift) {
         const { error } = await supabase
           .from("shifts")
-          .update(formData)
+          .update(shiftPayload)
           .eq("id", editingShift.id);
 
         if (error) throw error;
@@ -92,7 +107,7 @@ export default function ShiftManagement() {
       } else {
         const { error } = await supabase
           .from("shifts")
-          .insert([formData]);
+          .insert([shiftPayload]);
 
         if (error) throw error;
         toast({ title: "Success", description: "Shift created successfully" });
@@ -289,14 +304,14 @@ export default function ShiftManagement() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="last_checkin_limit">Last Check-in Limit (hours before end)</Label>
+                    <Label htmlFor="last_checkin_hours_before_end">Last Check-in Limit (hours before end)</Label>
                     <Input
-                      id="last_checkin_limit"
+                      id="last_checkin_hours_before_end"
                       type="number"
                       step="0.5"
                       min="0"
-                      value={formData.last_checkin_limit_hours}
-                      onChange={(e) => setFormData({ ...formData, last_checkin_limit_hours: parseFloat(e.target.value) || 0 })}
+                      value={formData.last_checkin_hours_before_end}
+                      onChange={(e) => setFormData({ ...formData, last_checkin_hours_before_end: parseFloat(e.target.value) || 0 })}
                       required
                     />
                     <p className="text-xs text-muted-foreground">Check-in after this limit marks as absent</p>
