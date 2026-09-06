@@ -249,6 +249,7 @@ export function BulkAttendanceApproval({ records, onUpdate, userId }: BulkAttend
                 <TableHead>Employee</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Check-in</TableHead>
+                <TableHead>Check-out</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -269,6 +270,13 @@ export function BulkAttendanceApproval({ records, onUpdate, userId }: BulkAttend
                     {record.check_in_time
                       ? format(new Date(record.check_in_time), "hh:mm a")
                       : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {record.check_out_time ? (
+                      format(new Date(record.check_out_time), "hh:mm a")
+                    ) : (
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Missing</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">

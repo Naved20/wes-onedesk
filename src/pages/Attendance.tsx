@@ -1047,6 +1047,15 @@ export default function Attendance() {
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
+
+              {pendingRecords.length > 0 && (
+                <TabsTrigger value="pending" className="relative">
+                  Pending Approvals
+                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded-full bg-amber-500 text-white font-medium">
+                    {pendingRecords.length}
+                  </span>
+                </TabsTrigger>
+              )}
   
               {lateRecords.length > 0 && (
                 <TabsTrigger value="late" className="relative">
