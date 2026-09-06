@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, Plus, Edit, Trash2, Settings } from "lucide-react";
+import { Clock, Plus, Edit, Trash2, Settings, ShieldCheck } from "lucide-react";
 
 interface Shift {
   id: string;
@@ -23,6 +25,11 @@ interface Shift {
   half_day_threshold_hours: number;
   last_checkin_hours_before_end: number;
   is_active: boolean;
+  is_checkout_mandatory: boolean;
+  early_checkout_threshold_minutes: number | null;
+  max_checkout_hours_after_end: number | null;
+  min_hours_full_day: number | null;
+  missing_checkout_action: string | null;
 }
 
 export default function ShiftManagement() {
@@ -38,6 +45,11 @@ export default function ShiftManagement() {
     late_threshold_minutes: 15,
     half_day_threshold_hours: 2.5,
     last_checkin_hours_before_end: 3.5,
+    is_checkout_mandatory: false,
+    early_checkout_threshold_minutes: 15,
+    max_checkout_hours_after_end: 2.0,
+    min_hours_full_day: 6.0,
+    missing_checkout_action: "no_penalty",
   });
 
   useEffect(() => {
@@ -110,6 +122,11 @@ export default function ShiftManagement() {
       late_threshold_minutes: shift.late_threshold_minutes,
       half_day_threshold_hours: shift.half_day_threshold_hours,
       last_checkin_hours_before_end: shift.last_checkin_hours_before_end,
+      is_checkout_mandatory: shift.is_checkout_mandatory ?? false,
+      early_checkout_threshold_minutes: shift.early_checkout_threshold_minutes ?? 15,
+      max_checkout_hours_after_end: shift.max_checkout_hours_after_end ?? 2.0,
+      min_hours_full_day: shift.min_hours_full_day ?? 6.0,
+      missing_checkout_action: shift.missing_checkout_action ?? "no_penalty",
     });
     setOpen(true);
   };
@@ -163,6 +180,11 @@ export default function ShiftManagement() {
       late_threshold_minutes: 15,
       half_day_threshold_hours: 2.5,
       last_checkin_hours_before_end: 3.5,
+      is_checkout_mandatory: false,
+      early_checkout_threshold_minutes: 15,
+      max_checkout_hours_after_end: 2.0,
+      min_hours_full_day: 6.0,
+      missing_checkout_action: "no_penalty",
     });
   };
 
@@ -273,10 +295,94 @@ export default function ShiftManagement() {
                     step="0.1"
                     min="0"
                     value={formData.last_checkin_hours_before_end}
-                    onChange={(e) => setFormData({ ...formData, last_checkin_hours_before_end: parseFloat(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, last_checkin_hours_before_end: parseFloat(e.target.value) || 0 })}
                     required
                   />
                   <p className="text-xs text-muted-foreground">Check-in after this limit marks as absent</p>
+                </div>
+
+                {/* Check-out Rules Section */}
+                <div className="pt-4 border-t space-y-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-sm">Check-out & Departure Rules</h3>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/40">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="checkout_mandatory" className="text-sm font-semibold cursor-pointer">
+                        Mandatory Check-out
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Require employees in this shift to scan face for check-out
+                      </p>
+                    </div>
+                    <Switch
+                      id="checkout_mandatory"
+                      checked={formData.is_checkout_mandatory}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_checkout_mandatory: checked })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="early_checkout">Early Checkout Grace (mins)</Label>
+                      <Input
+                        id="early_checkout"
+                        type="number"
+                        min="0"
+                        value={formData.early_checkout_threshold_minutes}
+                        onChange={(e) => setFormData({ ...formData, early_checkout_threshold_minutes: parseInt(e.target.value) || 0 })}
+                      />
+                      <p className="text-xs text-muted-foreground">Allowed mins before end without penalty</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="max_checkout">Max Late Checkout Window (hours)</Label>
+                      <Input
+                        id="max_checkout"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={formData.max_checkout_hours_after_end}
+                        onChange={(e) => setFormData({ ...formData, max_checkout_hours_after_end: parseFloat(e.target.value) || 0 })}
+                      />
+                      <p className="text-xs text-muted-foreground">Hours after shift end to accept checkout</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="min_hours">Min Hours for Full Day</Label>
+                      <Input
+                        id="min_hours"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={formData.min_hours_full_day}
+                        onChange={(e) => setFormData({ ...formData, min_hours_full_day: parseFloat(e.target.value) || 0 })}
+                      />
+                      <p className="text-xs text-muted-foreground">Minimum working hours required</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="missing_action">Action on Missing Check-out</Label>
+                      <Select
+                        value={formData.missing_checkout_action}
+                        onValueChange={(val) => setFormData({ ...formData, missing_checkout_action: val })}
+                      >
+                        <SelectTrigger id="missing_action">
+                          <SelectValue placeholder="Select action" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no_penalty">No Penalty (Keep Full Day)</SelectItem>
+                          <SelectItem value="mark_half_day">Mark as Half Day</SelectItem>
+                          <SelectItem value="pending_review">Manager Review Required</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">If mandatory ON but checkout missed</p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-2">
@@ -314,6 +420,7 @@ export default function ShiftManagement() {
                     <TableHead>Late Threshold</TableHead>
                     <TableHead>Half Day</TableHead>
                     <TableHead>Last Check-in</TableHead>
+                    <TableHead>Checkout Rule</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -331,6 +438,19 @@ export default function ShiftManagement() {
                       <TableCell>{shift.late_threshold_minutes} min</TableCell>
                       <TableCell>{shift.half_day_threshold_hours} hrs</TableCell>
                       <TableCell>{shift.last_checkin_hours_before_end} hrs before end</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <Badge 
+                            variant={shift.is_checkout_mandatory ? "default" : "outline"}
+                            className={shift.is_checkout_mandatory ? "bg-amber-600 hover:bg-amber-700 text-white w-fit text-[11px]" : "w-fit text-[11px]"}
+                          >
+                            {shift.is_checkout_mandatory ? "Mandatory" : "Auto (Optional)"}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            Early: {shift.early_checkout_threshold_minutes ?? 15}m · Max: +{shift.max_checkout_hours_after_end ?? 2}h
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={shift.is_active ? "default" : "secondary"}>
                           {shift.is_active ? "Active" : "Inactive"}

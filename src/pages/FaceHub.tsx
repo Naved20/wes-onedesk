@@ -7,13 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Camera, LogOut, History, CheckCircle2, XCircle, Loader2, Scan, MapPin, AlertTriangle, RefreshCw } from "lucide-react";
+import { Camera, LogOut, LogIn, History, CheckCircle2, XCircle, Loader2, Scan, MapPin, AlertTriangle, RefreshCw, Sparkles, Clock, AlertCircle } from "lucide-react";
 import { loadFaceModels, getAveragedFaceDescriptor } from "@/lib/faceApi";
 import { format } from "date-fns";
 import wesLogo from "@/assets/wes-logo.jpg";
 import { updateSessionActivity, logoutFaceSession, isSessionValid, getLocation } from "@/lib/faceSessionManager";
 import { validateUserGeoFence } from "@/lib/geoFenceManager";
-import { speakAttendanceEnrolled, speakAlreadyCheckedIn } from "@/lib/speak";
+import { speakAttendanceEnrolled, speakAlreadyCheckedIn, speakCheckoutSuccess, speakNotCheckedIn, speakAlreadyCheckedOut } from "@/lib/speak";
+import { cn } from "@/lib/utils";
 
 interface HistoryRow {
   id: string;
@@ -34,8 +35,13 @@ export default function FaceHub() {
   const [lastResult, setLastResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [lastDistance, setLastDistance] = useState<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [scanMode, setScanMode] = useState<"checkin" | "checkout">("checkin");
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [showAlreadyCheckedInDialog, setShowAlreadyCheckedInDialog] = useState(false);
+  const [showCheckoutSuccessDialog, setShowCheckoutSuccessDialog] = useState(false);
+  const [showAlreadyCheckedOutDialog, setShowAlreadyCheckedOutDialog] = useState(false);
+  const [showNotCheckedInDialog, setShowNotCheckedInDialog] = useState(false);
+  const [notCheckedInName, setNotCheckedInName] = useState("");
   const [showNotEnrolledDialog, setShowNotEnrolledDialog] = useState(false);
   const [notEnrolledDistance, setNotEnrolledDistance] = useState<number | null>(null);
   const [checkInData, setCheckInData] = useState<{ 
@@ -44,6 +50,16 @@ export default function FaceHub() {
     shiftName?: string;
     shiftStartTime?: string;
     shiftEndTime?: string;
+  } | null>(null);
+  const [checkoutData, setCheckoutData] = useState<{
+    name: string;
+    time: string;
+    durationStr?: string;
+    shiftName?: string;
+    shiftStartTime?: string;
+    shiftEndTime?: string;
+    isEarly?: boolean;
+    isLateCheckout?: boolean;
   } | null>(null);
 
   // Location states (Location verified at login time)
@@ -238,21 +254,43 @@ export default function FaceHub() {
 
   const playSuccessSound = () => {
     // Create a simple success beep using Web Audio API
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
 
-    oscillator.frequency.value = 800;
-    oscillator.type = "sine";
+      oscillator.frequency.value = 800;
+      oscillator.type = "sine";
 
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
 
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch { /* ignore */ }
+  };
+
+  const playErrorSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 300;
+      oscillator.type = "sawtooth";
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.6);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.6);
+    } catch { /* ignore */ }
   };
 
   const fetchHistory = async () => {
@@ -372,10 +410,14 @@ export default function FaceHub() {
         return;
       }
 
-      console.log("[FaceHub] Face descriptor obtained, calling edge function...");
+      console.log("[FaceHub] Face descriptor obtained, calling edge function with mode:", scanMode);
       const sessionToken = localStorage.getItem("faceSessionToken") || sessionStorage.getItem("faceSessionToken");
       const { data, error } = await supabase.functions.invoke("face-hub-checkin", {
-        body: { descriptor: Array.from(descriptor), session_token: sessionToken },
+        body: { 
+          descriptor: Array.from(descriptor), 
+          session_token: sessionToken,
+          mode: scanMode,
+        },
       });
 
       console.log("[FaceHub] Edge function response:", { data, error, ok: data?.ok, message: data?.message });
@@ -399,46 +441,161 @@ export default function FaceHub() {
 
       const distance = typeof data.distance === "number" ? data.distance : null;
       setLastDistance(distance);
-      setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Face check-in failed." });
+      setLastResult({ ok: Boolean(data.ok), msg: data.message ?? "Scan processed." });
       
-      // If successful, play sound and show popup
-      if (data.ok) {
-        if (data.alreadyCheckedIn) {
-          console.log("[FaceHub] Face match already checked in today:", data.employeeName);
-          playSuccessSound();
-          const timeDisplay = data.formattedCheckInTime || format(new Date(), "hh:mm a");
-          speakAlreadyCheckedIn(data.employeeName || "Employee", timeDisplay);
-          setCheckInData({
-            name: data.employeeName || "Employee",
-            time: timeDisplay,
-            shiftName: data.shiftName,
-            shiftStartTime: data.shiftStartTime,
-            shiftEndTime: data.shiftEndTime,
-          });
-          setShowAlreadyCheckedInDialog(true);
+      // CASE A: Employee attempted Check-Out without prior Check-In
+      if (data.notCheckedIn) {
+        console.log("[FaceHub] Employee not checked in today:", data.employeeName);
+        playErrorSound();
+        const empName = data.employeeName || "Employee";
+        speakNotCheckedIn(empName);
+        setNotCheckedInName(empName);
+        setShowNotCheckedInDialog(true);
+        setTimeout(() => {
+          setShowNotCheckedInDialog(false);
+          setNotCheckedInName("");
+        }, 4500);
+        fetchHistory();
+        return;
+      }
 
-          setTimeout(() => {
-            setShowAlreadyCheckedInDialog(false);
-            setCheckInData(null);
-          }, 4000);
-        } else {
-          console.log("[FaceHub] Face match successful:", data.employeeName);
-          playSuccessSound();
-          speakAttendanceEnrolled(data.employeeName || "Employee");
-          setCheckInData({
-            name: data.employeeName || "Employee",
-            time: format(new Date(), "hh:mm a"),
-            shiftName: data.shiftName,
-            shiftStartTime: data.shiftStartTime,
-            shiftEndTime: data.shiftEndTime,
-          });
-          setShowSuccessDialog(true);
+      // CASE B: Successful Check-Out
+      if (data.action === "checkout") {
+        console.log("[FaceHub] Face match check-out successful:", data.employeeName);
+        playSuccessSound();
+        const empName = data.employeeName || "Employee";
+        speakCheckoutSuccess(empName, data.durationStr);
+        setCheckoutData({
+          name: empName,
+          time: data.formattedCheckOutTime || format(new Date(), "hh:mm a"),
+          durationStr: data.durationStr,
+          shiftName: data.shiftName,
+          shiftStartTime: data.shiftStartTime,
+          shiftEndTime: data.shiftEndTime,
+          isEarly: data.isEarly,
+          isLateCheckout: data.isLateCheckout,
+        });
+        setShowCheckoutSuccessDialog(true);
+        setTimeout(() => {
+          setShowCheckoutSuccessDialog(false);
+          setCheckoutData(null);
+        }, 4000);
+        fetchHistory();
+        return;
+      }
 
-          setTimeout(() => {
-            setShowSuccessDialog(false);
-            setCheckInData(null);
-          }, 3000);
+      // CASE C: Already Checked Out Today
+      if (data.alreadyCheckedOut) {
+        console.log("[FaceHub] Face match already checked out today:", data.employeeName);
+        playSuccessSound();
+        const empName = data.employeeName || "Employee";
+        const timeDisplay = data.formattedCheckOutTime || format(new Date(), "hh:mm a");
+        speakAlreadyCheckedOut(empName, timeDisplay);
+        setCheckoutData({
+          name: empName,
+          time: timeDisplay,
+          shiftName: data.shiftName,
+        });
+        setShowAlreadyCheckedOutDialog(true);
+        setTimeout(() => {
+          setShowAlreadyCheckedOutDialog(false);
+          setCheckoutData(null);
+        }, 4000);
+        fetchHistory();
+        return;
+      }
+
+      // CASE D: Successful Check-In
+      if (data.ok && !data.alreadyCheckedIn && data.action !== "checkout") {
+        console.log("[FaceHub] Face match check-in successful:", data.employeeName);
+        playSuccessSound();
+        speakAttendanceEnrolled(data.employeeName || "Employee");
+        setCheckInData({
+          name: data.employeeName || "Employee",
+          time: format(new Date(), "hh:mm a"),
+          shiftName: data.shiftName,
+          shiftStartTime: data.shiftStartTime,
+          shiftEndTime: data.shiftEndTime,
+        });
+        setShowSuccessDialog(true);
+        setTimeout(() => {
+          setShowSuccessDialog(false);
+          setCheckInData(null);
+        }, 3000);
+        fetchHistory();
+        return;
+      }
+
+      // CASE E: Already Checked In Today
+      if (data.alreadyCheckedIn) {
+        // Fallback: If edge function on cloud didn't process checkout (running older code)
+        // and user requested checkout (or auto with at least 2 minutes passed), handle it directly
+        if ((scanMode === "checkout" || scanMode === "auto") && data.attendanceId) {
+          try {
+            const { data: attRow } = await supabase
+              .from("attendance")
+              .select("id, check_in_time, check_out_time, notes")
+              .eq("id", data.attendanceId)
+              .maybeSingle();
+
+            if (attRow?.check_in_time && !attRow.check_out_time) {
+              const diffMs = Date.now() - new Date(attRow.check_in_time).getTime();
+              // In auto mode, require 2 minutes gap to prevent double-tap; in checkout mode, immediate
+              if (scanMode === "checkout" || diffMs >= 2 * 60 * 1000) {
+                const now = new Date();
+                const totalMins = Math.max(0, Math.floor(diffMs / (60 * 1000)));
+                const durationStr = `${Math.floor(totalMins / 60)}h ${totalMins % 60}m`;
+                const formattedOutTime = format(now, "hh:mm a");
+
+                await supabase
+                  .from("attendance")
+                  .update({
+                    check_out_time: now.toISOString(),
+                    notes: (attRow.notes ? `${attRow.notes} | ` : "") + "Face recognition check-out",
+                  })
+                  .eq("id", attRow.id);
+
+                const empName = data.employeeName || "Employee";
+                playSuccessSound();
+                speakCheckoutSuccess(empName, durationStr);
+                setCheckoutData({
+                  name: empName,
+                  time: formattedOutTime,
+                  durationStr,
+                  shiftName: data.shiftName,
+                  shiftStartTime: data.shiftStartTime,
+                  shiftEndTime: data.shiftEndTime,
+                });
+                setShowCheckoutSuccessDialog(true);
+                setTimeout(() => {
+                  setShowCheckoutSuccessDialog(false);
+                  setCheckoutData(null);
+                }, 4000);
+                fetchHistory();
+                return;
+              }
+            }
+          } catch (fbErr) {
+            console.warn("[FaceHub] Fallback checkout check error:", fbErr);
+          }
         }
+
+        console.log("[FaceHub] Face match already checked in today:", data.employeeName);
+        playSuccessSound();
+        const timeDisplay = data.formattedCheckInTime || format(new Date(), "hh:mm a");
+        speakAlreadyCheckedIn(data.employeeName || "Employee", timeDisplay);
+        setCheckInData({
+          name: data.employeeName || "Employee",
+          time: timeDisplay,
+          shiftName: data.shiftName,
+          shiftStartTime: data.shiftStartTime,
+          shiftEndTime: data.shiftEndTime,
+        });
+        setShowAlreadyCheckedInDialog(true);
+        setTimeout(() => {
+          setShowAlreadyCheckedInDialog(false);
+          setCheckInData(null);
+        }, 4000);
       }
       
       fetchHistory();
@@ -487,26 +644,59 @@ export default function FaceHub() {
           </Button>
         </div>
 
-        <Tabs defaultValue="checkin">
+        <Tabs defaultValue="attendance">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="checkin">
-              <Camera className="h-4 w-4 mr-2" /> Check-in
+            <TabsTrigger value="attendance">
+              <Camera className="h-4 w-4 mr-2" /> Face Attendance
             </TabsTrigger>
             <TabsTrigger value="history">
               <History className="h-4 w-4 mr-2" /> History
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="checkin" className="mt-2">
+          <TabsContent value="attendance" className="mt-2">
             <Card>
-              <CardHeader>
-                <CardTitle>Camera</CardTitle>
-                <CardDescription>
-                  {modelsReady ? "Models loaded. Position your face and tap Scan." : "Loading face models..."}
-                </CardDescription>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Camera</CardTitle>
+                    <CardDescription>
+                      {modelsReady ? "Position your face and tap Scan." : "Loading face models..."}
+                    </CardDescription>
+                  </div>
+                </div>
+
+                {/* Mode Selector */}
+                <div className="mt-3 p-1 bg-muted/80 rounded-xl border flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setScanMode("checkin")}
+                    className={cn(
+                      "flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2",
+                      scanMode === "checkin"
+                        ? "bg-green-600 text-white shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Check-in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScanMode("checkout")}
+                    className={cn(
+                      "flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2",
+                      scanMode === "checkout"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Check-out
+                  </button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* GPS Location Verified Status */}
                 {/* GPS Location Status */}
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs sm:text-sm text-green-900">
                   <div className="flex items-center gap-2 min-w-0">
@@ -537,7 +727,9 @@ export default function FaceHub() {
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
                       <div className="text-center space-y-4">
                         <Scan className="h-20 w-20 mx-auto text-white animate-pulse drop-shadow-lg" />
-                        <p className="text-white text-xl font-semibold drop-shadow-lg">Scanning face...</p>
+                        <p className="text-white text-xl font-semibold drop-shadow-lg">
+                          {scanMode === "checkout" ? "Scanning for Check-out..." : scanMode === "checkin" ? "Scanning for Check-in..." : "Scanning face..."}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -559,15 +751,22 @@ export default function FaceHub() {
                   onClick={handleScan} 
                   disabled={!modelsReady || scanning} 
                   size="lg" 
-                  className="w-full h-14 text-lg"
+                  className={cn(
+                    "w-full h-14 text-lg font-semibold transition-all",
+                    scanMode === "checkout" ? "bg-blue-600 hover:bg-blue-700" : scanMode === "checkin" ? "bg-green-600 hover:bg-green-700" : ""
+                  )}
                 >
                   {scanning ? (
                     <>
                       <Loader2 className="h-6 w-6 mr-2 animate-spin" /> Scanning...
                     </>
+                  ) : scanMode === "checkout" ? (
+                    <>
+                      <LogOut className="h-6 w-6 mr-2" /> Scan Face & Check-out
+                    </>
                   ) : (
                     <>
-                      <Camera className="h-6 w-6 mr-2" /> Scan Face & Check-in
+                      <LogIn className="h-6 w-6 mr-2" /> Scan Face & Check-in
                     </>
                   )}
                 </Button>
@@ -676,6 +875,101 @@ export default function FaceHub() {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div className="warning-progress-bar h-full bg-amber-500 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Not Checked In Alert Dialog */}
+      <Dialog open={showNotCheckedInDialog} onOpenChange={setShowNotCheckedInDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-red-100 p-3">
+              <AlertCircle className="h-12 w-12 text-red-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-red-600">Not Checked In!</h3>
+              <p className="text-lg font-semibold text-foreground">
+                {notCheckedInName}
+              </p>
+              <p className="text-sm text-muted-foreground px-4">
+                You have not checked in today. Please select <span className="font-semibold text-primary">Check-in</span> first!
+              </p>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="error-progress-bar h-full bg-red-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Check-Out Success Dialog */}
+      <Dialog open={showCheckoutSuccessDialog} onOpenChange={setShowCheckoutSuccessDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-blue-100 p-3">
+              <LogOut className="h-12 w-12 text-blue-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-blue-600">Check-Out Successful!</h3>
+              {checkoutData && (
+                <>
+                  <p className="text-lg font-semibold">{checkoutData.name}</p>
+                  <p className="text-muted-foreground text-sm">
+                    Checked out at <span className="font-semibold text-foreground">{checkoutData.time}</span>
+                  </p>
+                  {checkoutData.durationStr && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-200 mt-1">
+                      <Clock className="h-3.5 w-3.5" /> Total Working Time: {checkoutData.durationStr}
+                    </div>
+                  )}
+                  {checkoutData.isEarly && (
+                    <div className="p-2 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-800 mt-2 font-medium">
+                      ⚠️ Early departure recorded (Before shift end)
+                    </div>
+                  )}
+                  {checkoutData.shiftName && (
+                    <div className="mt-3 p-3 bg-muted/60 rounded-lg border text-xs">
+                      <p className="font-medium text-foreground">
+                        Shift: {checkoutData.shiftName}
+                      </p>
+                      {checkoutData.shiftStartTime && checkoutData.shiftEndTime && (
+                        <p className="text-muted-foreground mt-0.5">
+                          {checkoutData.shiftStartTime} - {checkoutData.shiftEndTime}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="success-progress-bar h-full bg-blue-600 rounded-full"></div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Already Checked Out Dialog */}
+      <Dialog open={showAlreadyCheckedOutDialog} onOpenChange={setShowAlreadyCheckedOutDialog}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="rounded-full bg-slate-100 p-3">
+              <CheckCircle2 className="h-12 w-12 text-slate-600" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-slate-700">Already Checked Out</h3>
+              {checkoutData && (
+                <>
+                  <p className="text-lg font-semibold">{checkoutData.name}</p>
+                  <p className="text-muted-foreground text-sm">
+                    Your attendance for today was already checked out at <span className="font-semibold text-foreground">{checkoutData.time}</span>
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+              <div className="warning-progress-bar h-full bg-slate-500 rounded-full"></div>
             </div>
           </div>
         </DialogContent>

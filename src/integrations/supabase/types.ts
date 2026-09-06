@@ -2228,12 +2228,17 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          early_checkout_threshold_minutes: number | null
           end_time: string
           half_day_threshold_hours: number | null
           id: string
           is_active: boolean | null
+          is_checkout_mandatory: boolean
           last_checkin_hours_before_end: number | null
           late_threshold_minutes: number | null
+          max_checkout_hours_after_end: number | null
+          min_hours_full_day: number | null
+          missing_checkout_action: string | null
           name: string
           start_time: string
           updated_at: string | null
@@ -2241,12 +2246,17 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          early_checkout_threshold_minutes?: number | null
           end_time: string
           half_day_threshold_hours?: number | null
           id?: string
           is_active?: boolean | null
+          is_checkout_mandatory?: boolean
           last_checkin_hours_before_end?: number | null
           late_threshold_minutes?: number | null
+          max_checkout_hours_after_end?: number | null
+          min_hours_full_day?: number | null
+          missing_checkout_action?: string | null
           name: string
           start_time: string
           updated_at?: string | null
@@ -2254,12 +2264,17 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          early_checkout_threshold_minutes?: number | null
           end_time?: string
           half_day_threshold_hours?: number | null
           id?: string
           is_active?: boolean | null
+          is_checkout_mandatory?: boolean
           last_checkin_hours_before_end?: number | null
           late_threshold_minutes?: number | null
+          max_checkout_hours_after_end?: number | null
+          min_hours_full_day?: number | null
+          missing_checkout_action?: string | null
           name?: string
           start_time?: string
           updated_at?: string | null

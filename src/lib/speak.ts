@@ -25,3 +25,24 @@ export const speakAlreadyCheckedIn = (name: string, formattedTime?: string) => {
     speak(`${name}, your attendance for today was already marked`);
   }
 };
+
+export const speakCheckoutSuccess = (name: string, durationStr?: string) => {
+  if (durationStr) {
+    speak(`Thank you ${name}, your check-out is marked. Total working time ${durationStr}. Have a great day!`);
+  } else {
+    speak(`Thank you ${name}, your check-out is marked. Have a great day!`);
+  }
+};
+
+export const speakNotCheckedIn = (name: string) => {
+  speak(`${name}, you are not checked in today. Please check in first.`);
+};
+
+export const speakAlreadyCheckedOut = (name: string, formattedTime?: string) => {
+  if (formattedTime) {
+    speak(`${name}, you have already checked out today at ${formattedTime}`);
+  } else {
+    speak(`${name}, you have already checked out today`);
+  }
+};
+
