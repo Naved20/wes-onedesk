@@ -460,7 +460,7 @@ export default function ShiftManagement() {
                             variant={shift.is_checkout_mandatory ? "default" : "outline"}
                             className={shift.is_checkout_mandatory ? "bg-amber-600 hover:bg-amber-700 text-white w-fit text-[11px]" : "w-fit text-[11px]"}
                           >
-                            {shift.is_checkout_mandatory ? "Mandatory" : "Auto (Optional)"}
+                            {shift.is_checkout_mandatory ? "Mandatory" : "Optional"}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">
                             Early: {shift.early_checkout_threshold_minutes ?? 15}m · Max: +{shift.max_checkout_hours_after_end ?? 2}h
