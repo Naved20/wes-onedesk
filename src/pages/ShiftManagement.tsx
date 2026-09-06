@@ -393,7 +393,6 @@ export default function ShiftManagement() {
                           <SelectContent>
                             <SelectItem value="no_penalty">No Penalty (Keep Full Day)</SelectItem>
                             <SelectItem value="mark_half_day">Mark as Half Day</SelectItem>
-                            <SelectItem value="pending_review">Manager Review Required</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">If mandatory ON but checkout missed</p>
