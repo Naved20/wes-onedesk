@@ -56,7 +56,7 @@ export default function Attendance() {
   const [loading, setLoading] = useState(true);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedAttendance, setSelectedAttendance] = useState<AttendanceWithEmployee | null>(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
