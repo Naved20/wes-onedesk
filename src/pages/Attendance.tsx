@@ -149,8 +149,8 @@ export default function Attendance() {
 
   const fetchData = async () => {
     await Promise.all([
-      fetchAttendance(), 
-      checkTodayAttendance(), 
+      fetchAttendance(),
+      checkTodayAttendance(),
       fetchHolidays(),
       fetchLeaves(),
       ...(role === "admin" || role === "manager" ? [fetchAllEmployees()] : [])
@@ -169,7 +169,7 @@ export default function Attendance() {
       const uniqueInstitutions = [...new Set(
         data?.map(p => p.institution_assignment).filter(Boolean) as string[]
       )];
-      
+
       setInstitutions(uniqueInstitutions);
     } catch (error) {
       console.error("Error fetching institutions:", error);
@@ -203,7 +203,7 @@ export default function Attendance() {
           .eq("status", "pending")
           .neq("status", "holiday")
           .order("date", { ascending: false });
-        
+
         if (pendingError) throw pendingError;
         pendingData = data || [];
       }
@@ -241,10 +241,10 @@ export default function Attendance() {
             const lastName = (p.last_name || "").trim();
             const fullName = `${firstName} ${lastName}`.trim() || "Unknown User";
             return [
-              p.user_id, 
-              { 
+              p.user_id,
+              {
                 name: fullName,
-                institution: p.institution_assignment 
+                institution: p.institution_assignment
               }
             ];
           }) || []
@@ -275,7 +275,7 @@ export default function Attendance() {
 
   const checkTodayAttendance = async () => {
     if (!user) return;
-    
+
     const today = format(new Date(), "yyyy-MM-dd");
     const { data } = await supabase
       .from("attendance")
@@ -296,21 +296,21 @@ export default function Attendance() {
         .select("date, name")  // ← FIXED: column is 'name', not 'holiday_name'
         .order("date");
 
-      console.log("holidays_view attempt:", { 
-        success: !viewError, 
+      console.log("holidays_view attempt:", {
+        success: !viewError,
         recordCount: viewData?.length || 0,
-        error: viewError?.message 
+        error: viewError?.message
       });
 
       if (!viewError && viewData && viewData.length > 0) {
         console.log("✅ Using holidays_view for holiday data");
         console.log("Sample holidays:", viewData.slice(0, 3));
-        
+
         const holidays: Holiday[] = viewData.map((h: any) => ({
           date: h.date,
           name: h.name || "Holiday"  // ← FIXED: use 'name' field
         }));
-        
+
         setHolidays(holidays);
         console.log("Total holidays set:", holidays.length);
         return;
@@ -322,21 +322,21 @@ export default function Attendance() {
         .select("date, name")
         .order("date");
 
-      console.log("holidays table attempt:", { 
-        success: !holidaysError, 
+      console.log("holidays table attempt:", {
+        success: !holidaysError,
         recordCount: holidaysData?.length || 0,
-        error: holidaysError?.message 
+        error: holidaysError?.message
       });
 
       if (!holidaysError && holidaysData) {
         console.log("✅ Using holidays table for holiday data");
         console.log("Sample holidays:", holidaysData.slice(0, 3));
-        
+
         const holidays: Holiday[] = holidaysData.map(h => ({
           date: h.date,
           name: h.name
         }));
-        
+
         setHolidays(holidays);
         console.log("Total holidays set:", holidays.length);
         return;
@@ -349,15 +349,15 @@ export default function Attendance() {
         .eq("status", "holiday")
         .order("date");
 
-      console.log("attendance (status=holiday) attempt:", { 
-        success: !attendanceError, 
+      console.log("attendance (status=holiday) attempt:", {
+        success: !attendanceError,
         recordCount: attendanceData?.length || 0,
-        error: attendanceError?.message 
+        error: attendanceError?.message
       });
 
       if (attendanceData && attendanceData.length > 0) {
         console.log("✅ Using attendance table for holiday data");
-        
+
         // Get unique holidays by date
         const uniqueHolidaysMap = new Map<string, string>();
         attendanceData.forEach((h: any) => {
@@ -370,7 +370,7 @@ export default function Attendance() {
           date,
           name
         }));
-        
+
         console.log("Sample holidays:", holidays.slice(0, 3));
         setHolidays(holidays);
         console.log("Total holidays set:", holidays.length);
@@ -455,11 +455,11 @@ export default function Attendance() {
   const getStatusBadge = (record: AttendanceWithEmployee) => {
     // Check calculated_status first for direct status display
     const calculatedStatus = record.calculated_status?.toLowerCase();
-    
+
     // Check if this date is a holiday (now includes Sundays from database)
     const recordDate = new Date(record.date).toISOString().split('T')[0];
     const isHoliday = holidays.some(h => new Date(h.date).toISOString().split('T')[0] === recordDate);
-    
+
     // Debug log
     if (record.employee_name?.includes("test") || Math.random() < 0.1) {
       console.log("Badge for:", record.employee_name, {
@@ -469,7 +469,7 @@ export default function Attendance() {
         isHoliday: isHoliday
       });
     }
-    
+
     // If NA (not applicable)
     if (calculatedStatus === "not_applicable" || calculatedStatus === "na") {
       return (
@@ -501,7 +501,7 @@ export default function Attendance() {
         </div>
       );
     }
-    
+
     // If half day (either from flag or calculated_status), show HD as main status
     if (record.is_half_day || calculatedStatus === "half_day") {
       return (
@@ -585,9 +585,9 @@ export default function Attendance() {
       record.calculated_status,
       record.is_late
     );
-    
+
     const statusBadge = getAttendanceStatusBadge(displayStatus, true);
-    
+
     return (
       <div className="flex flex-wrap gap-1 items-center">
         <Badge variant={statusBadge.variant} className="font-mono">
@@ -617,7 +617,13 @@ export default function Attendance() {
   };
 
   // Get all employees for absent calculation
-  const [allEmployees, setAllEmployees] = useState<Array<{user_id: string, employee_id?: string, name: string, institution: string | null}>>([]);
+  const [allEmployees, setAllEmployees] = useState<Array<{
+    user_id: string;
+    employee_id?: string;
+    name: string;
+    institution: string | null;
+    date_of_joining: string | null;
+  }>>([]);
 
   useEffect(() => {
     if (role === "admin" || role === "manager") {
@@ -629,7 +635,7 @@ export default function Attendance() {
     try {
       const { data, error } = await supabase
         .from("employee_profiles")
-        .select("user_id, employee_id, first_name, last_name, institution_assignment")
+        .select("user_id, employee_id, first_name, last_name, institution_assignment, date_of_joining")
         .eq("is_active", true)
         .order("first_name", { ascending: true });
 
@@ -643,7 +649,8 @@ export default function Attendance() {
           user_id: p.user_id,
           employee_id: (p as any).employee_id || "-",
           name: fullName,
-          institution: p.institution_assignment
+          institution: p.institution_assignment,
+          date_of_joining: (p as any).date_of_joining || null
         };
       }) || [];
 
@@ -655,87 +662,25 @@ export default function Attendance() {
 
   // Filter records for current month or selected date
   const monthRecords = useMemo(() => {
+    // If no specific date is selected from calendar, keep list blank for fast loading & clean UX
+    if (!selectedDate) {
+      return [];
+    }
+
     let filtered = attendanceRecords;
-
-    console.log("Total attendance records:", attendanceRecords.length);
-    
-    if (attendanceRecords.length > 0) {
-      const firstRecord = attendanceRecords[0];
-      console.log("FIRST RECORD FULL:", firstRecord);
-      console.log("First record date:", firstRecord.date, "Type:", typeof firstRecord.date);
-    }
-    
-    console.log("Sample records:", attendanceRecords.slice(0, 5).map(r => ({
-      date: r.date,
-      dateType: typeof r.date,
-      status: r.status,
-      calculated_status: r.calculated_status,
-      employee: r.employee_name,
-      check_in: r.check_in_time
-    })));
-    console.log("Selected month:", selectedMonth);
-    console.log("Month start:", startOfMonth(selectedMonth));
-    console.log("Month end:", endOfMonth(selectedMonth));
-
-    // If a specific date is selected, show only that date's records
-    if (selectedDate) {
-      const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
-      console.log("Filtering by specific date:", selectedDateStr);
-      filtered = filtered.filter(record => {
-        const matches = record.date === selectedDateStr;
-        if (!matches && Math.random() < 0.01) { // Log 1% of mismatches
-          console.log("Date mismatch:", record.date, "!==", selectedDateStr);
-        }
-        return matches;
-      });
-    } else {
-      // Otherwise show all records for the current month
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
-      const monthStartStr = format(monthStart, "yyyy-MM-dd");
-      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
-      
-      console.log("Filtering by month range:", monthStartStr, "to", monthEndStr);
-      console.log("First 3 record dates:", attendanceRecords.slice(0, 3).map(r => r.date));
-      
-      filtered = filtered.filter(record => {
-        const matches = record.date >= monthStartStr && record.date <= monthEndStr;
-        if (!matches && Math.random() < 0.01) { // Log 1% of mismatches
-          console.log("Range mismatch:", record.date, "not in range", monthStartStr, "to", monthEndStr);
-        }
-        return matches;
-      });
-    }
-
-    console.log("After date filter:", filtered.length);
-
-    // Note: Holiday records are already excluded in the fetchAttendance query
-    // No need to filter them here again
+    const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+    filtered = filtered.filter(record => record.date === selectedDateStr);
 
     // Apply institution filter
     if (selectedInstitution !== "all") {
-      filtered = filtered.filter(record => 
+      filtered = filtered.filter(record =>
         record.institution === selectedInstitution
       );
-      console.log("After institution filter:", filtered.length);
     }
-
-    // Check if target date is a holiday (now includes Sundays from database)
-    const isTargetDateHoliday = (dateStr: string) => {
-      return holidays.some(h => h.date === dateStr);
-    };
 
     // Apply status filter
     if (selectedStatusFilter && selectedStatusFilter !== "all") {
-      console.log("Status filter active:", selectedStatusFilter);
-      
       filtered = filtered.filter(record => {
-        // If a specific date is selected, respect that date
-        if (selectedDate) {
-          const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
-          if (record.date !== selectedDateStr) return false;
-        }
-
         const displayStatus = getAttendanceDisplayStatus(
           record.status,
           record.calculated_status,
@@ -762,57 +707,79 @@ export default function Attendance() {
         }
         return true;
       });
-      
-      console.log("After status filter:", filtered.length);
     }
 
-    console.log("Final filtered records:", filtered.length);
     return filtered;
-  }, [attendanceRecords, selectedMonth, selectedDate, selectedInstitution, selectedStatusFilter, holidays]);
+  }, [attendanceRecords, selectedDate, selectedInstitution, selectedStatusFilter]);
 
   // Apply employee search filter
   const searchFilteredRecords = useMemo(() => {
+    if (!selectedDate) return [];
     if (!employeeSearchQuery.trim()) return monthRecords;
-    
-    return monthRecords.filter(record => 
+
+    return monthRecords.filter(record =>
       record.employee_name?.toLowerCase().includes(employeeSearchQuery.toLowerCase())
     );
-  }, [monthRecords, employeeSearchQuery]);
+  }, [monthRecords, employeeSearchQuery, selectedDate]);
 
-  // Calculate daily stats for selected date or today
+  // Calculate daily stats for selected date or current active staff
   const dailyStats = useMemo(() => {
-    const targetDate = selectedDate || new Date();
-    const targetDateStr = format(targetDate, "yyyy-MM-dd");
-    
-    // Check if target date is a holiday - fetch from attendance table
-    const isHoliday = attendanceRecords.some(r => 
-      r.date === targetDateStr && r.status === 'holiday'
-    );
-    
     // Filter employees by institution first
     let employeesToCount = allEmployees;
     if (selectedInstitution !== "all") {
-      employeesToCount = employeesToCount.filter(emp => 
+      employeesToCount = employeesToCount.filter(emp =>
         emp.institution === selectedInstitution
       );
     }
-    
-    // Total employees from employee_profiles (not just those with attendance records)
-    const totalEmployees = employeesToCount.length;
-    
+
+    // Total current active employees from employee_profiles
+    const currentActiveTotal = employeesToCount.length;
+
+    // When NO date is selected:
+    // Total card shows Current Active Employees count (e.g. 31),
+    // and other cards (Present, Absent, Leave, etc.) show "-" because no date is selected
+    if (!selectedDate) {
+      return {
+        total: currentActiveTotal,
+        present: "-",
+        halfDay: "-",
+        paidLeave: "-",
+        leave: "-",
+        absent: "-",
+        date: null,
+        isHoliday: false
+      };
+    }
+
+    const targetDate = selectedDate;
+    const targetDateStr = format(targetDate, "yyyy-MM-dd");
+
+    // When a date is selected, count only employees active up to that date (joining date <= selected date)
+    const activeEmployeesOnDate = employeesToCount.filter(emp => {
+      if (!emp.date_of_joining) return true; // If no joining date is set, consider active
+      return emp.date_of_joining <= targetDateStr;
+    });
+
+    const totalEmployeesOnDate = activeEmployeesOnDate.length;
+
+    // Check if target date is a holiday - fetch from attendance table
+    const isHoliday = attendanceRecords.some(r =>
+      r.date === targetDateStr && r.status === 'holiday'
+    );
+
     // Filter attendance records by institution
     let filteredRecords = attendanceRecords;
     if (selectedInstitution !== "all") {
-      filteredRecords = filteredRecords.filter(record => 
+      filteredRecords = filteredRecords.filter(record =>
         record.institution === selectedInstitution
       );
     }
-    
-    // Get today's attendance records
-    const todayRecords = filteredRecords.filter(record => 
+
+    // Get selected date's attendance records
+    const todayRecords = filteredRecords.filter(record =>
       record.date === targetDateStr
     );
-    
+
     // Use the SAME logic as the row badges (getAttendanceDisplayStatus) so
     // counters always match what's visible in the table.
     const displayStatuses = todayRecords.map(record =>
@@ -825,9 +792,9 @@ export default function Attendance() {
     const paidLeaveCount = displayStatuses.filter(s => s === "paid_leave").length;
     const leaveCount = displayStatuses.filter(s => s === "leave").length;
     const absentCount = isHoliday ? 0 : displayStatuses.filter(s => s === "absent").length;
-    
+
     return {
-      total: totalEmployees,
+      total: totalEmployeesOnDate,
       present: presentCount,
       halfDay: halfDayCount,
       paidLeave: paidLeaveCount,
@@ -842,10 +809,10 @@ export default function Attendance() {
   const uniqueHolidaysInMonth = useMemo(() => {
     const monthHolidays = holidays.filter(h => {
       const hDate = new Date(h.date);
-      return hDate.getFullYear() === selectedMonth.getFullYear() && 
-             hDate.getMonth() === selectedMonth.getMonth();
+      return hDate.getFullYear() === selectedMonth.getFullYear() &&
+        hDate.getMonth() === selectedMonth.getMonth();
     });
-    
+
     // Deduplicate by date
     const uniqueDates = new Set();
     const deduplicated = [];
@@ -1097,8 +1064,8 @@ export default function Attendance() {
                 {/* Month Selector */}
                 <div className="w-36">
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Month</Label>
-                  <Select 
-                    value={String(currentMonth)} 
+                  <Select
+                    value={String(currentMonth)}
                     onValueChange={(val) => setSelectedMonth(new Date(currentYear, Number(val) - 1))}
                   >
                     <SelectTrigger className="h-9">
@@ -1126,12 +1093,12 @@ export default function Attendance() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Year Selector */}
                 <div className="w-28">
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Year</Label>
-                  <Select 
-                    value={String(currentYear)} 
+                  <Select
+                    value={String(currentYear)}
                     onValueChange={(val) => setSelectedMonth(new Date(Number(val), currentMonth - 1))}
                   >
                     <SelectTrigger className="h-9">
@@ -1174,8 +1141,8 @@ export default function Attendance() {
                 {/* Clear Filter Button */}
                 {(selectedInstitution !== "all" || employeeSearchQuery.trim() !== "" || selectedStatusFilter !== null) && (
                   <div className="self-end pb-0.5">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       onClick={() => {
                         setSelectedInstitution("all");
@@ -1217,9 +1184,9 @@ export default function Attendance() {
 
         {/* Attendance Stats - Show for employee viewing their own stats */}
         {user && role === "employee" && (
-          <AttendanceStats 
-            userId={user.id} 
-            year={currentYear} 
+          <AttendanceStats
+            userId={user.id}
+            year={currentYear}
             month={currentMonth}
             attendanceRecords={attendanceRecords as any}
             holidays={holidays}
@@ -1241,7 +1208,7 @@ export default function Attendance() {
                   </span>
                 </TabsTrigger>
               )}
-  
+
               {lateRecords.length > 0 && (
                 <TabsTrigger value="late" className="relative">
                   Late Check-ins
@@ -1338,8 +1305,8 @@ export default function Attendance() {
                         {selectedStatusFilter && (
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-muted-foreground">Filtered by:</span>
-                            <Badge 
-                              variant="secondary" 
+                            <Badge
+                              variant="secondary"
                               className="text-xs capitalize flex items-center gap-1 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800"
                               onClick={() => setSelectedStatusFilter(null)}
                             >
@@ -1349,30 +1316,28 @@ export default function Attendance() {
                           </div>
                         )}
                       </div>
-                      
+
                       {/* Clickable Metric Cards for Attendance Types (P, A, HD, PL, LE) */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 text-sm">
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(null)}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === null 
-                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === null
+                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <Label className="text-xs text-muted-foreground cursor-pointer block">Total</Label>
                           <p className="font-semibold text-lg text-blue-600">{dailyStats.total}</p>
                         </button>
-                        
+
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(selectedStatusFilter === "present" ? null : "present")}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === "present" 
-                              ? "bg-green-50/80 border-green-500/50 dark:bg-green-950/40 shadow-sm ring-2 ring-green-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === "present"
+                              ? "bg-green-50/80 border-green-500/50 dark:bg-green-950/40 shadow-sm ring-2 ring-green-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">Present</Label>
@@ -1384,11 +1349,10 @@ export default function Attendance() {
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(selectedStatusFilter === "absent" ? null : "absent")}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === "absent" 
-                              ? "bg-red-50/80 border-red-500/50 dark:bg-red-950/40 shadow-sm ring-2 ring-red-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === "absent"
+                              ? "bg-red-50/80 border-red-500/50 dark:bg-red-950/40 shadow-sm ring-2 ring-red-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">
@@ -1406,11 +1370,10 @@ export default function Attendance() {
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(selectedStatusFilter === "half_day" ? null : "half_day")}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === "half_day" 
-                              ? "bg-amber-50/80 border-amber-500/50 dark:bg-amber-950/40 shadow-sm ring-2 ring-amber-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === "half_day"
+                              ? "bg-amber-50/80 border-amber-500/50 dark:bg-amber-950/40 shadow-sm ring-2 ring-amber-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">Half Day</Label>
@@ -1422,11 +1385,10 @@ export default function Attendance() {
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(selectedStatusFilter === "paid_leave" ? null : "paid_leave")}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === "paid_leave" 
-                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === "paid_leave"
+                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">Paid Leave</Label>
@@ -1438,11 +1400,10 @@ export default function Attendance() {
                         <button
                           type="button"
                           onClick={() => setSelectedStatusFilter(selectedStatusFilter === "leave" ? null : "leave")}
-                          className={`p-2.5 rounded-lg text-left transition-all border ${
-                            selectedStatusFilter === "leave" 
-                              ? "bg-cyan-50/80 border-cyan-500/50 dark:bg-cyan-950/40 shadow-sm ring-2 ring-cyan-500/30" 
+                          className={`p-2.5 rounded-lg text-left transition-all border ${selectedStatusFilter === "leave"
+                              ? "bg-cyan-50/80 border-cyan-500/50 dark:bg-cyan-950/40 shadow-sm ring-2 ring-cyan-500/30"
                               : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">Leave</Label>
@@ -1483,7 +1444,7 @@ export default function Attendance() {
                           </TableHeader>
                           <TableBody>
                             {searchFilteredRecords.map((record, index) => (
-                              <TableRow 
+                              <TableRow
                                 key={record.id}
                                 className="cursor-pointer hover:bg-muted/50 transition-colors"
                                 onClick={() => openApprovalDialog(record)}
@@ -1491,7 +1452,7 @@ export default function Attendance() {
                                 <TableCell className="font-medium text-muted-foreground">
                                   {index + 1}
                                 </TableCell>
-                                <TableCell 
+                                <TableCell
                                   className="font-medium cursor-pointer hover:text-primary hover:underline"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1569,7 +1530,7 @@ export default function Attendance() {
                       </TableHeader>
                       <TableBody>
                         {lateRecords.map((record) => (
-                          <TableRow 
+                          <TableRow
                             key={record.id}
                             className="cursor-pointer hover:bg-muted/50 transition-colors"
                             onClick={() => openApprovalDialog(record)}
@@ -1640,7 +1601,7 @@ export default function Attendance() {
                       </div>
                     ))}
                   </div>
-                  
+
                   {/* Calendar grid */}
                   <div className="grid grid-cols-7 gap-2">
                     {(() => {
@@ -1648,16 +1609,16 @@ export default function Attendance() {
                         if (r.user_id !== user?.id) return false;
                         const recordDate = new Date(r.date);
                         return recordDate.getMonth() === currentMonth - 1 &&
-                               recordDate.getFullYear() === currentYear;
+                          recordDate.getFullYear() === currentYear;
                       });
 
                       const recordMap = new Map(monthRecords.map(r => [r.date, r]));
-                      
+
                       const firstDay = new Date(currentYear, currentMonth - 1, 1);
                       const lastDay = new Date(currentYear, currentMonth, 0);
                       const daysInMonth = lastDay.getDate();
                       const startingDayOfWeek = firstDay.getDay();
-                      
+
                       const days = [];
                       for (let i = 0; i < startingDayOfWeek; i++) {
                         days.push(null);
@@ -1674,10 +1635,10 @@ export default function Attendance() {
                         const currentDate = new Date(currentYear, currentMonth - 1, day);
                         const dateStr = format(currentDate, "yyyy-MM-dd");
                         const record = recordMap.get(dateStr);
-                        
+
                         // Check if it's a holiday
                         const isHoliday = holidays.some(h => h.date === dateStr);
-                        
+
                         // Determine status and color
                         let statusTag = '';
                         let bgColor = 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700';
@@ -1685,7 +1646,7 @@ export default function Attendance() {
 
                         if (record) {
                           const calcStatus = record.calculated_status?.toLowerCase();
-                          
+
                           if (calcStatus === 'not_applicable' || calcStatus === 'na') {
                             statusTag = 'NA';
                             bgColor = 'bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700';
@@ -1725,7 +1686,7 @@ export default function Attendance() {
                           textColor = 'text-purple-700 dark:text-purple-300';
                         }
 
-                        const checkInTime = record?.check_in_time 
+                        const checkInTime = record?.check_in_time
                           ? format(new Date(record.check_in_time), "hh:mm a")
                           : '';
 
@@ -1814,7 +1775,7 @@ export default function Attendance() {
                 })()}
               </DialogTitle>
             </DialogHeader>
-            
+
             {/* Month Navigation */}
             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
               <Button
@@ -1872,15 +1833,15 @@ export default function Attendance() {
               )}
 
               {/* Monthly Stats */}
-              <AttendanceStats 
-                userId={selectedEmployeeId} 
-                year={employeeDialogMonth.getFullYear()} 
+              <AttendanceStats
+                userId={selectedEmployeeId}
+                year={employeeDialogMonth.getFullYear()}
                 month={employeeDialogMonth.getMonth() + 1}
                 attendanceRecords={dialogAttendanceRecords as any}
                 holidays={holidays}
                 compactView={true}
               />
-              
+
               {/* Attendance Records - Calendar View */}
               <Card>
                 <CardHeader>
@@ -1903,13 +1864,13 @@ export default function Attendance() {
 
                     // Create a map of date -> record for quick lookup
                     const recordMap = new Map(monthRecords.map(r => [r.date, r]));
-                    
+
                     // Get first day of month and number of days
                     const firstDay = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth(), 1);
                     const lastDay = new Date(employeeDialogMonth.getFullYear(), employeeDialogMonth.getMonth() + 1, 0);
                     const daysInMonth = lastDay.getDate();
                     const startingDayOfWeek = firstDay.getDay();
-                    
+
                     // Create array of days
                     const days = [];
                     for (let i = 0; i < startingDayOfWeek; i++) {
@@ -1929,7 +1890,7 @@ export default function Attendance() {
                             </div>
                           ))}
                         </div>
-                        
+
                         {/* Calendar grid */}
                         <div className="grid grid-cols-7 gap-2">
                           {days.map((day, index) => {
@@ -1942,7 +1903,7 @@ export default function Attendance() {
                             const record = recordMap.get(dateStr);
                             const dayOfWeek = currentDate.getDay();
                             const isSunday = dayOfWeek === 0;
-                            
+
                             // Check if it's a holiday
                             const isHoliday = holidays.some(h => h.date === dateStr);
 
