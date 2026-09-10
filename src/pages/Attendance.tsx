@@ -978,30 +978,6 @@ export default function Attendance() {
                   </div>
                 )}
 
-                {/* Attendance Type Selector */}
-                {(role === "admin" || role === "manager") && (
-                  <div className="w-44">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Att Type</Label>
-                    <Select 
-                      value={selectedStatusFilter || "all"} 
-                      onValueChange={(val) => setSelectedStatusFilter(val === "all" ? null : val)}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="All Types" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="present">Present (P / PR)</SelectItem>
-                        <SelectItem value="absent">Absent (A / AB)</SelectItem>
-                        <SelectItem value="half_day">Half Day (HD)</SelectItem>
-                        <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
-                        <SelectItem value="leave">Leave (LE)</SelectItem>
-                        <SelectItem value="holiday">Holiday (HO)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
                 {/* Clear Filter Button */}
                 {(selectedInstitution !== "all" || employeeSearchQuery.trim() !== "" || selectedStatusFilter !== null) && (
                   <div className="self-end pb-0.5">
@@ -1195,7 +1171,7 @@ export default function Attendance() {
                         >
                           <div className="flex items-center justify-between">
                             <Label className="text-xs text-muted-foreground cursor-pointer">Present</Label>
-                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-green-300 text-green-700 bg-green-50">PR (P)</Badge>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-green-300 text-green-700 bg-green-50">PR</Badge>
                           </div>
                           <p className="font-semibold text-lg text-green-600">{dailyStats.present}</p>
                         </button>
@@ -1214,7 +1190,7 @@ export default function Attendance() {
                               {dailyStats.isHoliday ? "Holiday" : "Absent"}
                             </Label>
                             <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-red-300 text-red-700 bg-red-50">
-                              {dailyStats.isHoliday ? "HO" : "AB (A)"}
+                              {dailyStats.isHoliday ? "HO" : "AB"}
                             </Badge>
                           </div>
                           <p className={`font-semibold text-lg ${dailyStats.isHoliday ? 'text-purple-600' : 'text-red-600'}`}>
