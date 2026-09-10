@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, isSameDay, isSunday } from "date-fns";
+import { format, startOfMonth, endOfMonth, isSameDay, isSunday, eachDayOfInterval, isPast, isToday } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check, History, ShieldCheck, X, Building2, Filter } from "lucide-react";
+import { CalendarDays, CheckCircle, XCircle, AlertTriangle, Eye, Search, Clock, Zap, Gift, Palmtree, Check, History, ShieldCheck, X, Building2, Filter, Download } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { AttendanceStats } from "@/components/attendance/AttendanceStats";
 import { AttendanceApprovalDialog } from "@/components/attendance/AttendanceApprovalDialog";
@@ -617,7 +617,7 @@ export default function Attendance() {
   };
 
   // Get all employees for absent calculation
-  const [allEmployees, setAllEmployees] = useState<Array<{user_id: string, name: string, institution: string | null}>>([]);
+  const [allEmployees, setAllEmployees] = useState<Array<{user_id: string, employee_id?: string, name: string, institution: string | null}>>([]);
 
   useEffect(() => {
     if (role === "admin" || role === "manager") {
@@ -629,8 +629,9 @@ export default function Attendance() {
     try {
       const { data, error } = await supabase
         .from("employee_profiles")
-        .select("user_id, first_name, last_name, institution_assignment")
-        .eq("is_active", true);
+        .select("user_id, employee_id, first_name, last_name, institution_assignment")
+        .eq("is_active", true)
+        .order("first_name", { ascending: true });
 
       if (error) throw error;
 
@@ -640,6 +641,7 @@ export default function Attendance() {
         const fullName = `${firstName} ${lastName}`.trim() || "Unknown User";
         return {
           user_id: p.user_id,
+          employee_id: (p as any).employee_id || "-",
           name: fullName,
           institution: p.institution_assignment
         };
@@ -866,6 +868,188 @@ export default function Attendance() {
     return attendanceRecords.filter(r => r.is_late && r.status === "pending");
   }, [attendanceRecords]);
 
+  // Export Monthly Attendance in clean Matrix format (CSV)
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportMonthlyAttendance = async () => {
+    try {
+      setIsExporting(true);
+      toast({
+        title: "Generating Attendance Report...",
+        description: `Preparing export for ${format(selectedMonth, "MMMM yyyy")}...`,
+      });
+
+      const monthStart = startOfMonth(selectedMonth);
+      const monthEnd = endOfMonth(selectedMonth);
+      const monthStartStr = format(monthStart, "yyyy-MM-dd");
+      const monthEndStr = format(monthEnd, "yyyy-MM-dd");
+      const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+      // 1. Fetch complete attendance records for this month (including holidays & all statuses)
+      const { data: monthAttendance, error: attError } = await supabase
+        .from("attendance")
+        .select("user_id, date, status, calculated_status, is_late, is_half_day")
+        .gte("date", monthStartStr)
+        .lte("date", monthEndStr);
+
+      if (attError) throw attError;
+
+      // Map: `${user_id}_${date}` -> record
+      const recordMap = new Map<string, any>();
+      (monthAttendance || []).forEach(r => {
+        recordMap.set(`${r.user_id}_${r.date}`, r);
+      });
+
+      // 2. Fetch all active employees if not already loaded
+      let employees = allEmployees;
+      if (employees.length === 0) {
+        const { data: empData, error: empError } = await supabase
+          .from("employee_profiles")
+          .select("user_id, employee_id, first_name, last_name, institution_assignment")
+          .eq("is_active", true)
+          .order("first_name", { ascending: true });
+
+        if (empError) throw empError;
+
+        employees = (empData || []).map(p => {
+          const firstName = (p.first_name || "Unknown").trim();
+          const lastName = (p.last_name || "").trim();
+          return {
+            user_id: p.user_id,
+            employee_id: (p as any).employee_id || "-",
+            name: `${firstName} ${lastName}`.trim() || "Unknown User",
+            institution: p.institution_assignment
+          };
+        });
+      }
+
+      // Filter by institution if selected
+      if (selectedInstitution !== "all") {
+        employees = employees.filter(e => e.institution === selectedInstitution);
+      }
+
+      // 3. Holidays set
+      const holidayDateSet = new Set(holidays.map(h => h.date));
+
+      // 4. Build CSV Rows:
+      // Col 1: Name, Col 2: Employee ID, Col 3: Institution, Col 4..N: Daily attendance, Summary columns
+      const headers = [
+        "Name",
+        "Employee ID",
+        "Institution",
+        ...daysInMonth.map(d => format(d, "dd-MMM")),
+        "Present (P)",
+        "Absent (A)",
+        "Half Day (HD)",
+        "Paid Leave (PL)",
+        "Leave (LE)",
+        "Holiday (HO)",
+        "Total Payable Days"
+      ];
+
+      const csvRows: string[][] = [headers];
+
+      for (const emp of employees) {
+        let pCount = 0;
+        let aCount = 0;
+        let hdCount = 0;
+        let plCount = 0;
+        let leCount = 0;
+        let hoCount = 0;
+
+        const dayCodes: string[] = [];
+
+        for (const day of daysInMonth) {
+          const dateStr = format(day, "yyyy-MM-dd");
+          const rec = recordMap.get(`${emp.user_id}_${dateStr}`);
+
+          let code = "-";
+          if (rec) {
+            const displayStatus = getAttendanceDisplayStatus(rec.status, rec.calculated_status, rec.is_late);
+            if (displayStatus === "present") code = "P";
+            else if (displayStatus === "absent") code = "A";
+            else if (displayStatus === "half_day") code = "HD";
+            else if (displayStatus === "paid_leave") code = "PL";
+            else if (displayStatus === "leave") code = "LE";
+            else if (displayStatus === "holiday") code = "HO";
+            else if (rec.is_half_day) code = "HD";
+          } else {
+            // Check holiday or Sunday
+            if (isSunday(day) || holidayDateSet.has(dateStr)) {
+              code = "HO";
+            } else if (isPast(day) && !isToday(day)) {
+              code = "A";
+            } else {
+              code = "-";
+            }
+          }
+
+          if (code === "P") pCount++;
+          else if (code === "A") aCount++;
+          else if (code === "HD") hdCount++;
+          else if (code === "PL") plCount++;
+          else if (code === "LE") leCount++;
+          else if (code === "HO") hoCount++;
+
+          dayCodes.push(code);
+        }
+
+        const payableDays = pCount + plCount + hoCount + (hdCount * 0.5);
+
+        csvRows.push([
+          emp.name,
+          emp.employee_id || "-",
+          emp.institution || "-",
+          ...dayCodes,
+          String(pCount),
+          String(aCount),
+          String(hdCount),
+          String(plCount),
+          String(leCount),
+          String(hoCount),
+          payableDays.toFixed(1)
+        ]);
+      }
+
+      // 5. Convert to CSV string with escaping and UTF-8 BOM
+      const escapeCsvCell = (val: any) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val);
+        return `"${str.replace(/"/g, '""')}"`;
+      };
+
+      const BOM = "\uFEFF";
+      const csvContent = BOM + csvRows.map(row => row.map(escapeCsvCell).join(",")).join("\r\n");
+
+      // Download file
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const cleanMonthName = format(selectedMonth, "MMMM_yyyy");
+      const instSuffix = selectedInstitution !== "all" ? `_${selectedInstitution.replace(/\s+/g, "_")}` : "_All_Institutions";
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Attendance_${cleanMonthName}${instSuffix}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Export Completed!",
+        description: `Exported ${employees.length} employees for ${format(selectedMonth, "MMMM yyyy")}.`,
+      });
+    } catch (err: any) {
+      console.error("Export error:", err);
+      toast({
+        title: "Export Failed",
+        description: err.message || "Failed to generate monthly attendance file.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -876,6 +1060,15 @@ export default function Attendance() {
           </div>
           {(role === "admin" || role === "manager") && (
             <div className="flex items-center gap-2">
+              <Button
+                onClick={handleExportMonthlyAttendance}
+                disabled={isExporting}
+                variant="outline"
+                className="gap-2 bg-background border border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 shadow-sm"
+              >
+                <Download className={`h-4 w-4 ${isExporting ? 'animate-bounce' : 'text-emerald-600'}`} />
+                {isExporting ? "Exporting..." : "Export Attendance"}
+              </Button>
               <Button
                 onClick={() => navigate("/face-attendance-history")}
                 variant="outline"
@@ -1119,8 +1312,20 @@ export default function Attendance() {
 
                 {/* Records Table */}
                 <Card className="lg:col-span-2">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Attendance Records</CardTitle>
+                    {(role === "admin" || role === "manager") && (
+                      <Button
+                        onClick={handleExportMonthlyAttendance}
+                        disabled={isExporting}
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                      >
+                        <Download className={`h-3.5 w-3.5 ${isExporting ? 'animate-bounce' : 'text-emerald-600'}`} />
+                        {isExporting ? "Exporting..." : `Export ${format(selectedMonth, "MMM yyyy")}`}
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Compact Stats Grid - Like Salary Edit Dialog */}
