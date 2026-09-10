@@ -724,51 +724,42 @@ export default function Attendance() {
     };
 
     // Apply status filter
-    if (selectedStatusFilter) {
-      const targetDate = selectedDate || new Date();
-      const targetDateStr = format(targetDate, "yyyy-MM-dd");
-      const isHoliday = isTargetDateHoliday(targetDateStr);
-      
+    if (selectedStatusFilter && selectedStatusFilter !== "all") {
       console.log("Status filter active:", selectedStatusFilter);
       
-      if (selectedStatusFilter === "present") {
-        filtered = filtered.filter(record => {
-          if (record.date !== targetDateStr) return false;
-          // Check calculated_status for present/late, not approval status
-          const calcStatus = record.calculated_status?.toLowerCase();
-          return calcStatus === "present" || calcStatus === "late";
-        });
-      } else if (selectedStatusFilter === "absent") {
-        // Don't show absent records if the date is a holiday
-        if (isHoliday) {
-          return [];
+      filtered = filtered.filter(record => {
+        // If a specific date is selected, respect that date
+        if (selectedDate) {
+          const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+          if (record.date !== selectedDateStr) return false;
         }
 
-        // Show employees who have calculated_status = absent
-        filtered = filtered.filter(record => {
-          if (record.date !== targetDateStr) return false;
-          const calcStatus = record.calculated_status?.toLowerCase();
-          return calcStatus === "absent";
-        });
-      } else if (selectedStatusFilter === "paid_leave") {
-        filtered = filtered.filter(record => {
-          if (record.date !== targetDateStr) return false;
-          const calcStatus = record.calculated_status?.toLowerCase();
-          return calcStatus === "paid_leave";
-        });
-      } else if (selectedStatusFilter === "leave") {
-        filtered = filtered.filter(record => {
-          if (record.date !== targetDateStr) return false;
-          const calcStatus = record.calculated_status?.toLowerCase();
-          return calcStatus === "leave";
-        });
-      } else if (selectedStatusFilter === "all") {
-        // Show all employees (present + absent) for the selected date
-        const targetDate = selectedDate || new Date();
-        const targetDateStr = format(targetDate, "yyyy-MM-dd");
-        
-        filtered = filtered.filter(record => record.date === targetDateStr);
-      }
+        const displayStatus = getAttendanceDisplayStatus(
+          record.status,
+          record.calculated_status,
+          record.is_late
+        );
+
+        if (selectedStatusFilter === "present") {
+          return displayStatus === "present";
+        }
+        if (selectedStatusFilter === "absent") {
+          return displayStatus === "absent";
+        }
+        if (selectedStatusFilter === "half_day") {
+          return displayStatus === "half_day" || record.is_half_day === true;
+        }
+        if (selectedStatusFilter === "paid_leave") {
+          return displayStatus === "paid_leave";
+        }
+        if (selectedStatusFilter === "leave") {
+          return displayStatus === "leave";
+        }
+        if (selectedStatusFilter === "holiday") {
+          return displayStatus === "holiday";
+        }
+        return true;
+      });
       
       console.log("After status filter:", filtered.length);
     }
@@ -987,8 +978,32 @@ export default function Attendance() {
                   </div>
                 )}
 
+                {/* Attendance Type Selector */}
+                {(role === "admin" || role === "manager") && (
+                  <div className="w-44">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">Att Type</Label>
+                    <Select 
+                      value={selectedStatusFilter || "all"} 
+                      onValueChange={(val) => setSelectedStatusFilter(val === "all" ? null : val)}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="All Types" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="present">Present (P / PR)</SelectItem>
+                        <SelectItem value="absent">Absent (A / AB)</SelectItem>
+                        <SelectItem value="half_day">Half Day (HD)</SelectItem>
+                        <SelectItem value="paid_leave">Paid Leave (PL)</SelectItem>
+                        <SelectItem value="leave">Leave (LE)</SelectItem>
+                        <SelectItem value="holiday">Holiday (HO)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* Clear Filter Button */}
-                {(selectedInstitution !== "all" || employeeSearchQuery.trim() !== "") && (
+                {(selectedInstitution !== "all" || employeeSearchQuery.trim() !== "" || selectedStatusFilter !== null) && (
                   <div className="self-end pb-0.5">
                     <Button 
                       variant="ghost" 
@@ -996,6 +1011,7 @@ export default function Attendance() {
                       onClick={() => {
                         setSelectedInstitution("all");
                         setEmployeeSearchQuery("");
+                        setSelectedStatusFilter(null);
                       }}
                       className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1"
                     >
@@ -1133,35 +1149,126 @@ export default function Attendance() {
                   <CardContent className="space-y-4">
                     {/* Compact Stats Grid - Like Salary Edit Dialog */}
                     <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800">
-                      <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4" />
-                        Daily Attendance Summary - {selectedDate ? format(selectedDate, "MMM dd, yyyy") : format(new Date(), "MMM dd, yyyy")}
-                      </h4>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4" />
+                          Daily Attendance Summary - {selectedDate ? format(selectedDate, "MMM dd, yyyy") : format(new Date(), "MMM dd, yyyy")}
+                        </h4>
+                        {selectedStatusFilter && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">Filtered by:</span>
+                            <Badge 
+                              variant="secondary" 
+                              className="text-xs capitalize flex items-center gap-1 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800"
+                              onClick={() => setSelectedStatusFilter(null)}
+                            >
+                              {selectedStatusFilter.replace("_", " ")}
+                              <X className="h-3 w-3" />
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
                       
-                      {/* First Row: Total, Present, Paid Leave, Leave, Absent */}
-                      <div className="grid grid-cols-5 gap-5 mx-5 text-sm mb-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Total</Label>
+                      {/* Clickable Metric Cards for Attendance Types (P, A, HD, PL, LE) */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 text-sm">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(null)}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === null 
+                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <Label className="text-xs text-muted-foreground cursor-pointer block">Total</Label>
                           <p className="font-semibold text-lg text-blue-600">{dailyStats.total}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Present (PR)</Label>
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(selectedStatusFilter === "present" ? null : "present")}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === "present" 
+                              ? "bg-green-50/80 border-green-500/50 dark:bg-green-950/40 shadow-sm ring-2 ring-green-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground cursor-pointer">Present</Label>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-green-300 text-green-700 bg-green-50">PR (P)</Badge>
+                          </div>
                           <p className="font-semibold text-lg text-green-600">{dailyStats.present}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Paid Leave (PL)</Label>
-                          <p className="font-semibold text-lg text-blue-500">{dailyStats.paidLeave}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Leave (LE)</Label>
-                          <p className="font-semibold text-lg text-cyan-600">{dailyStats.leave}</p>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">{dailyStats.isHoliday ? "Holiday (HO)" : "Absent (AB)"}</Label>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(selectedStatusFilter === "absent" ? null : "absent")}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === "absent" 
+                              ? "bg-red-50/80 border-red-500/50 dark:bg-red-950/40 shadow-sm ring-2 ring-red-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground cursor-pointer">
+                              {dailyStats.isHoliday ? "Holiday" : "Absent"}
+                            </Label>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-red-300 text-red-700 bg-red-50">
+                              {dailyStats.isHoliday ? "HO" : "AB (A)"}
+                            </Badge>
+                          </div>
                           <p className={`font-semibold text-lg ${dailyStats.isHoliday ? 'text-purple-600' : 'text-red-600'}`}>
                             {dailyStats.isHoliday ? "-" : dailyStats.absent}
                           </p>
-                        </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(selectedStatusFilter === "half_day" ? null : "half_day")}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === "half_day" 
+                              ? "bg-amber-50/80 border-amber-500/50 dark:bg-amber-950/40 shadow-sm ring-2 ring-amber-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground cursor-pointer">Half Day</Label>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-amber-300 text-amber-700 bg-amber-50">HD</Badge>
+                          </div>
+                          <p className="font-semibold text-lg text-amber-600">{dailyStats.halfDay}</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(selectedStatusFilter === "paid_leave" ? null : "paid_leave")}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === "paid_leave" 
+                              ? "bg-blue-50/80 border-blue-500/50 dark:bg-blue-950/40 shadow-sm ring-2 ring-blue-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground cursor-pointer">Paid Leave</Label>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-blue-300 text-blue-700 bg-blue-50">PL</Badge>
+                          </div>
+                          <p className="font-semibold text-lg text-blue-500">{dailyStats.paidLeave}</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStatusFilter(selectedStatusFilter === "leave" ? null : "leave")}
+                          className={`p-2.5 rounded-lg text-left transition-all border ${
+                            selectedStatusFilter === "leave" 
+                              ? "bg-cyan-50/80 border-cyan-500/50 dark:bg-cyan-950/40 shadow-sm ring-2 ring-cyan-500/30" 
+                              : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground cursor-pointer">Leave</Label>
+                            <Badge variant="outline" className="text-[10px] font-bold px-1 py-0 border-cyan-300 text-cyan-700 bg-cyan-50">LE</Badge>
+                          </div>
+                          <p className="font-semibold text-lg text-cyan-600">{dailyStats.leave}</p>
+                        </button>
                       </div>
                     </div>
                     {loading ? (
