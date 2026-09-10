@@ -1279,21 +1279,7 @@ export default function Attendance() {
 
                 {/* Records Table */}
                 <Card className="lg:col-span-2">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Attendance Records</CardTitle>
-                    {(role === "admin" || role === "manager") && (
-                      <Button
-                        onClick={handleExportMonthlyAttendance}
-                        disabled={isExporting}
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                      >
-                        <Download className={`h-3.5 w-3.5 ${isExporting ? 'animate-bounce' : 'text-emerald-600'}`} />
-                        {isExporting ? "Exporting..." : `Export ${format(selectedMonth, "MMM yyyy")}`}
-                      </Button>
-                    )}
-                  </CardHeader>
+                 
                   <CardContent className="space-y-4">
                     {/* Compact Stats Grid - Like Salary Edit Dialog */}
                     <div className="p-4 rounded-lg border bg-slate-50 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800">
